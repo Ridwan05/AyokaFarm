@@ -16,7 +16,7 @@ import { Tabs } from '../components/ui/Tabs'
 import { penDetails, type DailyEntry, type PenDetail as PenDetailData } from '../data/penDetail'
 import { pens } from '../data/pens'
 import { useCurrentUser } from '../data/sessionContext'
-import { canRecordProduction } from '../lib/access'
+import { canRecordProduction, isAttendant } from '../lib/access'
 import { formatCrates, formatNumber, formatSignedPct } from '../lib/format'
 import Placeholder from './Placeholder'
 
@@ -42,8 +42,8 @@ export default function PenDetail() {
   return (
     <>
       <PageHeader
-        backTo={user.role === 'pen-attendant' ? '/' : '/pens'}
-        eyebrow={[user.role === 'pen-attendant' ? 'My pens' : 'Pens & flocks', `Pen ${pen.id}`]}
+        backTo={isAttendant(user.role) ? '/' : '/pens'}
+        eyebrow={[isAttendant(user.role) ? 'My pens' : 'Pens & flocks', `Pen ${pen.id}`]}
         title={title}
         description={subtitle}
         actions={

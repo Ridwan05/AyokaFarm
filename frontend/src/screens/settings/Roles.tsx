@@ -114,7 +114,7 @@ export default function Roles() {
               </tbody>
             </table>
           </div>
-          {role.id === 'pen-attendant' && (
+          {(role.id === 'pen-attendant' || role.id === 'pen-attendant-all') && (
             <div className="flex flex-col gap-4 sm:flex-row">
               <Field label="Edit window" hint="Own records only" className="flex-1">
                 {(id) => <SelectInput id={id} size="md" value={editWindow} onChange={(e) => setEditWindow(e.target.value)} options={EDIT_WINDOWS.map((v) => ({ value: v, label: v }))} />}

@@ -10,7 +10,7 @@ import { pens } from '../../data/pens'
 import type { PaymentMethod } from '../../data/sales'
 import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
-import { canSeePen } from '../../lib/access'
+import { canSeePen, isAttendant } from '../../lib/access'
 import { formatNumber } from '../../lib/format'
 
 const SCOPES = ['Whole farm', 'One pen'] as const
@@ -19,8 +19,8 @@ const METHODS = ['Cash', 'Transfer', 'POS'] as const
 export function AddExpenseModal({ onClose }: { onClose: () => void }) {
   const currentUser = useCurrentUser()
   const { addExpense } = useTrade()
-  // Pen attendants add expenses for their own pens only (BRD §4); everyone else can pick any pen or the whole farm.
-  const ownPensOnly = currentUser.pens !== 'all'
+  // Attendants add pen expenses only, for the pens they work on (BRD §4); everyone else can pick any pen or the whole farm.
+  const ownPensOnly = isAttendant(currentUser.role)
   const penOptions = [...pens].filter((p) => canSeePen(currentUser, p.id)).sort((a, b) => a.id - b.id)
   const toast = useToast()
   const me = currentUser.name.split(' ')[0]

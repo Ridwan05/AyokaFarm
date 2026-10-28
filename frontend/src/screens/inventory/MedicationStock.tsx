@@ -16,6 +16,7 @@ import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
 import { MedicationDrawer } from '../../features/stock/MedicationDrawer'
 import { ReceiveDeliveryDrawer } from '../../features/stock/ReceiveDeliveryDrawer'
+import { isAttendant } from '../../lib/access'
 import { formatNumber } from '../../lib/format'
 import { InventoryTabs } from './InventoryTabs'
 import { Presence } from '../../components/ui/Overlay'
@@ -58,7 +59,7 @@ export default function MedicationStock() {
   const { stockOf } = useTrade()
   const keeper = user.role === 'store-keeper'
   // Pen attendants can look, not act (BRD §4: Inventory V).
-  const readOnly = user.role === 'pen-attendant'
+  const readOnly = isAttendant(user.role)
   const [showWithdrawal, setShowWithdrawal] = useState(true)
   const [overlay, setOverlay] = useState<{ kind: 'receive' } | { kind: 'detail'; batch: string } | null>(null)
   const rows = medications.map((m) => ({ ...m, stock: stockOf(m.name, m.stock) }))

@@ -16,6 +16,7 @@ const sees: Record<string, string> = {
   'sales-accounts': 'sales, payments, customers, suppliers and reports',
   'store-keeper': 'feed, egg and medication stock, and deliveries',
   'pen-attendant': 'your own pens, their daily entries and expenses, and stock levels',
+  'pen-attendant-all': 'every pen, its daily entries and expenses, and stock levels',
 }
 
 /** P-E15 · shown when someone opens a page outside their role (e.g. from a shared link). */

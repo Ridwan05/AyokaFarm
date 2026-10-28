@@ -1,6 +1,7 @@
 'use client'
 
 import { useCurrentUser } from '../data/sessionContext'
+import { isAttendant } from '../lib/access'
 import AccountsHome from './AccountsHome'
 import Dashboard from './Dashboard'
 import PenAttendantHome from './PenAttendantHome'
@@ -11,6 +12,6 @@ export default function Home() {
   const { role } = useCurrentUser()
   if (role === 'sales-accounts') return <AccountsHome />
   if (role === 'store-keeper') return <StockHome />
-  if (role === 'pen-attendant') return <PenAttendantHome />
+  if (isAttendant(role)) return <PenAttendantHome />
   return <Dashboard />
 }

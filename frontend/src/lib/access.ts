@@ -1,6 +1,9 @@
 import { roles, type Module } from '../data/settings'
 import type { Role, User } from '../data/session'
 
+/** Pen attendants, whether they cover assigned pens or every pen. */
+export const isAttendant = (role: Role) => role === 'pen-attendant' || role === 'pen-attendant-all'
+
 /** Which permission module guards each area of the app (longest prefix wins). */
 const areas: { prefix: string; module: Module | 'reports' | 'deliveries'; label: string; group: string }[] = [
   { prefix: '/deliveries', module: 'deliveries', label: 'Deliveries', group: 'Trade' },
@@ -28,12 +31,12 @@ function canView(role: Role, module: Module | 'reports' | 'deliveries') {
   // Receiving deliveries and the weekly count are the Store Keeper's jobs.
   if (module === 'deliveries') return role === 'store-keeper'
   // Reports are for the people who run the farm and its money.
-  if (module === 'reports') return role !== 'store-keeper' && role !== 'pen-attendant'
+  if (module === 'reports') return role !== 'store-keeper' && !isAttendant(role)
   const p = roles.find((r) => r.id === role)!.permissions[module]
   return p.view !== false
 }
 
-/** Pen attendants see only their own pens; everyone who works on production sees all of them. */
+/** Pen attendants see only their assigned pens; everyone else who works on production sees all of them. */
 export const canSeePen = (user: User, penId: number) => user.pens === 'all' || user.pens.includes(penId)
 
 /** The pen id in /pens/:id or /production/entry/:id, if any. */
@@ -45,11 +48,11 @@ const penInPath = (path: string) => {
 export function canAccess(path: string, user: User) {
   const { role } = user
   // Every role has a home: the dashboard, or its own start page for the narrower roles.
-  if (path === '/') return role === 'pen-attendant' || role === 'store-keeper' || canView(role, 'Dashboard')
+  if (path === '/') return isAttendant(role) || role === 'store-keeper' || canView(role, 'Dashboard')
   // The farm manager's settings scope is the staff list only.
   if (role === 'farm-manager' && (path.startsWith('/settings') || path === '/go-live')) return path === '/settings/staff'
   // Pen attendants: their pens, production and read-only stock — nothing else.
-  if (role === 'pen-attendant' && !(path.startsWith('/pens/') || ['/production', '/inventory'].some((p) => path === p || path.startsWith(p + '/')))) return false
+  if (isAttendant(role) && !(path.startsWith('/pens/') || ['/production', '/inventory'].some((p) => path === p || path.startsWith(p + '/')))) return false
   const pen = penInPath(path)
   if (pen !== null && !canSeePen(user, pen)) return false
   const area = areaFor(path)
@@ -67,7 +70,7 @@ export const canApprove = (role: Role) => role === 'owner' || role === 'farm-man
 
 /** Who can record a pen's daily entry: its attendant, the farm manager or the owner. */
 export const canRecordProduction = (user: User, penId: number) =>
-  (user.role === 'owner' || user.role === 'farm-manager' || user.role === 'pen-attendant') && canSeePen(user, penId)
+  (user.role === 'owner' || user.role === 'farm-manager' || isAttendant(user.role)) && canSeePen(user, penId)
 
 /** Where the Settings item points for each role. */
 export const settingsHomeFor = (role: Role) => (role === 'farm-manager' ? '/settings/staff' : '/settings')

@@ -21,6 +21,7 @@ export const roleLabels: Record<StaffMember['role'], string> = {
   'sales-accounts': 'Sales & Accounts',
   'store-keeper': 'Store Keeper',
   'pen-attendant': 'Pen Attendant',
+  'pen-attendant-all': 'Pen Attendant · all pens',
 }
 
 export const staff: StaffMember[] = [
@@ -32,6 +33,7 @@ export const staff: StaffMember[] = [
   { id: 'kemi', name: 'Kemi Adewale', initials: 'KA', phone: '0905 ••• 3318', role: 'pen-attendant', pens: 'Pen 2', lastActive: 'Today 07:12', whatsapp: true, active: true },
   { id: 'tunde', name: 'Tunde Bakare', initials: 'TB', phone: '0814 ••• 6620', role: 'pen-attendant', pens: 'Pen 6', lastActive: 'Today 06:51', whatsapp: true, active: true },
   { id: 'chidi', name: 'Chidi Okeke', initials: 'CO', phone: '0703 ••• 2290', role: 'pen-attendant', pens: 'Pen 1', lastActive: 'Today 06:40', whatsapp: false, active: true },
+  { id: 'yemi', name: 'Yemi Okafor', initials: 'YO', phone: '0816 ••• 2045', role: 'pen-attendant-all', pens: 'All pens', lastActive: 'Today 07:30', whatsapp: true, active: true },
   { id: 'segun', name: 'Segun Alabi', initials: 'SA', phone: '0802 ••• 4417', role: 'pen-attendant', pens: '—', lastActive: '14/09', whatsapp: false, active: false },
 ]
 
@@ -70,7 +72,7 @@ export const roles: RoleDef[] = [
     id: 'farm-manager',
     name: 'Farm Manager',
     description: 'Runs the farm day to day. Approves below-minimum sales and late entries.',
-    permissions: byModule((m) => (m === 'Admin & settings' ? { view: 'partial', add: false, edit: false, delete: false, scope: 'Staff list only' } : work(m === 'Production' ? 'All pens · corrections with a reason' : 'All records'))),
+    permissions: byModule((m) => (m === 'Admin & settings' ? { view: 'partial', add: false, edit: false, delete: false, scope: 'Staff list · assigns pens' } : work(m === 'Production' ? 'All pens · corrections with a reason' : 'All records'))),
   },
   {
     id: 'pen-attendant',
@@ -80,6 +82,18 @@ export const roles: RoleDef[] = [
       m === 'Production' ? { view: true, add: true, edit: true, delete: false, scope: 'Own pens · edit until 23:59' }
       : m === 'Inventory — feed & eggs' || m === 'Medication stock' ? readOnly()
       : m === 'Expenses' ? { view: false, add: true, edit: false, delete: false, scope: 'Own pens · add only' }
+      : m === 'Dashboard' ? { view: 'partial', add: false, edit: false, delete: false, scope: 'Production tiles only' }
+      : none,
+    ),
+  },
+  {
+    id: 'pen-attendant-all',
+    name: 'Pen Attendant · all pens',
+    description: 'Records daily production and pen expenses for every pen — relief cover.',
+    permissions: byModule((m) =>
+      m === 'Production' ? { view: true, add: true, edit: true, delete: false, scope: 'All pens · edit until 23:59' }
+      : m === 'Inventory — feed & eggs' || m === 'Medication stock' ? readOnly()
+      : m === 'Expenses' ? { view: false, add: true, edit: false, delete: false, scope: 'Any pen · add only' }
       : m === 'Dashboard' ? { view: 'partial', add: false, edit: false, delete: false, scope: 'Production tiles only' }
       : none,
     ),

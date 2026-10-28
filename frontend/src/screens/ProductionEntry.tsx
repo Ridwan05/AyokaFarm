@@ -25,6 +25,7 @@ import {
 import { farm } from '../data/session'
 import { useCurrentUser } from '../data/sessionContext'
 import { useTrade } from '../data/tradeContext'
+import { isAttendant } from '../lib/access'
 import { cn } from '../lib/cn'
 import { formatNumber, formatShortDate, formatSignedPct } from '../lib/format'
 
@@ -118,7 +119,7 @@ export default function ProductionEntry() {
   const setMed = (i: number, patch: Partial<Draft['meds'][number]>) => set('meds', draft.meds.map((m, j) => (j === i ? { ...m, ...patch } : m)))
   const layers = ctx.type === 'Layers'
   const today = todayISO()
-  const backTo = user.role === 'pen-attendant' ? '/' : `/pens/${penId}`
+  const backTo = isAttendant(user.role) ? '/' : `/pens/${penId}`
 
   const existing = productionRecords.find((r) => r.penId === penId && r.date === today)
   const recordedAt = existing?.time ?? ctx.recordedAt

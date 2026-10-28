@@ -1,4 +1,4 @@
-export type Role = 'owner' | 'farm-manager' | 'sales-accounts' | 'store-keeper' | 'pen-attendant'
+export type Role = 'owner' | 'farm-manager' | 'sales-accounts' | 'store-keeper' | 'pen-attendant' | 'pen-attendant-all'
 
 export type User = {
   name: string
@@ -17,6 +17,7 @@ export const users: User[] = [
   { name: 'Bayo Lawal', initials: 'BL', role: 'store-keeper', roleLabel: 'Store Keeper', pens: [] },
   { name: 'Musa Ibrahim', initials: 'MI', role: 'pen-attendant', roleLabel: 'Pen Attendant · Pens 3, 4, 5', pens: [3, 4, 5] },
   { name: 'Kemi Adewale', initials: 'KA', role: 'pen-attendant', roleLabel: 'Pen Attendant · Pen 2', pens: [2] },
+  { name: 'Yemi Okafor', initials: 'YO', role: 'pen-attendant-all', roleLabel: 'Pen Attendant · all pens', pens: 'all' },
 ]
 
 export const farm = {

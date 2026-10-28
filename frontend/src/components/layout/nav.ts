@@ -14,7 +14,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { Role, User } from '../../data/session'
-import { canAccess } from '../../lib/access'
+import { canAccess, isAttendant } from '../../lib/access'
 
 export type NavItem = {
   label: string
@@ -73,7 +73,7 @@ const penAttendantNav: NavGroup[] = [
 ]
 
 export function navFor(role: Role): NavGroup[] {
-  if (role === 'pen-attendant') return penAttendantNav
+  if (isAttendant(role)) return penAttendantNav
   if (role === 'store-keeper') return [{ items: [{ label: 'Store today', to: '/', icon: LayoutDashboard }] }, ...navGroups.slice(1)]
   return navGroups
 }

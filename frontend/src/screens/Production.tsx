@@ -27,7 +27,7 @@ import { FEED_DEVIATION_WARN_PCT, pensToday, type PenToday } from '../data/dashb
 import { withTodaysRecord } from '../data/production'
 import { useCurrentUser } from '../data/sessionContext'
 import { useTrade } from '../data/tradeContext'
-import { canRecordProduction, canSeePen } from '../lib/access'
+import { canRecordProduction, canSeePen, isAttendant } from '../lib/access'
 import { farm } from '../data/session'
 import { formatCrates, formatNumber, formatShortDate, formatSignedPct, parseISODate } from '../lib/format'
 
@@ -107,7 +107,7 @@ export default function Production() {
   const [reminded, setReminded] = useState(false)
   const user = useCurrentUser()
   const { productionRecords } = useTrade()
-  const attendant = user.role === 'pen-attendant'
+  const attendant = isAttendant(user.role)
   const penEntries = allPenEntries.filter((p) => canSeePen(user, p.penId))
   const today = pensToday.filter((p) => canSeePen(user, p.id)).map((p) => withTodaysRecord(p, productionRecords))
 

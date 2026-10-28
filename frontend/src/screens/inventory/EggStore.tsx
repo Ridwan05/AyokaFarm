@@ -11,6 +11,7 @@ import { Card, CardHeader } from '../../components/ui/Card'
 import { KpiCard } from '../../components/ui/KpiCard'
 import { NumberCell, Table, TextCell, type Column } from '../../components/ui/Table'
 import { eggDelta, eggKpis, eggStore, withBalances, withdrawal, type Balanced, type EggMovement } from '../../data/inventory'
+import { isAttendant } from '../../lib/access'
 import { InventoryTabs } from './InventoryTabs'
 
 const columns: Column<Balanced<EggMovement>>[] = [
@@ -36,7 +37,7 @@ export default function EggStore() {
   const role = useCurrentUser().role
   const keeper = role === 'store-keeper'
   // Pen attendants can look, not act (BRD §4: Inventory V).
-  const readOnly = role === 'pen-attendant'
+  const readOnly = isAttendant(role)
   return (
     <>
       <PageHeader

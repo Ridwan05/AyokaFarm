@@ -15,6 +15,7 @@ import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
 import { AskReorderModal } from '../../features/stock/AskReorderModal'
 import { ReceiveDeliveryDrawer } from '../../features/stock/ReceiveDeliveryDrawer'
+import { isAttendant } from '../../lib/access'
 import { cn } from '../../lib/cn'
 import { formatNumber } from '../../lib/format'
 import { InventoryTabs, LedgerNote } from './InventoryTabs'
@@ -45,7 +46,7 @@ export default function FeedStock() {
   const { stockOf, stockMoves } = useTrade()
   const keeper = user.role === 'store-keeper'
   // Pen attendants can look, not act (BRD §4: Inventory V).
-  const readOnly = user.role === 'pen-attendant'
+  const readOnly = isAttendant(user.role)
   const [selected, setSelected] = useState(feedTypes[0].name)
   const [showReorder, setShowReorder] = useState(true)
   const [overlay, setOverlay] = useState<'receive' | 'reorder' | null>(null)

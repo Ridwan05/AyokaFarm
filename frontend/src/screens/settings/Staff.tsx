@@ -11,14 +11,24 @@ import { Modal, Presence } from '../../components/ui/Overlay'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { PrimaryCell, Table, TextCell, type Column } from '../../components/ui/Table'
 import { useToast } from '../../components/ui/toastContext'
+import { pens as farmPens } from '../../data/pens'
+import { useCurrentUser } from '../../data/sessionContext'
 import { roleLabels, staff as initialStaff, type StaffMember } from '../../data/settings'
 import { SettingsHeader } from './SettingsHeader'
 
+/** "Pens 3, 4, 5" → [3, 4, 5] */
+const penIds = (text: string) => (text.match(/d+/g) ?? []).map(Number)
+const penText = (ids: number[]) => (ids.length === 0 ? '—' : ids.length === 1 ? `Pen ${ids[0]}` : `Pens ${ids.join(', ')}`)
+
 export default function Staff() {
   const toast = useToast()
+  // The owner adds and deactivates staff; the owner and the farm manager assign pens.
+  const { role: myRole } = useCurrentUser()
+  const isOwner = myRole === 'owner'
   const [people, setPeople] = useState(initialStaff)
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
+  const [assigning, setAssigning] = useState<StaffMember | null>(null)
   const active = people.filter((p) => p.active)
   const inactive = people.filter((p) => !p.active)
   const tabs = [`Active · ${active.length}`, `Deactivated · ${inactive.length}`, 'All']
@@ -53,9 +63,11 @@ export default function Staff() {
         title="Staff"
         description={`${active.length} people. Each person sees only what their role allows, and everything they record carries their name.`}
         actions={
-          <Button variant="primary" leadingIcon={Plus} onClick={() => setAdding(true)}>
-            Add staff
-          </Button>
+          isOwner && (
+            <Button variant="primary" leadingIcon={Plus} onClick={() => setAdding(true)}>
+              Add staff
+            </Button>
+          )
         }
       />
       <div className="flex flex-wrap items-center gap-3">
@@ -73,10 +85,19 @@ export default function Staff() {
           rowActions={(p) => (
             <RowMenu
               items={[
+                ...(p.role === 'pen-attendant'
+                  ? [{ label: 'Assign pens…', disabled: !p.active, onSelect: () => setAssigning(p) }]
+                  : p.role === 'pen-attendant-all'
+                    ? [{ label: 'Works on all pens', disabled: true, onSelect: () => {} }]
+                    : []),
                 { label: 'Reset password', onSelect: () => toast(`Reset link sent to ${p.name.split(' ')[0]} on WhatsApp`), disabled: !p.active },
-                p.active
-                  ? { label: 'Deactivate…', danger: true, disabled: p.role === 'owner', onSelect: () => (setActive(p.id, false), toast(`${p.name} deactivated and signed out`)) }
-                  : { label: 'Reactivate', onSelect: () => (setActive(p.id, true), toast(`${p.name} reactivated`)) },
+                ...(isOwner
+                  ? [
+                      p.active
+                        ? { label: 'Deactivate…', danger: true, disabled: p.role === 'owner', onSelect: () => (setActive(p.id, false), toast(`${p.name} deactivated and signed out`)) }
+                        : { label: 'Reactivate', onSelect: () => (setActive(p.id, true), toast(`${p.name} reactivated`)) },
+                    ]
+                  : []),
               ]}
             />
           )}
@@ -84,9 +105,21 @@ export default function Staff() {
       </Card>
       <p className="-mt-2 flex items-center gap-2 type-body-sm text-fg-secondary">
         <ShieldCheck size={16} strokeWidth={1.5} className="text-icon-secondary" />
-        Deactivating someone signs them out everywhere at once. Their past records keep their name. Admin and the farm manager can reset passwords.
+        {isOwner ? 'Deactivating someone signs them out everywhere at once. Their past records keep their name.' : 'Only the owner can add or deactivate staff.'} The owner and farm manager assign pens and reset passwords.
       </p>
       <Presence>{adding && <AddStaffModal onClose={() => setAdding(false)} onSave={(p) => setPeople((list) => [...list, p])} />}</Presence>
+      <Presence>
+        {assigning && (
+          <AssignPensModal
+            person={assigning}
+            onClose={() => setAssigning(null)}
+            onSave={(ids) => {
+              setPeople((list) => list.map((p) => (p.id === assigning.id ? { ...p, pens: penText(ids) } : p)))
+              toast(`${assigning.name.split(' ')[0]} now works on ${ids.length ? penText(ids) : 'no pens'}`)
+            }}
+          />
+        )}
+      </Presence>
     </>
   )
 }
@@ -113,7 +146,7 @@ function AddStaffModal({ onClose, onSave }: { onClose: () => void; onSave: (p: S
       initials: trimmed.split(/\s+/).slice(0, 2).map((w) => w[0].toUpperCase()).join(''),
       phone: `${digits.slice(0, 4)} ••• ${digits.slice(-4)}`,
       role,
-      pens: role === 'pen-attendant' ? pens || '—' : role === 'farm-manager' ? 'All pens' : '—',
+      pens: role === 'pen-attendant' ? pens || '—' : role === 'farm-manager' || role === 'pen-attendant-all' ? 'All pens' : '—',
       lastActive: 'Invited',
       whatsapp,
       active: true,
@@ -163,6 +196,49 @@ function AddStaffModal({ onClose, onSave }: { onClose: () => void; onSave: (p: S
         )}
         <Checkbox label="Send them alerts on WhatsApp" checked={whatsapp} onChange={setWhatsapp} />
       </form>
+    </Modal>
+  )
+}
+
+function AssignPensModal({ person, onClose, onSave }: { person: StaffMember; onClose: () => void; onSave: (ids: number[]) => void }) {
+  const [selected, setSelected] = useState(() => new Set(penIds(person.pens)))
+  const toggle = (id: number, on: boolean) =>
+    setSelected((s) => {
+      const next = new Set(s)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Assign pens · ${person.name}`}
+      subtitle="They’ll see and record only these pens"
+      footer={
+        <>
+          <Button size="lg" className="flex-1" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            size="lg"
+            variant="primary"
+            className="flex-1"
+            onClick={() => {
+              onSave([...selected].sort((a, b) => a - b))
+              onClose()
+            }}
+          >
+            Save pens
+          </Button>
+        </>
+      }
+    >
+      <div className="grid grid-cols-2 gap-3">
+        {[...farmPens].sort((a, b) => a.id - b.id).map((p) => (
+          <Checkbox key={p.id} label={`Pen ${p.id} · ${p.type}`} checked={selected.has(p.id)} onChange={(on) => toggle(p.id, on)} />
+        ))}
+      </div>
     </Modal>
   )
 }
