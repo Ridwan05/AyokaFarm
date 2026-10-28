@@ -2,14 +2,35 @@
 
 A web app for running AyokaFarm's poultry operation: daily pen production, feed and medication stock, sales, purchases, expenses, payments, customer and supplier balances, and reports. The requirements are in [AyokaFarm_BRD.md](AyokaFarm_BRD.md).
 
-It's one responsive web app for everyone — on a PC in the office or a phone in the pen. The front end still runs on mock data held in memory (`frontend/src/data/`), so changes reset on reload; the Supabase backend is being built alongside it.
+It's one responsive web app for everyone — on a PC in the office or a phone in the pen. Staff sign in with their phone number and a password; the farm's records live in Supabase, protected by row-level security. Dashboards, charts and most reports still show sample figures (marked "Sample figures") until round 2.
 
 ## Repository layout
 
 ```
 frontend/   the Next.js web app
-backend/    Supabase: database migrations and config (supabase/)
+backend/    Supabase: database migrations and config (supabase/), setup scripts (scripts/)
 ```
+
+## Environment variables
+
+Copy `frontend/.env.example` to `frontend/.env.local` (git ignores it) and fill it in. On Vercel, set the same names under Settings → Environment Variables.
+
+| Name | Where to find it | Secret? |
+|---|---|---|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Project Settings → API | No |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase → API Keys (`sb_publishable_…`) | No — row-level security protects the data |
+| `SUPABASE_SECRET_KEY` | Supabase → API Keys → Secret keys (`sb_secret_…`) | **Yes** — server only; mark it Sensitive on Vercel, never prefix with `NEXT_PUBLIC_` |
+
+## First-time setup
+
+```sh
+cd frontend && npm install && cd ..
+node backend/scripts/setup.mjs          # creates the Owner (asks for name, phone, password)
+node backend/scripts/setup.mjs --demo   # optional: demo staff, pens, flocks and a week of records
+node backend/scripts/remove-demo.mjs    # before go-live: deletes all farm records and demo staff
+```
+
+The Owner then adds everyone else in Settings → Staff. Public sign-up is turned off in Supabase (Authentication → Sign In / Providers → "Allow new users to sign up").
 
 ## Run the web app
 
@@ -30,7 +51,7 @@ cd backend
 npx supabase migration new <name>
 ```
 
-Use the person at the bottom of the sidebar (or in the ☰ menu on a phone) to view the app as each role.
+Each person sees only what their role allows:
 
 | Role | Starts on | Can use |
 |---|---|---|

@@ -40,7 +40,7 @@ export default function EggStore() {
   const readOnly = isAttendant(role)
   return (
     <>
-      <PageHeader
+      <PageHeader sample
         eyebrow={keeper ? ['Inventory', 'Eggs'] : ['Operate', 'Inventory']}
         title="Egg store"
         description={keeper ? 'Read only for the store — eggs come in from pen entries and go out through sales.' : 'Eggs come in from pen entries and go out through sales — counted, never typed.'}

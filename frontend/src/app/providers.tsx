@@ -2,16 +2,13 @@
 
 import type { ReactNode } from 'react'
 import { Toaster } from '../components/ui/Toast'
-import { SessionProvider } from '../data/SessionProvider'
-import { TradeProvider } from '../data/store'
 
+/** App-wide providers. Signed-in data (session, farm records) lives in the (app) layout. */
 export function Providers({ children }: { children: ReactNode }) {
   return (
-    <SessionProvider>
-      <TradeProvider>
-        {children}
-        <Toaster />
-      </TradeProvider>
-    </SessionProvider>
+    <>
+      {children}
+      <Toaster />
+    </>
   )
 }

@@ -161,9 +161,9 @@ export default function ProductionEntry() {
     (!layers || (num(draft.crates) !== null && num(draft.pieces) !== null)) &&
     draft.meds.every((m, i) => num(m.qty) !== null && !medError(i))
 
-  function save() {
+  async function save() {
     if (!valid || !ctx) return
-    addProductionRecord({
+    if (!(await addProductionRecord({
       penId,
       date: today,
       time: clockTime(),
@@ -179,7 +179,7 @@ export default function ProductionEntry() {
       layingRate,
       medications: draft.meds.map((m) => ({ medication: m.medication, qty: num(m.qty)!, mode: m.mode, purpose: m.purpose })),
       recordedBy: user.name.split(' ')[0],
-    })
+    }))) return
     saveDraft(penId, null)
     setSaved(true)
     if (overMortality) {

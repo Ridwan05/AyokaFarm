@@ -47,11 +47,11 @@ export function ReceiveDeliveryDrawer({ onClose }: { onClose: () => void }) {
     note: note.trim() ? undefined : 'Copy the number from the delivery note',
   }
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault()
     setSubmitted(true)
     if (!order || errors.delivered || errors.sentBack || errors.note) return
-    receiveDelivery(order.ref, num(delivered), num(sentBack), note.trim(), user.name.split(' ')[0])
+    if (!(await receiveDelivery(order.ref, num(delivered), num(sentBack), note.trim(), user.name.split(' ')[0]))) return
     toast(`${order.ref} received · ${formatNumber(intoStore)} ${order.stockUnit} into the store`)
     onClose()
   }

@@ -52,7 +52,7 @@ export default function Dashboard() {
 
   return (
     <>
-      <PageHeader
+      <PageHeader sample
         eyebrow={formatLongDate(farm.today)}
         title={`${greeting(farm.today)}, ${firstName}`}
         description={`${liveAlerts.length} things need your attention across ${pensToday.length} pens.`}

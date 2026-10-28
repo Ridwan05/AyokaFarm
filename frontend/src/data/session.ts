@@ -1,6 +1,8 @@
 export type Role = 'owner' | 'farm-manager' | 'sales-accounts' | 'store-keeper' | 'pen-attendant' | 'pen-attendant-all'
 
 export type User = {
+  /** Supabase auth user id (= profiles.id). */
+  id: string
   name: string
   initials: string
   role: Role
@@ -9,18 +11,25 @@ export type User = {
   pens: number[] | 'all'
 }
 
-/** Everyone signs in to the same web app — on a PC in the office or a phone in the pen. */
-export const users: User[] = [
-  { name: 'Adeola Ogunleye', initials: 'AO', role: 'owner', roleLabel: 'Owner · Admin', pens: 'all' },
-  { name: 'Emeka Nwosu', initials: 'EN', role: 'farm-manager', roleLabel: 'Farm Manager', pens: 'all' },
-  { name: 'Funmi Adebayo', initials: 'FA', role: 'sales-accounts', roleLabel: 'Sales & Accounts', pens: [] },
-  { name: 'Bayo Lawal', initials: 'BL', role: 'store-keeper', roleLabel: 'Store Keeper', pens: [] },
-  { name: 'Musa Ibrahim', initials: 'MI', role: 'pen-attendant', roleLabel: 'Pen Attendant · Pens 3, 4, 5', pens: [3, 4, 5] },
-  { name: 'Kemi Adewale', initials: 'KA', role: 'pen-attendant', roleLabel: 'Pen Attendant · Pen 2', pens: [2] },
-  { name: 'Yemi Okafor', initials: 'YO', role: 'pen-attendant-all', roleLabel: 'Pen Attendant · all pens', pens: 'all' },
-]
+/** Database role ids use underscores (farm_manager); the app uses dashes (farm-manager). */
+export const roleFromDb = (id: string) => id.replace(/_/g, '-') as Role
+export const roleToDb = (role: Role) => role.replace(/-/g, '_')
+
+/** Today's date on the farm (Africa/Lagos), as YYYY-MM-DD. */
+export function farmTodayISO(now = new Date()) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now)
+}
 
 export const farm = {
   name: 'AyokaFarm',
-  today: new Date(2026, 9, 9),
+  /** Midnight at the start of today on the farm. */
+  today: new Date(`${farmTodayISO()}T00:00:00`),
 }
+
+export const initialsOf = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0].toUpperCase())
+    .join('')

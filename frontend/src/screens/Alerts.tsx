@@ -69,7 +69,7 @@ export default function Alerts() {
 
   return (
     <>
-      <PageHeader
+      <PageHeader sample
         backTo="/"
         eyebrow={['Dashboard', 'Alerts']}
         title="Alerts"

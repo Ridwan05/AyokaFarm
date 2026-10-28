@@ -61,9 +61,9 @@ export default function MedicationStock() {
   // Pen attendants can look, not act (BRD §4: Inventory V).
   const readOnly = isAttendant(user.role)
   const [showWithdrawal, setShowWithdrawal] = useState(true)
-  const [overlay, setOverlay] = useState<{ kind: 'receive' } | { kind: 'detail'; batch: string } | null>(null)
+  const [overlay, setOverlay] = useState<{ kind: 'receive' } | { kind: 'detail'; name: string } | null>(null)
   const rows = medications.map((m) => ({ ...m, stock: stockOf(m.name, m.stock) }))
-  const open = overlay?.kind === 'detail' ? medications.find((m) => m.batch === overlay.batch) : undefined
+  const open = overlay?.kind === 'detail' ? medications.find((m) => m.name === overlay.name) : undefined
   return (
     <>
       <PageHeader
@@ -114,7 +114,7 @@ export default function MedicationStock() {
           meta={<span className="type-body-sm text-fg-tertiary">Oldest expiry is used first</span>}
           action={{ label: 'Export', to: '#' }}
         />
-        <Table columns={columns} rows={rows} rowKey={(m) => m.batch} onRowClick={(m) => setOverlay({ kind: 'detail', batch: m.batch })} />
+        <Table columns={columns} rows={rows} rowKey={(m) => m.name} onRowClick={(m) => setOverlay({ kind: 'detail', name: m.name })} />
       </Card>
 
       <Presence>{overlay?.kind === 'receive' && <ReceiveDeliveryDrawer onClose={() => setOverlay(null)} />}</Presence>

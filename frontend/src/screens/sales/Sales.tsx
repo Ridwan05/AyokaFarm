@@ -68,8 +68,8 @@ export default function Sales() {
                 ) : (
                 <>
                   <Button
-                    onClick={() => {
-                      rejectSale(first.receipt)
+                    onClick={async () => {
+                      if (!(await rejectSale(first.receipt))) return
                       toast(`${first.receipt} rejected`)
                     }}
                   >
@@ -78,8 +78,8 @@ export default function Sales() {
                   <Button
                     variant="primary"
                     leadingIcon={Check}
-                    onClick={() => {
-                      approveSale(first.receipt, me)
+                    onClick={async () => {
+                      if (!(await approveSale(first.receipt, me))) return
                       toast(`${first.receipt} approved`)
                     }}
                   >

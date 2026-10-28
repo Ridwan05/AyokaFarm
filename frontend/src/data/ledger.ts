@@ -1,17 +1,18 @@
 import { GO_LIVE, type Customer } from './customers'
+import { farmTodayISO } from './session'
 import type { Payment } from './payments'
 import { totalOf, type Purchase } from './purchases'
 import { amountOf, products, type Sale } from './sales'
 
 // Balances are always derived — never stored or typed.
 
-export const TODAY_ISO = '2026-10-09'
+export const TODAY_ISO = farmTodayISO()
 
 /** An unpaid (or part-paid) charge. */
 export type Bill = { ref: string; date: string; left: number }
 
 /** "09/10 15:10" → "2026-10-09" */
-export const saleISODate = (s: Sale) => `2026-${s.date.slice(3, 5)}-${s.date.slice(0, 2)}`
+export const saleISODate = (s: Sale) => s.iso ?? `2026-${s.date.slice(3, 5)}-${s.date.slice(0, 2)}`
 
 export function daysBetween(fromISO: string, toISO = TODAY_ISO) {
   return Math.round((Date.parse(toISO) - Date.parse(fromISO)) / 86_400_000)

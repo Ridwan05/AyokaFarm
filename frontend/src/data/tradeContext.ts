@@ -28,35 +28,42 @@ export type Trade = {
   customerBalance: (customerId: string) => number
   customerOpenBills: (customerId: string) => Bill[]
   customerStatement: (customerId: string) => StatementLine[]
-  addCustomer: (customer: Customer) => void
-  addSupplier: (supplier: Supplier) => void
+  addCustomer: (customer: Customer) => Promise<boolean>
+  addSupplier: (supplier: Supplier) => Promise<boolean>
   supplierBalance: (supplierId: string) => number
   supplierOpenBills: (supplierId: string) => Bill[]
   supplierStatement: (supplierId: string) => StatementLine[]
   /** Total paid on a purchase so far (at purchase + payments since). */
   purchasePaid: (ref: string) => number
-  approveSale: (receipt: string, by: string) => void
-  rejectSale: (receipt: string) => void
-  addSale: (sale: Sale) => void
+  approveSale: (receipt: string, by: string) => Promise<boolean>
+  rejectSale: (receipt: string) => Promise<boolean>
+  addSale: (sale: Sale) => Promise<boolean>
   /** Payment against one sale. */
-  recordSalePayment: (receipt: string, amount: number, method: PaymentMethod) => void
-  addPurchase: (purchase: Purchase) => void
+  recordSalePayment: (receipt: string, amount: number, method: PaymentMethod) => Promise<boolean>
+  addPurchase: (purchase: Purchase) => Promise<boolean>
   orders: Order[]
   deliveries: Delivery[]
   stockMoves: StockMove[]
-  /** Base stock plus anything received or adjusted this session. */
-  stockOf: (item: string, base: number) => number
-  receiveDelivery: (ref: string, delivered: number, sentBack: number, note: string, by: string) => void
-  addStockMoves: (moves: StockMove[]) => void
+  /** Stock on hand now, from the stock ledger in Supabase. The base argument is ignored (kept for old callers). */
+  stockOf: (item: string, base?: number) => number
+  receiveDelivery: (ref: string, delivered: number, sentBack: number, note: string, by: string) => Promise<boolean>
+  addStockMoves: (moves: StockMove[]) => Promise<boolean>
   expenses: Expense[]
-  addExpense: (expense: Expense) => void
-  /** Daily pen entries recorded this session. */
+  addExpense: (expense: Expense) => Promise<boolean>
+  /** Today's pen entries. */
   productionRecords: ProductionRecord[]
   /** Saves the entry and takes its feed and medication out of stock. */
-  addProductionRecord: (record: ProductionRecord) => void
-  /** Payment outside a sale/purchase; clears the oldest bills first. Returns what it cleared. */
+  addProductionRecord: (record: ProductionRecord) => Promise<boolean>
+  /** Payment outside a sale/purchase; clears the oldest bills first. Returns what it cleared (saving continues in the background). */
   recordPayment: (payment: NewPayment) => string
+  addPen: (pen: NewPen) => Promise<boolean>
+  placeFlock: (flock: NewFlock) => Promise<boolean>
+  /** Load everything again from Supabase. */
+  reload: () => Promise<void>
 }
+
+export type NewPen = { name: string; type: 'Layers' | 'Broilers'; capacity: number }
+export type NewFlock = { code: string; penId: number; type: 'Layers' | 'Broilers'; breed: string; placedOn: string; ageAtPlacementDays: number; birds: number }
 
 export const TradeContext = createContext<Trade | null>(null)
 

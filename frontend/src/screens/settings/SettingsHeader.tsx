@@ -13,11 +13,11 @@ const tabs = [
   { label: 'Audit log', to: '/settings/audit' },
 ]
 
-export function SettingsHeader({ title, description, actions }: { title: string; description: string; actions?: ReactNode }) {
+export function SettingsHeader({ title, description, actions, sample }: { title: string; description: string; actions?: ReactNode; sample?: boolean }) {
   const user = useCurrentUser()
   return (
     <>
-      <PageHeader eyebrow="Settings" title={title} description={description} actions={actions} />
+      <PageHeader eyebrow="Settings" title={title} description={description} actions={actions} sample={sample} />
       <LinkTabs label="Settings" tabs={tabs.filter((t) => canAccess(t.to, user))} />
     </>
   )

@@ -32,7 +32,7 @@ export default function StatementsReport() {
   const toast = useToast()
   const [side, setSide] = useState<'Customers' | 'Suppliers'>('Suppliers')
   const [query, setQuery] = useState('')
-  const [selected, setSelected] = useState('greenfield')
+  const [selected, setSelected] = useState('')
   const [weekly, setWeekly] = useState(true)
   const [sending, setSending] = useState(false)
 

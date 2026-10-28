@@ -2,6 +2,8 @@
 
 import { Plus, ShieldCheck } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
+import { toast as sonner } from 'sonner'
+import { addStaff, resetStaffPassword, setStaffActive } from '../../app/(app)/settings/staff/actions'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card, CardHeader } from '../../components/ui/Card'
@@ -12,32 +14,42 @@ import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { PrimaryCell, Table, TextCell, type Column } from '../../components/ui/Table'
 import { useToast } from '../../components/ui/toastContext'
 import { pens as farmPens } from '../../data/pens'
+import { roleToDb } from '../../data/session'
 import { useCurrentUser } from '../../data/sessionContext'
-import { roleLabels, staff as initialStaff, type StaffMember } from '../../data/settings'
+import { roleLabels, staff, type StaffMember } from '../../data/settings'
+import { useTrade } from '../../data/tradeContext'
+import { createClient } from '../../lib/supabase/client'
 import { SettingsHeader } from './SettingsHeader'
 
 /** "Pens 3, 4, 5" → [3, 4, 5] */
-const penIds = (text: string) => (text.match(/d+/g) ?? []).map(Number)
-const penText = (ids: number[]) => (ids.length === 0 ? '—' : ids.length === 1 ? `Pen ${ids[0]}` : `Pens ${ids.join(', ')}`)
+const penIds = (text: string) => (text.match(/\d+/g) ?? []).map(Number)
+const penText = (ids: number[]) => (ids.length === 0 ? 'no pens' : ids.length === 1 ? `Pen ${ids[0]}` : `Pens ${ids.join(', ')}`)
 
 export default function Staff() {
   const toast = useToast()
-  // The owner adds and deactivates staff; the owner and the farm manager assign pens.
+  const { reload } = useTrade()
+  // The owner adds and deactivates staff; the owner and the farm manager assign pens and reset passwords.
   const { role: myRole } = useCurrentUser()
   const isOwner = myRole === 'owner'
-  const [people, setPeople] = useState(initialStaff)
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
   const [assigning, setAssigning] = useState<StaffMember | null>(null)
-  const active = people.filter((p) => p.active)
-  const inactive = people.filter((p) => !p.active)
+  const [resetting, setResetting] = useState<StaffMember | null>(null)
+  // `staff` is loaded from Supabase and refreshed after every change.
+  const active = staff.filter((p) => p.active)
+  const inactive = staff.filter((p) => !p.active)
   const tabs = [`Active · ${active.length}`, `Deactivated · ${inactive.length}`, 'All']
   const [tab, setTab] = useState(tabs[0])
   const key = tab.split(' · ')[0]
   const q = query.trim().toLowerCase()
-  const rows = (key === 'Active' ? active : key === 'Deactivated' ? inactive : people).filter((p) => !q || p.name.toLowerCase().includes(q))
+  const rows = (key === 'Active' ? active : key === 'Deactivated' ? inactive : staff).filter((p) => !q || p.name.toLowerCase().includes(q))
 
-  const setActive = (id: string, value: boolean) => setPeople((list) => list.map((p) => (p.id === id ? { ...p, active: value } : p)))
+  const setActive = async (p: StaffMember, value: boolean) => {
+    const result = await setStaffActive(p.id, value)
+    if (!result.ok) return void sonner.error(result.error)
+    await reload()
+    toast(value ? `${p.name} reactivated` : `${p.name} deactivated and signed out`)
+  }
 
   const columns: Column<StaffMember>[] = [
     { key: 'name', header: 'Name', render: (p) => <PrimaryCell initials={p.initials} title={p.name} subtitle={p.phone} /> },
@@ -90,12 +102,12 @@ export default function Staff() {
                   : p.role === 'pen-attendant-all'
                     ? [{ label: 'Works on all pens', disabled: true, onSelect: () => {} }]
                     : []),
-                { label: 'Reset password', onSelect: () => toast(`Reset link sent to ${p.name.split(' ')[0]} on WhatsApp`), disabled: !p.active },
+                { label: 'Reset password…', onSelect: () => setResetting(p), disabled: !p.active || (p.role === 'owner' && !isOwner) },
                 ...(isOwner
                   ? [
                       p.active
-                        ? { label: 'Deactivate…', danger: true, disabled: p.role === 'owner', onSelect: () => (setActive(p.id, false), toast(`${p.name} deactivated and signed out`)) }
-                        : { label: 'Reactivate', onSelect: () => (setActive(p.id, true), toast(`${p.name} reactivated`)) },
+                        ? { label: 'Deactivate…', danger: true, disabled: p.role === 'owner', onSelect: () => void setActive(p, false) }
+                        : { label: 'Reactivate', onSelect: () => void setActive(p, true) },
                     ]
                   : []),
               ]}
@@ -107,51 +119,40 @@ export default function Staff() {
         <ShieldCheck size={16} strokeWidth={1.5} className="text-icon-secondary" />
         {isOwner ? 'Deactivating someone signs them out everywhere at once. Their past records keep their name.' : 'Only the owner can add or deactivate staff.'} The owner and farm manager assign pens and reset passwords.
       </p>
-      <Presence>{adding && <AddStaffModal onClose={() => setAdding(false)} onSave={(p) => setPeople((list) => [...list, p])} />}</Presence>
-      <Presence>
-        {assigning && (
-          <AssignPensModal
-            person={assigning}
-            onClose={() => setAssigning(null)}
-            onSave={(ids) => {
-              setPeople((list) => list.map((p) => (p.id === assigning.id ? { ...p, pens: penText(ids) } : p)))
-              toast(`${assigning.name.split(' ')[0]} now works on ${ids.length ? penText(ids) : 'no pens'}`)
-            }}
-          />
-        )}
-      </Presence>
+      <Presence>{adding && <AddStaffModal onClose={() => setAdding(false)} />}</Presence>
+      <Presence>{assigning && <AssignPensModal person={assigning} onClose={() => setAssigning(null)} />}</Presence>
+      <Presence>{resetting && <ResetPasswordModal person={resetting} onClose={() => setResetting(null)} />}</Presence>
     </>
   )
 }
 
-function AddStaffModal({ onClose, onSave }: { onClose: () => void; onSave: (p: StaffMember) => void }) {
+function AddStaffModal({ onClose }: { onClose: () => void }) {
   const toast = useToast()
+  const { reload } = useTrade()
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
   const [role, setRole] = useState<StaffMember['role']>('pen-attendant')
-  const [pens, setPens] = useState('')
+  const [password, setPassword] = useState('')
+  const [pens, setPens] = useState<Set<number>>(new Set())
   const [whatsapp, setWhatsapp] = useState(true)
   const [submitted, setSubmitted] = useState(false)
-  const errors = { name: name.trim() ? undefined : 'Enter their name', phone: phone.replace(/\D/g, '').length >= 10 ? undefined : 'Enter their phone number' }
+  const [busy, setBusy] = useState(false)
+  const errors = {
+    name: name.trim() ? undefined : 'Enter their name',
+    phone: phone.replace(/\D/g, '').length >= 10 ? undefined : 'Enter their phone number',
+    password: password.length >= 8 ? undefined : 'At least 8 characters',
+  }
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault()
     setSubmitted(true)
-    if (errors.name || errors.phone) return
-    const digits = phone.replace(/\D/g, '')
-    const trimmed = name.trim()
-    onSave({
-      id: trimmed.toLowerCase().replace(/\s+/g, '-'),
-      name: trimmed,
-      initials: trimmed.split(/\s+/).slice(0, 2).map((w) => w[0].toUpperCase()).join(''),
-      phone: `${digits.slice(0, 4)} ••• ${digits.slice(-4)}`,
-      role,
-      pens: role === 'pen-attendant' ? pens || '—' : role === 'farm-manager' || role === 'pen-attendant-all' ? 'All pens' : '—',
-      lastActive: 'Invited',
-      whatsapp,
-      active: true,
-    })
-    toast(`${trimmed} invited — they’ll get a sign-in link on WhatsApp`)
+    if (errors.name || errors.phone || errors.password) return
+    setBusy(true)
+    const result = await addStaff({ name, phone, role: roleToDb(role), password, whatsapp, pens: [...pens] })
+    setBusy(false)
+    if (!result.ok) return void sonner.error(result.error)
+    await reload()
+    toast(`${name.trim()} can now sign in with their phone number`)
     onClose()
   }
 
@@ -160,14 +161,14 @@ function AddStaffModal({ onClose, onSave }: { onClose: () => void; onSave: (p: S
       open
       onClose={onClose}
       title="Add a staff member"
-      subtitle="They sign in with their phone number"
+      subtitle="They sign in with their phone number and this first password"
       footer={
         <>
           <Button size="lg" className="flex-1" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="lg" variant="primary" className="flex-1" type="submit" form="add-staff">
-            Send invite
+          <Button size="lg" variant="primary" className="flex-1" type="submit" form="add-staff" disabled={busy}>
+            {busy ? 'Adding…' : 'Add staff member'}
           </Button>
         </>
       }
@@ -176,8 +177,11 @@ function AddStaffModal({ onClose, onSave }: { onClose: () => void; onSave: (p: S
         <Field label="Full name" error={submitted ? errors.name : undefined}>
           {(id) => <TextInput id={id} value={name} onChange={(e) => setName(e.target.value)} />}
         </Field>
-        <Field label="Phone" error={submitted ? errors.phone : undefined}>
-          {(id) => <TextInput id={id} type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />}
+        <Field label="Phone" hint="This is their sign-in name" error={submitted ? errors.phone : undefined}>
+          {(id) => <TextInput id={id} type="tel" placeholder="0803 123 4567" value={phone} onChange={(e) => setPhone(e.target.value)} />}
+        </Field>
+        <Field label="First password" hint="Give it to them in person; they can't reset it themselves" error={submitted ? errors.password : undefined}>
+          {(id) => <TextInput id={id} type="text" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />}
         </Field>
         <Field label="Role" hint="What they can see and do — see Roles & permissions">
           {(id) => (
@@ -190,9 +194,19 @@ function AddStaffModal({ onClose, onSave }: { onClose: () => void; onSave: (p: S
           )}
         </Field>
         {role === 'pen-attendant' && (
-          <Field label="Pens" hint="They’ll only see these pens">
-            {(id) => <TextInput id={id} placeholder="Pen 7" value={pens} onChange={(e) => setPens(e.target.value)} />}
-          </Field>
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-1 type-label-md text-fg-primary">Pens</legend>
+            <div className="grid grid-cols-2 gap-3">
+              {farmPens.map((p) => (
+                <Checkbox
+                  key={p.id}
+                  label={`Pen ${p.id} · ${p.type}`}
+                  checked={pens.has(p.id)}
+                  onChange={(on) => setPens((s) => (on ? new Set(s).add(p.id) : new Set([...s].filter((x) => x !== p.id))))}
+                />
+              ))}
+            </div>
+          </fieldset>
         )}
         <Checkbox label="Send them alerts on WhatsApp" checked={whatsapp} onChange={setWhatsapp} />
       </form>
@@ -200,8 +214,11 @@ function AddStaffModal({ onClose, onSave }: { onClose: () => void; onSave: (p: S
   )
 }
 
-function AssignPensModal({ person, onClose, onSave }: { person: StaffMember; onClose: () => void; onSave: (ids: number[]) => void }) {
+function AssignPensModal({ person, onClose }: { person: StaffMember; onClose: () => void }) {
+  const toast = useToast()
+  const { reload } = useTrade()
   const [selected, setSelected] = useState(() => new Set(penIds(person.pens)))
+  const [busy, setBusy] = useState(false)
   const toggle = (id: number, on: boolean) =>
     setSelected((s) => {
       const next = new Set(s)
@@ -209,6 +226,26 @@ function AssignPensModal({ person, onClose, onSave }: { person: StaffMember; onC
       else next.delete(id)
       return next
     })
+
+  // Row-level security lets the owner and farm manager change pen assignments directly.
+  const save = async () => {
+    setBusy(true)
+    const db = createClient()
+    const before = new Set(penIds(person.pens))
+    const add = [...selected].filter((id) => !before.has(id))
+    const remove = [...before].filter((id) => !selected.has(id))
+    const results = await Promise.all([
+      add.length ? db.from('staff_pens').insert(add.map((pen_id) => ({ profile_id: person.id, pen_id }))) : null,
+      remove.length ? db.from('staff_pens').delete().eq('profile_id', person.id).in('pen_id', remove) : null,
+    ])
+    setBusy(false)
+    const error = results.find((r) => r?.error)?.error
+    if (error) return void sonner.error(error.message)
+    await reload()
+    toast(`${person.name.split(' ')[0]} now works on ${penText([...selected].sort((a, b) => a - b))}`)
+    onClose()
+  }
+
   return (
     <Modal
       open
@@ -220,15 +257,7 @@ function AssignPensModal({ person, onClose, onSave }: { person: StaffMember; onC
           <Button size="lg" className="flex-1" onClick={onClose}>
             Cancel
           </Button>
-          <Button
-            size="lg"
-            variant="primary"
-            className="flex-1"
-            onClick={() => {
-              onSave([...selected].sort((a, b) => a - b))
-              onClose()
-            }}
-          >
+          <Button size="lg" variant="primary" className="flex-1" disabled={busy} onClick={() => void save()}>
             Save pens
           </Button>
         </>
@@ -239,6 +268,46 @@ function AssignPensModal({ person, onClose, onSave }: { person: StaffMember; onC
           <Checkbox key={p.id} label={`Pen ${p.id} · ${p.type}`} checked={selected.has(p.id)} onChange={(on) => toggle(p.id, on)} />
         ))}
       </div>
+    </Modal>
+  )
+}
+
+function ResetPasswordModal({ person, onClose }: { person: StaffMember; onClose: () => void }) {
+  const toast = useToast()
+  const [password, setPassword] = useState('')
+  const [busy, setBusy] = useState(false)
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (password.length < 8) return void sonner.error('The new password needs at least 8 characters')
+    setBusy(true)
+    const result = await resetStaffPassword(person.id, password)
+    setBusy(false)
+    if (!result.ok) return void sonner.error(result.error)
+    toast(`New password set for ${person.name.split(' ')[0]} — give it to them in person`)
+    onClose()
+  }
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Reset password · ${person.name}`}
+      subtitle="Their old password stops working straight away"
+      footer={
+        <>
+          <Button size="lg" className="flex-1" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="lg" variant="primary" className="flex-1" type="submit" form="reset-password" disabled={busy}>
+            Set new password
+          </Button>
+        </>
+      }
+    >
+      <form id="reset-password" onSubmit={submit}>
+        <Field label="New password" hint="At least 8 characters">
+          {(id) => <TextInput id={id} type="text" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />}
+        </Field>
+      </form>
     </Modal>
   )
 }

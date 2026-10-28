@@ -151,7 +151,7 @@ export function entryContext(penId: number) {
   const today = pensToday.find((p) => p.id === penId)
   if (!pen || !today) return null
   // Mock: today is day 4 of the flock's current week.
-  const ageDays = pen.week * 7 - 3
+  const ageDays = pen.ageDays ?? pen.week * 7 - 3
   const bands = feedBands[pen.type === 'Layers' ? 'Layers · Isa Brown' : 'Broilers · Ross 308']
   const band = bands.find((b) => pen.week >= b.from && (b.to === null || pen.week <= b.to)) ?? bands[bands.length - 1]
   return {

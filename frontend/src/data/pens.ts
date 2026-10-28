@@ -25,6 +25,8 @@ export type Pen = {
   stats: [Stat, Stat, Stat]
   footer: string
   staff: string
+  /** Days since hatch, from the flock's placement date (set when loaded from Supabase). */
+  ageDays?: number
 }
 
 export const pens: Pen[] = [

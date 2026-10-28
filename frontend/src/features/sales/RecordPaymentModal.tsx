@@ -22,12 +22,12 @@ export function RecordPaymentModal({ sale, onClose }: { sale: Sale; onClose: () 
   const { name, customer } = customerView(sale, customers)
   const value = Number(amount.replace(/,/g, '')) || 0
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (value <= 0) return setError('Enter the amount received')
     if (value > left) return setError(`Only ₦${formatNumber(left)} is left on this sale`)
     const m: PaymentMethod = method === 'POS' ? 'POS' : method === 'Cash' ? 'cash' : 'transfer'
-    recordSalePayment(sale.receipt, value, m)
+    if (!(await recordSalePayment(sale.receipt, value, m))) return
     toast(`₦${formatNumber(value)} recorded on ${sale.receipt}`)
     onClose()
   }

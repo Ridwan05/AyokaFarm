@@ -72,9 +72,9 @@ export default function WeeklyCount() {
   const value = differences.reduce((n, i) => n + Math.abs(diffOf(i)!) * i.unitCost, 0)
   const update = (name: string, patch: Partial<Item>) => setItems((list) => list.map((i) => (i.name === name ? { ...i, ...patch } : i)))
 
-  const send = () => {
+  const send = async () => {
     // Small differences change stock now; bigger ones wait for Emeka.
-    addStockMoves(differences.filter((i) => !bigger.includes(i)).map((i) => ({ item: i.name, qty: diffOf(i)!, type: 'adjust', source: `Count by ${first}: ${i.reason}` })))
+    if (!(await addStockMoves(differences.filter((i) => !bigger.includes(i)).map((i) => ({ item: i.name, qty: diffOf(i)!, type: 'adjust', source: `Count by ${first}: ${i.reason}` }))))) return
     setSentAt('17:58')
     toast('Count sent to Emeka')
   }

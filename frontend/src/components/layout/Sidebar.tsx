@@ -2,10 +2,10 @@
 
 import Image from 'next/image'
 import { ChevronsUpDown, LogOut, Menu } from 'lucide-react'
-import { usePathname, useRouter } from 'next/navigation'
-import { useEffect, useRef, useState } from 'react'
+import { usePathname } from 'next/navigation'
+import { useState } from 'react'
 import { Drawer as Sheet } from 'vaul'
-import { farm, users } from '../../data/session'
+import { farm } from '../../data/session'
 import { useSession } from '../../data/sessionContext'
 import { describeArea, settingsHomeFor } from '../../lib/access'
 import { cn } from '../../lib/cn'
@@ -47,70 +47,22 @@ function Logo() {
   return <Image src="/logo-mark.svg" width={18} height={23} alt="" />
 }
 
-/** Prototype-only: view the app as another person. */
-function UserSwitcher({ onNavigate }: { onNavigate?: () => void }) {
-  const { user: currentUser, setUser } = useSession()
-  const router = useRouter()
-  const [switching, setSwitching] = useState(false)
-  const switcher = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    if (!switching) return
-    const close = (e: PointerEvent) => !switcher.current?.contains(e.target as Node) && setSwitching(false)
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setSwitching(false)
-    document.addEventListener('pointerdown', close)
-    document.addEventListener('keydown', onKey)
-    return () => {
-      document.removeEventListener('pointerdown', close)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [switching])
-
+/** The signed-in person, with sign out. */
+function UserCard() {
+  const { user, signOut } = useSession()
   return (
-    <div ref={switcher} className="relative flex w-full shrink-0 items-center gap-3 border-t border-line-subtle pt-3 pr-2 pl-3">
-      <button
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={switching}
-        title="Prototype: view the app as another person"
-        onClick={() => setSwitching((s) => !s)}
-        className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 text-left"
-      >
-        <Avatar initials={currentUser.initials} />
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate type-label-md text-fg-primary">{currentUser.name}</span>
-          <span className="truncate type-body-sm text-fg-tertiary">{currentUser.roleLabel}</span>
-        </span>
-      </button>
-      {switching && (
-        <div role="menu" className="ayk-pop absolute bottom-full left-0 z-30 mb-2 w-[240px] origin-bottom-left rounded-lg bg-surface p-1.5 shadow-lg">
-          <p className="px-3 pt-1 pb-1.5 type-overline text-fg-tertiary">Prototype · view as</p>
-          {users.map((u) => (
-            <button
-              key={u.name}
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                setUser(u)
-                setSwitching(false)
-                onNavigate?.()
-                router.push('/')
-              }}
-              className={cn('flex w-full cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-left hover:bg-subtle', u.name === currentUser.name && 'bg-subtle')}
-            >
-              <span className="flex flex-1 flex-col">
-                <span className="type-label-md text-fg-primary">{u.name}</span>
-                <span className="type-body-sm text-fg-tertiary">{u.roleLabel}</span>
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
+    <div className="flex w-full shrink-0 items-center gap-3 border-t border-line-subtle pt-3 pr-2 pl-3">
+      <Avatar initials={user.initials} />
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate type-label-md text-fg-primary">{user.name}</span>
+        <span className="truncate type-body-sm text-fg-tertiary">{user.roleLabel}</span>
+      </span>
       <button
         type="button"
         aria-label="Sign out"
         title="Sign out"
-        className="cursor-pointer rounded-sm p-1 text-icon-secondary hover:bg-subtle"
+        onClick={() => void signOut()}
+        className="flex size-9 cursor-pointer items-center justify-center rounded-md text-icon-secondary transition-[background-color,transform] duration-(--dur-press) ease-out hover:bg-subtle motion-safe:active:scale-[0.94]"
       >
         <LogOut size={16} strokeWidth={1.5} />
       </button>
@@ -153,7 +105,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
 
       {canSee(settings, user) && <NavRow item={settings} onNavigate={onNavigate} />}
-      <UserSwitcher onNavigate={onNavigate} />
+      <UserCard />
     </>
   )
 }

@@ -1,10 +1,15 @@
 import { createContext, useContext } from 'react'
-import { users, type User } from './session'
+import type { User } from './session'
 
-export type Session = { user: User; setUser: (u: User) => void }
+export type Session = { user: User; signOut: () => Promise<void> }
 
-export const SessionContext = createContext<Session>({ user: users[0], setUser: () => {} })
+export const SessionContext = createContext<Session | null>(null)
 
-export const useSession = () => useContext(SessionContext)
-/** The signed-in person (mock — switchable from the sidebar for the prototype). */
-export const useCurrentUser = () => useContext(SessionContext).user
+export function useSession() {
+  const ctx = useContext(SessionContext)
+  if (!ctx) throw new Error('useSession must be used inside SessionProvider')
+  return ctx
+}
+
+/** The signed-in person. */
+export const useCurrentUser = () => useSession().user

@@ -1,4 +1,5 @@
 import { Download, Share2 } from 'lucide-react'
+import { usePathname } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { Button } from '../../components/ui/Button'
@@ -16,12 +17,15 @@ const tabs = [
 /** Shared header + tabs for every report. */
 export function ReportHeader({ title, description, actions }: { title: string; description: string; actions?: ReactNode }) {
   const toast = useToast()
+  // Statements come from real records; the other reports are still samples until round 2.
+  const sample = usePathname() !== '/reports/statements'
   return (
     <>
       <PageHeader
         eyebrow={['Insight', 'Reports']}
         title={title}
         description={description}
+        sample={sample}
         actions={
           actions ?? (
             <>

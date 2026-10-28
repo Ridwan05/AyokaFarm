@@ -31,7 +31,7 @@ export function PaymentModal({ direction: initialDirection = 'in', partyId, onCl
   const [direction, setDirection] = useState(initialDirection)
   const isIn = direction === 'in'
   const parties = isIn ? trade.customers : trade.suppliers
-  const [party, setParty] = useState(partyId ?? (isIn ? 'chief-bello' : 'greenfield'))
+  const [party, setParty] = useState(partyId ?? parties[0]?.id ?? '')
   const bills = isIn ? trade.customerOpenBills(party) : trade.supplierOpenBills(party)
   const balance = isIn ? trade.customerBalance(party) : trade.supplierBalance(party)
   const [amount, setAmount] = useState(formatNumber(isIn ? Math.min(100000, balance) : Math.max(balance, 0)))
@@ -52,7 +52,7 @@ export function PaymentModal({ direction: initialDirection = 'in', partyId, onCl
   const switchDirection = (label: (typeof DIRECTIONS)[number]) => {
     const d = label === DIRECTIONS[0] ? 'in' : 'out'
     setDirection(d)
-    const next = d === 'in' ? 'chief-bello' : 'greenfield'
+    const next = (d === 'in' ? trade.customers : trade.suppliers)[0]?.id ?? ''
     setParty(next)
     const b = d === 'in' ? trade.customerBalance(next) : trade.supplierBalance(next)
     setAmount(formatNumber(d === 'in' ? Math.min(100000, b) : Math.max(b, 0)))

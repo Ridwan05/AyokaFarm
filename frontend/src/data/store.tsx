@@ -1,34 +1,79 @@
 'use client'
 
-import { useState, type ReactNode } from 'react'
-import { customers as initialCustomers } from './customers'
-import { initialDeliveries, initialOrders, type StockMove } from './deliveries'
+import { RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { toast } from 'sonner'
+import { Button } from '../components/ui/Button'
+import { createClient } from '../lib/supabase/client'
 import { allocate, customerBills, customerStatement, describeAllocation, sumLeft, supplierBalance, supplierBills, supplierPurchases, supplierStatement } from './ledger'
-import { initialExpenses } from './expenses'
-import { initialPayments } from './payments'
-import type { ProductionRecord } from './production'
-import { initialPurchases } from './purchases'
-import { initialSales } from './sales'
-import { suppliers as initialSuppliers } from './suppliers'
-import { TradeContext, type Trade } from './tradeContext'
+import { loadRemote, type Remote } from './remote'
+import type { TablesInsert } from '../lib/supabase/database.types'
+import type { PaymentMethod } from './sales'
+import { farmTodayISO } from './session'
+import { Splash } from './SessionProvider'
 import { useCurrentUser } from './sessionContext'
+import { TradeContext, type Trade } from './tradeContext'
 
-// In-memory store for records that several screens change (sales, purchases, payments).
-// Swap for API calls + a query cache when the backend exists.
+// The farm's records, loaded from Supabase. Screens read and write through useTrade(); every write
+// goes to the database (where triggers calculate refs, stock, bird counts and approvals) and then
+// the records are reloaded. Row-level security decides what each person can see and change.
+
+const dbMethod = (m: PaymentMethod | undefined) => (m === 'POS' ? 'pos' : m) ?? null
+
+/** Turn a Postgres/PostgREST error into a sentence for a toast. */
+function friendly(message: string) {
+  if (/row-level security|permission denied|42501/i.test(message)) return 'You don’t have permission to do that.'
+  if (/duplicate key.*production_one_per_pen_day/i.test(message)) return 'This pen already has an entry for today.'
+  return message.replace(/^.*?ERROR:\s*/, '')
+}
 
 export function TradeProvider({ children }: { children: ReactNode }) {
-  const currentUser = useCurrentUser()
-  const [sales, setSales] = useState(initialSales)
-  const [purchases, setPurchases] = useState(initialPurchases)
-  const [payments, setPayments] = useState(initialPayments)
-  const [customers, setCustomers] = useState(initialCustomers)
-  const [suppliers, setSuppliers] = useState(initialSuppliers)
-  const [orders, setOrders] = useState(initialOrders)
-  const [deliveries, setDeliveries] = useState(initialDeliveries)
-  const [stockMoves, setStockMoves] = useState<StockMove[]>([])
-  const [productionRecords, setProductionRecords] = useState<ProductionRecord[]>([])
-  const [expenses, setExpenses] = useState(initialExpenses)
-  const me = currentUser.name.split(' ')[0]
+  const user = useCurrentUser()
+  const db = useMemo(() => createClient(), [])
+  const [data, setData] = useState<Remote | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
+
+  const reload = useCallback(async () => {
+    try {
+      setData(await loadRemote(db))
+      setLoadError(null)
+    } catch (e) {
+      setLoadError(e instanceof Error ? e.message : String(e))
+    }
+  }, [db])
+
+  useEffect(() => {
+    // Initial load from Supabase (an external system), so setting state here is intended.
+    // oxlint-disable-next-line react/set-state-in-effect
+    void reload()
+  }, [reload])
+
+  if (loadError && !data) {
+    return (
+      <Splash>
+        <span className="type-h3 text-fg-primary">Couldn’t load the farm’s records</span>
+        <span className="max-w-[420px] text-center">{loadError}</span>
+        <Button leadingIcon={RefreshCw} onClick={() => void reload()}>
+          Try again
+        </Button>
+      </Splash>
+    )
+  }
+  if (!data) return <Splash>Loading the farm’s records…</Splash>
+
+  const { sales, purchases, payments, customers, suppliers, lookups } = data
+  const today = farmTodayISO()
+
+  /** Run a write, show a toast if it fails, then reload. Resolves true when it saved. */
+  async function write(run: () => PromiseLike<{ error: { message: string } | null }>): Promise<boolean> {
+    const { error } = await run()
+    if (error) {
+      toast.error(friendly(error.message))
+      return false
+    }
+    await reload()
+    return true
+  }
 
   const customerOpenBills = (id: string) => {
     const c = customers.find((x) => x.id === id)
@@ -47,33 +92,13 @@ export function TradeProvider({ children }: { children: ReactNode }) {
       const c = customers.find((x) => x.id === id)
       return c ? customerStatement(c, sales, payments) : []
     },
-    orders,
-    deliveries,
-    stockMoves,
-    stockOf: (item, base) => base + stockMoves.filter((m) => m.item === item).reduce((n, m) => n + m.qty, 0),
-    receiveDelivery(ref, delivered, sentBack, note, by) {
-      const order = orders.find((o) => o.ref === ref)
-      if (!order) return
-      const intoStore = (delivered - sentBack) * order.perUnit
-      setOrders((list) => list.filter((o) => o.ref !== ref))
-      setDeliveries((list) => [{ ...order, qty: delivered, received: '09/10 13:58', by, sentBack, note }, ...list])
-      setStockMoves((list) => [...list, { item: order.item, qty: intoStore, type: 'received', source: `Delivery · ${ref}` }])
-    },
-    addStockMoves: (moves) => setStockMoves((list) => [...list, ...moves]),
-    expenses,
-    addExpense: (expense) => setExpenses((list) => [expense, ...list]),
-    productionRecords,
-    addProductionRecord(record) {
-      setProductionRecords((list) => [record, ...list])
-      const source = `Pen ${record.penId} entry · ${record.recordedBy}`
-      setStockMoves((list) => [
-        ...list,
-        ...(record.feedBags > 0 ? [{ item: record.feedType, qty: -record.feedBags, type: 'used' as const, source }] : []),
-        ...record.medications.map((m) => ({ item: m.medication, qty: -m.qty, type: 'used' as const, source })),
-      ])
-    },
-    addCustomer: (c) => setCustomers((list) => [...list, c]),
-    addSupplier: (s) => setSuppliers((list) => [...list, s]),
+    orders: data.orders,
+    deliveries: data.deliveries,
+    // Today's ledger rows come from Supabase with the rest; nothing is held only in the browser.
+    stockMoves: [],
+    stockOf: (item) => data.stock.get(item) ?? 0,
+    expenses: data.expenses,
+    productionRecords: data.productionRecords,
     supplierBalance: (id) => supplierBalance(id, purchases, payments),
     supplierOpenBills: (id) => supplierBills(id, purchases, payments),
     supplierStatement: (id) => supplierStatement(id, purchases, payments),
@@ -81,47 +106,218 @@ export function TradeProvider({ children }: { children: ReactNode }) {
       const p = purchases.find((x) => x.ref === ref)
       return p ? (supplierPurchases(p.supplierId, purchases, payments).find((x) => x.purchase.ref === ref)?.paid ?? 0) : 0
     },
+    reload,
 
-    approveSale(receipt, by) {
-      setSales((list) =>
-        list.map((s) =>
-          s.receipt === receipt
-            ? { ...s, pendingApproval: false, approvedAt: '16:51', history: [{ title: `Approved by ${by}`, detail: 'Receipt released', time: '16:51' }, ...s.history] }
-            : s,
+    receiveDelivery: (ref, delivered, sentBack, note) =>
+      write(() =>
+        db
+          .from('purchases')
+          .update({ status: 'received', received_on: today, received_quantity: delivered, returned_quantity: sentBack, delivery_note: note || null })
+          .eq('id', lookups.purchaseId.get(ref)!),
+      ),
+
+    addStockMoves: (moves) =>
+      write(() =>
+        db.from('stock_adjustments').insert(
+          moves.map((m) => {
+            const feed = lookups.feedTypeId.get(m.item)
+            const med = lookups.medicationId.get(m.item)
+            return {
+              item: feed ? ('feed' as const) : med ? ('medication' as const) : ('eggs' as const),
+              feed_type_id: feed ?? null,
+              medication_id: med ?? null,
+              quantity_change: m.qty,
+              reason_id: lookups.reasonId.get('Recount')!,
+              note: m.source,
+              recorded_by: user.id,
+            }
+          }),
         ),
+      ),
+
+    addExpense: (e) =>
+      write(() =>
+        db.from('expenses').insert({
+          spent_on: e.date,
+          category_id: lookups.categoryId.get(e.category) ?? lookups.categoryId.get('Other')!,
+          description: e.description,
+          amount: e.amount,
+          supplier_id: e.supplierId ? Number(e.supplierId) : null,
+          amount_paid: e.amount,
+          payment_method: dbMethod(e.method),
+          pen_id: e.pen,
+          receipt_path: null,
+          recorded_by: user.id,
+        }),
+      ),
+
+    async addProductionRecord(r) {
+      const flock = lookups.activeFlockByPen.get(r.penId)
+      if (!flock) {
+        toast.error(`Pen ${r.penId} has no flock to record`)
+        return false
+      }
+      const { data: saved, error } = await db
+        .from('production_records')
+        .insert({
+          pen_id: r.penId,
+          flock_id: flock,
+          record_date: r.date,
+          mortality: r.died,
+          feed_type_id: r.feedBags > 0 ? (lookups.feedTypeId.get(r.feedType) ?? null) : null,
+          feed_bags: r.feedBags,
+          eggs_collected: r.eggs,
+          eggs_cracked: r.cracked,
+          recorded_by: user.id,
+        })
+        .select('id')
+        .single()
+      if (error || !saved) {
+        toast.error(friendly(error?.message ?? 'The entry wasn’t saved'))
+        return false
+      }
+      if (r.medications.length) {
+        const { error: medError } = await db.from('production_medications').insert(
+          r.medications.map((m) => ({
+            production_record_id: saved.id,
+            medication_id: lookups.medicationId.get(m.medication)!,
+            quantity: m.qty,
+            mode: (m.mode === 'Eye/nose drop' ? 'eye_nose_drop' : m.mode.toLowerCase()) as 'water',
+            purpose: m.purpose.toLowerCase() as 'treatment',
+          })),
+        )
+        if (medError) {
+          toast.error(`Entry saved, but the medication wasn’t: ${friendly(medError.message)}`)
+          await reload()
+          return false
+        }
+      }
+      await reload()
+      return true
+    },
+
+    addCustomer: (c) =>
+      write(() =>
+        db.from('customers').insert({
+          name: c.name,
+          short_name: c.short,
+          area: c.area === '—' ? null : c.area,
+          buys: c.buys
+            .split(/,\s*/)
+            .map((b) => b.toLowerCase())
+            .filter((b): b is 'eggs' | 'birds' | 'droppings' | 'sacks' => ['eggs', 'birds', 'droppings', 'sacks'].includes(b)),
+          whatsapp_opt_in: c.whatsapp,
+          opening_balance: c.opening,
+          created_by: user.id,
+        }),
+      ),
+
+    addSupplier: (s) =>
+      write(() =>
+        db.from('suppliers').insert({
+          name: s.name,
+          short_name: s.short,
+          phone: s.phone === '—' ? null : s.phone,
+          supplies: [s.kind.toLowerCase() as 'feed'],
+          payment_terms_days: s.termsDays,
+          created_by: user.id,
+        }),
+      ),
+
+    approveSale: (receipt) => write(() => db.from('sales').update({ approval: 'approved' }).eq('id', lookups.saleId.get(receipt)!)),
+    rejectSale: (receipt) => write(() => db.from('sales').update({ approval: 'rejected' }).eq('id', lookups.saleId.get(receipt)!)),
+
+    addSale: (s) =>
+      write(() =>
+        db.from('sales').insert({
+          sold_on: today,
+          customer_id: s.customerId === 'one-off' ? null : Number(s.customerId),
+          buyer_name: s.customerId === 'one-off' ? 'Walk-in buyer' : null,
+          product_id: Number(s.productId),
+          quantity: s.qty,
+          unit_price: s.price,
+          amount_paid: s.paid,
+          payment_method: dbMethod(s.method),
+          recorded_by: user.id,
+        }),
+      ),
+
+    recordSalePayment(receipt, amount, m) {
+      const sale = sales.find((s) => s.receipt === receipt)
+      return write(() =>
+        db
+          .from('sales')
+          .update({ amount_paid: (sale?.paid ?? 0) + amount, payment_method: dbMethod(m) })
+          .eq('id', lookups.saleId.get(receipt)!),
       )
     },
-    rejectSale(receipt) {
-      setSales((list) => list.filter((s) => s.receipt !== receipt))
-    },
-    addSale(sale) {
-      setSales((list) => [sale, ...list])
-    },
-    recordSalePayment(receipt, amount, method) {
-      setSales((list) =>
-        list.map((s) =>
-          s.receipt === receipt
-            ? { ...s, paid: s.paid + amount, method, history: [{ title: 'Payment recorded', detail: `₦${amount.toLocaleString('en-NG')} · ${method}`, time: 'now' }, ...s.history] }
-            : s,
-        ),
+
+    addPurchase(p) {
+      const kind = p.kind === 'Feed' ? 'feed' : p.kind === 'Birds' ? 'birds' : 'medication'
+      return write(() =>
+        db.from('purchases').insert({
+          kind,
+          purchased_on: p.date,
+          supplier_id: Number(p.supplierId),
+          feed_type_id: kind === 'feed' ? lookups.feedTypeId.get(p.item)! : null,
+          medication_id: kind === 'medication' ? lookups.medicationId.get(p.item)! : null,
+          quantity: p.qty,
+          unit: p.unit,
+          unit_price: p.price,
+          amount_paid: p.paidAtPurchase,
+          // Feed and medication wait for the Store Keeper to receive them; birds arrive with the flock.
+          status: kind === 'birds' ? 'received' : 'ordered',
+          received_on: kind === 'birds' ? p.date : null,
+          notes: kind === 'birds' ? p.item : null,
+          recorded_by: user.id,
+          // ref (PF-/PB-/PM-0001) is set by a database trigger.
+        } as TablesInsert<'purchases'>),
       )
     },
-    addPurchase(purchase) {
-      setPurchases((list) => [purchase, ...list])
-    },
+
     recordPayment(p) {
       const bills = p.direction === 'in' ? customerOpenBills(p.partyId) : supplierBills(p.partyId, purchases, payments)
-      const allocation = allocate(bills, p.amount)
-
-      // Payments are ledger entries; bills, balances and purchase histories are derived from them.
-
-      const cleared = describeAllocation(allocation) || 'Held as credit'
-      setPayments((list) => {
-        const prefix = p.direction === 'in' ? 'P-' : 'PP-'
-        const next = Math.max(...list.filter((x) => x.ref.startsWith(prefix) && !(prefix === 'P-' && x.ref.startsWith('PP-'))).map((x) => Number(x.ref.match(/\d+$/)![0]))) + 1
-        return [{ ref: `${prefix}${String(next).padStart(4, '0')}`, ...p, cleared, by: me }, ...list]
-      })
+      const cleared = describeAllocation(allocate(bills, p.amount)) || 'Held as credit'
+      void write(() =>
+        db.from('payments').insert({
+          paid_on: p.date,
+          direction: p.direction,
+          customer_id: p.direction === 'in' ? Number(p.partyId) : null,
+          supplier_id: p.direction === 'out' ? Number(p.partyId) : null,
+          amount: p.amount,
+          method: dbMethod(p.method) ?? 'cash',
+          reference: p.reference,
+          notes: cleared,
+          recorded_by: user.id,
+          // ref (P-/PP-0001) is set by a database trigger.
+        } as TablesInsert<'payments'>),
+      )
       return cleared
+    },
+
+    async addPen(pen) {
+      const { data: bird } = await db.from('bird_types').select('id').eq('name', pen.type === 'Layers' ? 'Layer' : 'Broiler').single()
+      return write(() => db.from('pens').insert({ name: pen.name, capacity: pen.capacity, bird_type_id: bird?.id ?? null }))
+    },
+
+    async placeFlock(f) {
+      const { data: bird } = await db.from('bird_types').select('id').eq('name', f.type === 'Layers' ? 'Layer' : 'Broiler').single()
+      if (!bird) {
+        toast.error('Bird type not found')
+        return false
+      }
+      return write(() =>
+        db.from('flocks').insert({
+          code: f.code,
+          pen_id: f.penId,
+          bird_type_id: bird.id,
+          breed: f.breed,
+          placed_on: f.placedOn,
+          age_at_placement_days: f.ageAtPlacementDays,
+          birds_placed: f.birds,
+          created_by: user.id,
+        }),
+      )
     },
   }
 

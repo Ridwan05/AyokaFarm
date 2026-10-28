@@ -42,8 +42,8 @@ export function SaleDrawer({ sale, onClose, onRecordPayment }: Props) {
       <Button
         size="lg"
         className="flex-1"
-        onClick={() => {
-          rejectSale(sale.receipt)
+        onClick={async () => {
+          if (!(await rejectSale(sale.receipt))) return
           toast(`${sale.receipt} rejected`)
           onClose()
         }}
@@ -54,8 +54,8 @@ export function SaleDrawer({ sale, onClose, onRecordPayment }: Props) {
         size="lg"
         variant="primary"
         className="flex-1"
-        onClick={() => {
-          approveSale(sale.receipt, approver)
+        onClick={async () => {
+          if (!(await approveSale(sale.receipt, approver))) return
           toast(`${sale.receipt} approved`)
           onClose()
         }}

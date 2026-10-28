@@ -128,7 +128,7 @@ export default function Production() {
 
   return (
     <>
-      <PageHeader
+      <PageHeader sample
         eyebrow={['Operate', 'Production']}
         title="Daily production"
         description={`Every pen-day entry in one place. Yesterday is complete except Pen ${missingEntry.penId}.`}

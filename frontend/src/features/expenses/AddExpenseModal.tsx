@@ -39,7 +39,7 @@ export function AddExpenseModal({ onClose }: { onClose: () => void }) {
     description: description.trim() ? undefined : 'Say what it was for',
   }
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault()
     setSubmitted(true)
     if (errors.amount || errors.description) return
@@ -56,7 +56,7 @@ export function AddExpenseModal({ onClose }: { onClose: () => void }) {
       receipt,
       addedBy: me,
     }
-    addExpense(expense)
+    if (!(await addExpense(expense))) return
     toast(`${category} · ₦${formatNumber(value)} saved`)
     onClose()
   }

@@ -1,6 +1,7 @@
 import { ArrowLeft } from 'lucide-react'
 import type { ReactNode } from 'react'
 import Link from 'next/link'
+import { Badge } from '../ui/Badge'
 
 type PageHeaderProps = {
   /** Small line above the title: a date, or a breadcrumb trail. */
@@ -10,9 +11,11 @@ type PageHeaderProps = {
   title: string
   description?: string
   actions?: ReactNode
+  /** Marks pages whose figures are still prototype samples, not the farm's records. */
+  sample?: boolean
 }
 
-export function PageHeader({ eyebrow, backTo, title, description, actions }: PageHeaderProps) {
+export function PageHeader({ eyebrow, backTo, title, description, actions, sample }: PageHeaderProps) {
   return (
     <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-6">
       <div className="flex min-w-0 flex-1 flex-col gap-1">
@@ -32,7 +35,14 @@ export function PageHeader({ eyebrow, backTo, title, description, actions }: Pag
             </p>
           </div>
         )}
-        <h1 className="type-display-md text-fg-primary text-balance lg:type-display-lg">{title}</h1>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <h1 className="type-display-md text-fg-primary text-balance lg:type-display-lg">{title}</h1>
+          {sample && (
+            <Badge tone="warning" dot>
+              Sample figures
+            </Badge>
+          )}
+        </div>
         {description && <p className="type-body-md text-fg-secondary">{description}</p>}
       </div>
       {actions && <div className="flex flex-wrap items-center gap-2 sm:shrink-0">{actions}</div>}

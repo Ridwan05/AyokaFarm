@@ -39,13 +39,13 @@ export function AddCustomerModal({ onClose }: { onClose: () => void }) {
     phone: phone.replace(/\D/g, '').length >= 10 ? undefined : 'Enter an 11-digit phone number',
   }
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault()
     setSubmitted(true)
     if (errors.name || (regular && errors.phone)) return
     if (regular) {
       const trimmed = name.trim()
-      addCustomer({
+      if (!(await addCustomer({
         id: trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
         name: trimmed,
         short: trimmed.split(' ').slice(0, 2).join(' '),
@@ -57,7 +57,7 @@ export function AddCustomerModal({ onClose }: { onClose: () => void }) {
         whatsapp: consent === CONSENT[0],
         opening: openingValue,
         olderSales: [],
-      })
+      }))) return
     }
     toast(`${name.trim()} added`)
     onClose()

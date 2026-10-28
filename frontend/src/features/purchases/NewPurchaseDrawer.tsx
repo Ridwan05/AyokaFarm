@@ -19,7 +19,8 @@ const num = (v: string) => Number(v.replace(/,/g, '')) || 0
 
 type Item = { name: string; unit: string; per: string; unitLabel: string; hint: string; defaultPrice: number }
 
-const items: Record<PurchaseKind, Item[]> = {
+/** Built when the drawer opens: feed types and medications are loaded from Supabase after this module is imported. */
+const buildItems = (): Record<PurchaseKind, Item[]> => ({
   Feed: feedTypes.map((f) => ({
     name: f.name,
     unit: 'bags',
@@ -41,16 +42,17 @@ const items: Record<PurchaseKind, Item[]> = {
     hint: `${formatNumber(m.stock)} ${m.unit} in stock · reorder at ${formatNumber(m.reorderAt)} ${m.unit}`,
     defaultPrice: 8500,
   })),
-}
-
-const defaultSupplier: Record<PurchaseKind, string> = { Feed: 'greenfield', Birds: 'oyo', Medication: 'vetcare' }
+})
 
 export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
   const currentUser = useCurrentUser()
   const { suppliers, purchases, supplierBalance, addPurchase } = useTrade()
   const toast = useToast()
+  const [items] = useState(buildItems)
+  // The first supplier of each kind, e.g. a feed supplier for feed.
+  const defaultSupplier = (k: PurchaseKind) => (suppliers.find((s) => s.kind === k) ?? suppliers[0])?.id ?? ''
   const [kind, setKind] = useState<PurchaseKind>('Feed')
-  const [supplierId, setSupplierId] = useState(defaultSupplier.Feed)
+  const [supplierId, setSupplierId] = useState(() => defaultSupplier('Feed'))
   const [itemName, setItemName] = useState(items.Feed[0].name)
   const item = items[kind].find((i) => i.name === itemName) ?? items[kind][0]
   const last = purchases.find((p) => p.item === item.name)
@@ -72,13 +74,13 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
 
   const changeKind = (k: PurchaseKind) => {
     setKind(k)
-    setSupplierId(defaultSupplier[k])
+    setSupplierId(defaultSupplier(k))
     const first = items[k][0]
     setItemName(first.name)
     setPrice(formatNumber(purchases.find((p) => p.item === first.name)?.price ?? first.defaultPrice))
   }
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault()
     setSubmitted(true)
     if (errors.qty || errors.price || errors.paid) return
@@ -90,8 +92,8 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
       ref, date: TODAY_ISO, supplierId, kind, item: item.name, qty: num(qty), unit: item.unit, per: item.per, price: num(price), paidAtPurchase: paidNow, recordedBy: me,
       history: [{ title: 'Purchase recorded', detail: `By ${me}${paidNow ? ` · paid ₦${formatNumber(paidNow)}` : ''}`, time: dayMonth(TODAY_ISO) }],
     }
-    addPurchase(purchase)
-    toast(`${ref} saved · ₦${formatNumber(totalOf(purchase))}`)
+    if (!(await addPurchase(purchase))) return
+    toast(`Purchase saved · ₦${formatNumber(totalOf(purchase))}`)
     onClose()
   }
 

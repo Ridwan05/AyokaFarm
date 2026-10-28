@@ -69,7 +69,7 @@ export default function GoLive() {
 
   return (
     <>
-      <PageHeader
+      <PageHeader sample
         backTo="/settings"
         eyebrow={['Settings', 'Go-live setup']}
         title="Set up AyokaFarm"

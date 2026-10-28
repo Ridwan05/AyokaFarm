@@ -41,7 +41,7 @@ export default function PenDetail() {
 
   return (
     <>
-      <PageHeader
+      <PageHeader sample
         backTo={isAttendant(user.role) ? '/' : '/pens'}
         eyebrow={[isAttendant(user.role) ? 'My pens' : 'Pens & flocks', `Pen ${pen.id}`]}
         title={title}

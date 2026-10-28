@@ -30,13 +30,13 @@ export function AddSupplierModal({ onClose }: { onClose: () => void }) {
   const [submitted, setSubmitted] = useState(false)
   const errors = { name: name.trim() ? undefined : 'Enter the business name' }
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault()
     setSubmitted(true)
     if (errors.name) return
     const trimmed = name.trim()
     const digits = phone.replace(/\D/g, '')
-    addSupplier({
+    if (!(await addSupplier({
       id: trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '-'),
       name: trimmed,
       short: trimmed.split(' ')[0],
@@ -48,7 +48,7 @@ export function AddSupplierModal({ onClose }: { onClose: () => void }) {
       termsDays: Number(terms),
       lastPurchase: '—',
       lastPayment: '—',
-    })
+    }))) return
     toast(`${trimmed} added`)
     onClose()
   }

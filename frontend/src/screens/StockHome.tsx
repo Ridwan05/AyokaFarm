@@ -65,7 +65,7 @@ export default function StockHome() {
           <CardHeader title="Medication" action={{ label: 'Open', to: '/inventory/medication' }} />
           <ul className="flex flex-col px-5 pb-3">
             {meds.map((m, i) => (
-              <li key={m.batch} className={`flex items-center gap-3 py-2.5 ${i < meds.length - 1 ? 'border-b border-line-subtle' : ''}`}>
+              <li key={m.name} className={`flex items-center gap-3 py-2.5 ${i < meds.length - 1 ? 'border-b border-line-subtle' : ''}`}>
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate type-label-md text-fg-primary">{m.name}</span>
                   <span className="type-body-sm text-fg-tertiary">

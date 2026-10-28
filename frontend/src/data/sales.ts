@@ -1,3 +1,4 @@
+import { farmTodayISO } from './session'
 // Mock sales matching P-D9 / P-D27 and the sale overlays.
 
 export type ProductKind = 'Eggs' | 'Birds' | 'Droppings'
@@ -30,6 +31,8 @@ export type Sale = {
   receipt: string
   /** dd/mm hh:mm */
   date: string
+  /** Full ISO date (YYYY-MM-DD), so statements work across years. */
+  iso?: string
   customerId: string
   productId: string
   qty: number
@@ -85,5 +88,8 @@ export const initialSales: Sale[] = [
 ]
 
 /** Days covered by "This week" in the mock (03–09 Oct). */
-export const THIS_WEEK_FROM_DAY = 3
-export const TODAY = '09/10'
+const todayIso = farmTodayISO()
+/** Today as dd/mm, matching Sale.date. */
+export const TODAY = `${todayIso.slice(8, 10)}/${todayIso.slice(5, 7)}`
+/** First day (ISO) of the last seven days, today included. */
+export const WEEK_START_ISO = new Date(Date.parse(todayIso) - 6 * 86_400_000).toISOString().slice(0, 10)

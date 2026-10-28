@@ -24,7 +24,7 @@ export default function FarmProfile() {
 
   return (
     <>
-      <SettingsHeader
+      <SettingsHeader sample
         title="Farm profile"
         description="Who the farm is on every receipt and statement, and the basics every number depends on."
         actions={

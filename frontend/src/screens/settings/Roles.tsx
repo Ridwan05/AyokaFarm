@@ -35,7 +35,7 @@ export default function Roles() {
 
   return (
     <>
-      <SettingsHeader
+      <SettingsHeader sample
         title="Roles & permissions"
         description="Tick what each role can view, add, edit and delete. Menus follow these ticks, and the server enforces them."
         actions={

@@ -44,7 +44,7 @@ export default function FeedTargets() {
 
   return (
     <>
-      <SettingsHeader
+      <SettingsHeader sample
         title="Feed & targets"
         description="The numbers behind every Auto field and alert. Only an Admin can change them, and every change is logged."
         actions={

@@ -13,7 +13,8 @@ import { SettingsHeader } from './SettingsHeader'
 
 const PERIODS = ['Last 7 days', 'Last 30 days', 'All time'] as const
 const ACTIONS = ['All actions', ...Object.keys(auditTone)]
-const person = (id: string) => staff.find((s) => s.id === id)!
+// Sample entries name people by the prototype's ids; fall back to the id when they aren't real staff.
+const person = (id: string) => staff.find((s) => s.id === id) ?? { name: id.charAt(0).toUpperCase() + id.slice(1), initials: id.slice(0, 2).toUpperCase(), role: 'owner' as const }
 
 const columns: Column<AuditEntry>[] = [
   { key: 'when', header: 'When', width: 104, render: (e) => <TextCell tone="primary">{e.when}</TextCell> },
@@ -46,7 +47,7 @@ export default function AuditLog() {
 
   return (
     <>
-      <SettingsHeader title="Audit log" description="Who did what, and when, for every create, edit and delete. Nothing is ever hard-deleted." actions={<Button leadingIcon={Download}>Export</Button>} />
+      <SettingsHeader sample title="Audit log" description="Who did what, and when, for every create, edit and delete. Nothing is ever hard-deleted." actions={<Button leadingIcon={Download}>Export</Button>} />
       <div className="flex flex-wrap items-center gap-3">
         <Select label="Period" leadingIcon={CalendarDays} width={170} options={PERIODS} value={period} onChange={setPeriod} />
         <Select label="Who" leadingIcon={Users} width={170} options={['Everyone', ...staff.map((s) => s.name)]} value={who} onChange={setWho} />

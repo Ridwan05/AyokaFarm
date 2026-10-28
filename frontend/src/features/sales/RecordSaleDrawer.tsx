@@ -24,7 +24,7 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
   const toast = useToast()
   const [kind, setKind] = useState<ProductKind>('Eggs')
   const kindProducts = products.filter((p) => p.kind === kind)
-  const [customerId, setCustomerId] = useState('mrs-okafor')
+  const [customerId, setCustomerId] = useState(customers[0]?.id ?? ONE_OFF.id)
   const [productId, setProductId] = useState(kindProducts[0].id)
   const product = products.find((p) => p.id === productId) ?? kindProducts[0]
   const [qty, setQty] = useState('25')
@@ -54,14 +54,14 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
     setPrice(formatNumber(first.price))
   }
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault()
     setSubmitted(true)
     if (errors.qty || errors.price || errors.paid) return
     const next = Math.max(...sales.map((s) => Number(s.receipt.slice(2)))) + 1
     const receipt = `S-${next}`
     const m: PaymentMethod = method === 'POS' ? 'POS' : method === 'Cash' ? 'cash' : 'transfer'
-    addSale({
+    if (!(await addSale({
       receipt,
       date: '09/10 15:40',
       customerId: customer?.id ?? ONE_OFF.id,
@@ -73,8 +73,8 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
       recordedBy: currentUser.name.split(' ')[0],
       pendingApproval: belowMin,
       history: [{ title: belowMin ? 'Sent for approval' : 'Sale recorded', detail: `By ${currentUser.name.split(' ')[0]}`, time: '15:40' }],
-    })
-    toast(belowMin ? `${receipt} is waiting for approval` : `${receipt} recorded`)
+    }))) return
+    toast(belowMin ? 'Sale sent for approval' : 'Sale recorded')
     onClose()
   }
 

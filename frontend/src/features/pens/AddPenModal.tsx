@@ -1,22 +1,22 @@
 import { useState, type FormEvent } from 'react'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
-import { Field, SelectInput, TextInput } from '../../components/ui/Form'
+import { Field, TextInput } from '../../components/ui/Form'
 import { Modal } from '../../components/ui/Overlay'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { useToast } from '../../components/ui/toastContext'
-import { attendants, pens } from '../../data/pens'
+import { pens } from '../../data/pens'
+import { useTrade } from '../../data/tradeContext'
 
 type Props = { open: boolean; onClose: () => void }
 
 export function AddPenModal({ open, onClose }: Props) {
   const toast = useToast()
-  const nextId = Math.max(...pens.map((p) => p.id)) + 1
+  const { addPen } = useTrade()
+  const nextId = Math.max(0, ...pens.map((p) => p.id)) + 1
   const [name, setName] = useState(`Pen ${nextId}`)
   const [type, setType] = useState<'Layers' | 'Broilers'>('Broilers')
   const [capacity, setCapacity] = useState('1,500')
-  const [house, setHouse] = useState('')
-  const [attendant, setAttendant] = useState(attendants[0].name)
   const [submitted, setSubmitted] = useState(false)
 
   const capacityNum = Number(capacity.replace(/,/g, ''))
@@ -25,10 +25,11 @@ export function AddPenModal({ open, onClose }: Props) {
     capacity: capacityNum > 0 ? undefined : 'Enter how many birds it holds',
   }
 
-  const submit = (e: FormEvent) => {
+  const submit = async (e: FormEvent) => {
     e.preventDefault()
     setSubmitted(true)
     if (errors.name || errors.capacity) return
+    if (!(await addPen({ name: name.trim(), type, capacity: capacityNum }))) return
     toast(`${name} added`)
     onClose()
   }
@@ -71,27 +72,9 @@ export function AddPenModal({ open, onClose }: Props) {
               />
             )}
           </Field>
-          <Field label="House" className="flex-1">
-            {(id) => (
-              <TextInput id={id} placeholder="Block B, east" value={house} onChange={(e) => setHouse(e.target.value)} />
-            )}
-          </Field>
         </div>
-        <Field label="Attendant" hint="It appears in their pens list when they sign in">
-          {(id) => (
-            <SelectInput
-              id={id}
-              value={attendant}
-              onChange={(e) => setAttendant(e.target.value)}
-              options={attendants.map((a) => ({
-                value: a.name,
-                label: `${a.name} · also has ${a.pens.map((p) => `Pen ${p}`).join(', ')}`,
-              }))}
-            />
-          )}
-        </Field>
         <Alert title="Empty until a flock is placed">
-          Missing-entry reminders and feed targets start when you place a flock in this pen.
+          Missing-entry reminders and feed targets start when you place a flock in this pen. Assign its attendant in Settings → Staff.
         </Alert>
       </form>
     </Modal>

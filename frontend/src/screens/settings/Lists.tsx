@@ -42,7 +42,7 @@ export default function Lists() {
 
   return (
     <>
-      <SettingsHeader
+      <SettingsHeader sample
         title="Lists"
         description="The pick-lists every form uses. Change one here and every phone gets the new list at its next sign-in."
         actions={
