@@ -11,25 +11,26 @@ type Result = { ok: true } | { ok: false; error: string }
 const ROLES = ['owner', 'farm_manager', 'sales_accounts', 'store_keeper', 'pen_attendant', 'pen_attendant_all'] as const
 type DbRole = (typeof ROLES)[number]
 
-/** The caller's role, if they're signed in and active. */
-async function callerRole(): Promise<string | null> {
+/** Who is calling and their role, if they're signed in and active. */
+async function caller(): Promise<{ id: string; role: string | null } | null> {
   const supabase = await createClient()
   const { data } = await supabase.auth.getClaims()
   const id = data?.claims?.sub
   if (!id) return null
   const { data: profile } = await supabase.from('profiles').select('role_id, is_active').eq('id', id).single()
-  return profile?.is_active ? profile.role_id : null
+  return profile?.is_active ? { id, role: profile.role_id } : null
 }
+const callerRole = async () => (await caller())?.role ?? null
 
 const fail = (error: string): Result => ({ ok: false, error })
 
 export async function addStaff(input: { name: string; phone: string; role: string; password: string; whatsapp: boolean; pens: number[] }): Promise<Result> {
-  if ((await callerRole()) !== 'owner') return fail('Only the owner can add staff.')
+  if ((await callerRole()) !== 'owner') return fail('Only an owner can add staff.')
   const name = input.name.trim()
   const phone = normalisePhone(input.phone)
   if (!name) return fail('Enter their name.')
   if (!phone) return fail('Enter a valid Nigerian mobile number.')
-  if (!ROLES.includes(input.role as DbRole) || input.role === 'owner') return fail('Choose a role.')
+  if (!ROLES.includes(input.role as DbRole)) return fail('Choose a role.')
   if (input.password.length < 8) return fail('The first password needs at least 8 characters.')
 
   const admin = createSecretClient()
@@ -55,10 +56,16 @@ export async function addStaff(input: { name: string; phone: string; role: strin
 }
 
 export async function setStaffActive(profileId: string, active: boolean): Promise<Result> {
-  if ((await callerRole()) !== 'owner') return fail('Only the owner can deactivate staff.')
+  const me = await caller()
+  if (me?.role !== 'owner') return fail('Only an owner can deactivate staff.')
+  if (me.id === profileId) return fail('You can’t deactivate your own account.')
   const admin = createSecretClient()
   const { data: target } = await admin.from('profiles').select('role_id').eq('id', profileId).single()
-  if (target?.role_id === 'owner') return fail('The owner account can’t be deactivated.')
+  // There can be several owners, but the farm must always keep at least one active.
+  if (!active && target?.role_id === 'owner') {
+    const { count } = await admin.from('profiles').select('id', { count: 'exact', head: true }).eq('role_id', 'owner').eq('is_active', true)
+    if ((count ?? 0) <= 1) return fail('The farm needs at least one active owner.')
+  }
   const { error } = await admin.from('profiles').update({ is_active: active }).eq('id', profileId)
   if (error) return fail(error.message)
   // A ban stops their session from refreshing, which signs them out everywhere.
@@ -72,7 +79,7 @@ export async function resetStaffPassword(profileId: string, password: string): P
   if (password.length < 8) return fail('The new password needs at least 8 characters.')
   const admin = createSecretClient()
   const { data: target } = await admin.from('profiles').select('role_id').eq('id', profileId).single()
-  if (target?.role_id === 'owner' && role !== 'owner') return fail('Only the owner can reset the owner’s password.')
+  if (target?.role_id === 'owner' && role !== 'owner') return fail('Only an owner can reset an owner’s password.')
   const { error } = await admin.auth.admin.updateUserById(profileId, { password })
   return error ? fail(error.message) : { ok: true }
 }

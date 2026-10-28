@@ -29,7 +29,7 @@ export default function Staff() {
   const toast = useToast()
   const { reload } = useTrade()
   // The owner adds and deactivates staff; the owner and the farm manager assign pens and reset passwords.
-  const { role: myRole } = useCurrentUser()
+  const { id: myId, role: myRole } = useCurrentUser()
   const isOwner = myRole === 'owner'
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
@@ -106,7 +106,7 @@ export default function Staff() {
                 ...(isOwner
                   ? [
                       p.active
-                        ? { label: 'Deactivate…', danger: true, disabled: p.role === 'owner', onSelect: () => void setActive(p, false) }
+                        ? { label: 'Deactivate…', danger: true, disabled: p.id === myId, onSelect: () => void setActive(p, false) }
                         : { label: 'Reactivate', onSelect: () => void setActive(p, true) },
                     ]
                   : []),
@@ -183,13 +183,13 @@ function AddStaffModal({ onClose }: { onClose: () => void }) {
         <Field label="First password" hint="Give it to them in person; they can't reset it themselves" error={submitted ? errors.password : undefined}>
           {(id) => <TextInput id={id} type="text" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />}
         </Field>
-        <Field label="Role" hint="What they can see and do — see Roles & permissions">
+        <Field label="Role" hint={role === 'owner' ? 'Another owner can do everything you can, including adding and removing staff' : 'What they can see and do — see Roles & permissions'}>
           {(id) => (
             <SelectInput
               id={id}
               value={role}
               onChange={(e) => setRole(e.target.value as StaffMember['role'])}
-              options={(Object.keys(roleLabels) as StaffMember['role'][]).filter((r) => r !== 'owner').map((r) => ({ value: r, label: roleLabels[r] }))}
+              options={(Object.keys(roleLabels) as StaffMember['role'][]).map((r) => ({ value: r, label: roleLabels[r] }))}
             />
           )}
         </Field>
