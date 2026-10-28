@@ -28,6 +28,12 @@ dist-ssr
 next-env.d.ts
 *.tsbuildinfo
 
+# environment variables — real values live in Vercel and on your machine, never in git.
+# Only the .env.example templates (names, no values) are committed.
+.env
+.env*
+!.env.example
+
 # vercel
 .vercel
 

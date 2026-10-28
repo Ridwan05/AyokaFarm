@@ -807,7 +807,7 @@ create function private.soft_delete()
 returns trigger
 language plpgsql
 set search_path = ''
-as $
+as $$
 begin
   if new.deleted_at is not distinct from old.deleted_at then
     return new;
@@ -824,7 +824,7 @@ begin
   end if;
   return new;
 end;
-$;
+$$;
 
 -- ── Stock movements, rebuilt from each source row ───────────────────
 
@@ -1398,9 +1398,9 @@ begin
                            'medications', 'products', 'expense_categories', 'adjustment_reasons']
   loop
     execute format($f$create policy "Staff can read" on public.%I for select to authenticated using ((select private.my_role()) is not null)$f$, t);
-    execute format($f$create policy "Owner can add" on public.%I for insert to authenticated with check ((select private.can('admin', 'add'))))$f$, t);
-    execute format($f$create policy "Owner can edit" on public.%I for update to authenticated using ((select private.can('admin', 'edit'))) with check ((select private.can('admin', 'edit'))))$f$, t);
-    execute format($f$create policy "Owner can delete" on public.%I for delete to authenticated using ((select private.can('admin', 'delete'))))$f$, t);
+    execute format($f$create policy "Owner can add" on public.%I for insert to authenticated with check ((select private.can('admin', 'add')))$f$, t);
+    execute format($f$create policy "Owner can edit" on public.%I for update to authenticated using ((select private.can('admin', 'edit'))) with check ((select private.can('admin', 'edit')))$f$, t);
+    execute format($f$create policy "Owner can delete" on public.%I for delete to authenticated using ((select private.can('admin', 'delete')))$f$, t);
   end loop;
 end;
 $$;
