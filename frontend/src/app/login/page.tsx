@@ -46,7 +46,7 @@ function LoginForm() {
         <p className="type-body-md text-fg-secondary">Use the phone number the owner registered for you.</p>
       </div>
       <Field label="Phone number">
-        {(id) => <TextInput id={id} type="tel" inputMode="tel" autoComplete="username" placeholder="0811 386 0000" value={phone} onChange={(e) => setPhone(e.target.value)} />}
+        {(id) => <TextInput id={id} type="tel" inputMode="tel" autoComplete="username" placeholder="0811 234 5678" value={phone} onChange={(e) => setPhone(e.target.value)} />}
       </Field>
       <Field label="Password">
         {(id) => <TextInput id={id} type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />}
