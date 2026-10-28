@@ -1,0 +1,375 @@
+@import 'tailwindcss';
+
+/*
+ * AyokaFarm design tokens — mirrors the `ayk-*` variables in Figma
+ * (Foundations · Semantic color / Typography / Space, radius, elevation).
+ */
+:root {
+  /* Background */
+  --ayk-color-bg-canvas: #f7f7f4;
+  --ayk-color-bg-surface: #ffffff;
+  --ayk-color-bg-subtle: #efeeea;
+  --ayk-color-bg-muted: #e2e1db;
+  --ayk-color-bg-inverse: #1b1a18;
+  --ayk-color-bg-scrim: #1212107a;
+  --ayk-color-bg-brand: #224f37;
+  --ayk-color-bg-brand-hover: #1b3f2c;
+  --ayk-color-bg-brand-subtle: #eff6f1;
+  --ayk-color-bg-accent: #eda61f;
+  --ayk-color-bg-accent-subtle: #fff8e6;
+  --ayk-color-bg-success-subtle: #eff6f1;
+  --ayk-color-bg-warning-subtle: #fff8e6;
+  --ayk-color-bg-danger: #a83624;
+  --ayk-color-bg-danger-hover: #872c1f;
+  --ayk-color-bg-danger-subtle: #fdf3f1;
+  --ayk-color-bg-info-subtle: #eff5fb;
+
+  /* Border */
+  --ayk-color-border-default: #e2e1db;
+  --ayk-color-border-subtle: #efeeea;
+  --ayk-color-border-strong: #8f8e86;
+  --ayk-color-border-focus: #3a7a54;
+  --ayk-color-border-brand: #224f37;
+  --ayk-color-border-success: #b5d6c0;
+  --ayk-color-border-warning: #f7bf45;
+  --ayk-color-border-danger: #c8462f;
+  --ayk-color-border-info: #b7d0ec;
+
+  /* Text */
+  --ayk-color-text-primary: #1b1a18;
+  --ayk-color-text-secondary: #5c5b54;
+  --ayk-color-text-tertiary: #6e6d66;
+  --ayk-color-text-disabled: #8f8e86;
+  --ayk-color-text-inverse: #ffffff;
+  --ayk-color-text-on-brand: #ffffff;
+  --ayk-color-text-brand: #224f37;
+  --ayk-color-text-success: #224f37;
+  --ayk-color-text-warning: #88520e;
+  --ayk-color-text-danger: #872c1f;
+  --ayk-color-text-info: #294777;
+
+  /* Icon */
+  --ayk-color-icon-primary: #2b2a27;
+  --ayk-color-icon-secondary: #6e6d66;
+  --ayk-color-icon-disabled: #cdccc4;
+  --ayk-color-icon-inverse: #ffffff;
+  --ayk-color-icon-brand: #2b6243;
+  --ayk-color-icon-on-brand: #ffffff;
+  --ayk-color-icon-success: #2b6243;
+  --ayk-color-icon-warning: #ad6c0b;
+  --ayk-color-icon-danger: #a83624;
+  --ayk-color-icon-info: #305893;
+
+  /* Chart */
+  --ayk-color-chart-1: #2b6243;
+  --ayk-color-chart-2: #eda61f;
+  --ayk-color-chart-3: #3c6fb4;
+  --ayk-color-chart-4: #de6750;
+  --ayk-color-chart-5: #8f8e86;
+  --ayk-color-chart-grid: #efeeea;
+}
+
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-instrument-serif), ui-serif, Georgia, serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+
+  /* Radius (ayk-radius-*) */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-2xl: 24px;
+
+  /* Elevation */
+  --shadow-xs: 0 1px 2px 0 #1212100d;
+  --shadow-sm: 0 1px 3px 0 #1212100f, 0 1px 2px -1px #1212100a;
+  --shadow-md: 0 4px 12px -2px #12121014, 0 2px 4px -2px #1212100a;
+  --shadow-lg: 0 16px 40px -8px #12121024, 0 4px 10px -4px #1212100d;
+  --shadow-focus: 0 0 0 3px #3a7a5447;
+
+  /* Motion. Strong curves: the built-in CSS easings are too weak to feel intentional.
+     ease-out for anything entering or responding to a press, ease-in-out for things
+     moving on screen, ease-drawer for sheets. Never ease-in. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+/* Semantic colors as utilities: bg-*, text-*, border-*, fill-*, stroke-* */
+@theme inline {
+  --color-canvas: var(--ayk-color-bg-canvas);
+  --color-surface: var(--ayk-color-bg-surface);
+  --color-subtle: var(--ayk-color-bg-subtle);
+  --color-muted: var(--ayk-color-bg-muted);
+  --color-inverse: var(--ayk-color-bg-inverse);
+  --color-scrim: var(--ayk-color-bg-scrim);
+  --color-brand: var(--ayk-color-bg-brand);
+  --color-brand-hover: var(--ayk-color-bg-brand-hover);
+  --color-brand-subtle: var(--ayk-color-bg-brand-subtle);
+  --color-accent: var(--ayk-color-bg-accent);
+  --color-accent-subtle: var(--ayk-color-bg-accent-subtle);
+  --color-success-subtle: var(--ayk-color-bg-success-subtle);
+  --color-warning-subtle: var(--ayk-color-bg-warning-subtle);
+  --color-danger: var(--ayk-color-bg-danger);
+  --color-danger-hover: var(--ayk-color-bg-danger-hover);
+  --color-danger-subtle: var(--ayk-color-bg-danger-subtle);
+  --color-info-subtle: var(--ayk-color-bg-info-subtle);
+
+  --color-line: var(--ayk-color-border-default);
+  --color-line-subtle: var(--ayk-color-border-subtle);
+  --color-line-strong: var(--ayk-color-border-strong);
+  --color-line-focus: var(--ayk-color-border-focus);
+  --color-line-brand: var(--ayk-color-border-brand);
+  --color-line-success: var(--ayk-color-border-success);
+  --color-line-warning: var(--ayk-color-border-warning);
+  --color-line-danger: var(--ayk-color-border-danger);
+  --color-line-info: var(--ayk-color-border-info);
+
+  --color-fg-primary: var(--ayk-color-text-primary);
+  --color-fg-secondary: var(--ayk-color-text-secondary);
+  --color-fg-tertiary: var(--ayk-color-text-tertiary);
+  --color-fg-disabled: var(--ayk-color-text-disabled);
+  --color-fg-inverse: var(--ayk-color-text-inverse);
+  --color-fg-on-brand: var(--ayk-color-text-on-brand);
+  --color-fg-brand: var(--ayk-color-text-brand);
+  --color-fg-success: var(--ayk-color-text-success);
+  --color-fg-warning: var(--ayk-color-text-warning);
+  --color-fg-danger: var(--ayk-color-text-danger);
+  --color-fg-info: var(--ayk-color-text-info);
+
+  --color-icon-primary: var(--ayk-color-icon-primary);
+  --color-icon-secondary: var(--ayk-color-icon-secondary);
+  --color-icon-disabled: var(--ayk-color-icon-disabled);
+  --color-icon-brand: var(--ayk-color-icon-brand);
+  --color-icon-success: var(--ayk-color-icon-success);
+  --color-icon-warning: var(--ayk-color-icon-warning);
+  --color-icon-danger: var(--ayk-color-icon-danger);
+  --color-icon-info: var(--ayk-color-icon-info);
+
+  --color-chart-1: var(--ayk-color-chart-1);
+  --color-chart-2: var(--ayk-color-chart-2);
+  --color-chart-3: var(--ayk-color-chart-3);
+  --color-chart-4: var(--ayk-color-chart-4);
+  --color-chart-5: var(--ayk-color-chart-5);
+  --color-chart-grid: var(--ayk-color-chart-grid);
+}
+
+/* Text styles (Foundations · Typography) */
+@utility type-display-xl {
+  font-family: var(--font-serif);
+  font-size: 56px;
+  line-height: 60px;
+  letter-spacing: -1.2px;
+  font-weight: 400;
+}
+@utility type-display-lg {
+  font-family: var(--font-serif);
+  font-size: 40px;
+  line-height: 44px;
+  letter-spacing: -0.6px;
+  font-weight: 400;
+}
+@utility type-display-md {
+  font-family: var(--font-serif);
+  font-size: 32px;
+  line-height: 36px;
+  letter-spacing: -0.3px;
+  font-weight: 400;
+}
+@utility type-h1 {
+  font-size: 24px;
+  line-height: 32px;
+  letter-spacing: -0.5px;
+  font-weight: 600;
+}
+@utility type-h2 {
+  font-size: 20px;
+  line-height: 28px;
+  letter-spacing: -0.3px;
+  font-weight: 600;
+}
+@utility type-h3 {
+  font-size: 16px;
+  line-height: 24px;
+  letter-spacing: -0.15px;
+  font-weight: 600;
+}
+@utility type-label-lg {
+  font-size: 16px;
+  line-height: 24px;
+  letter-spacing: -0.1px;
+  font-weight: 500;
+}
+@utility type-label-md {
+  font-size: 14px;
+  line-height: 20px;
+  letter-spacing: -0.05px;
+  font-weight: 500;
+}
+@utility type-label-sm {
+  font-size: 12px;
+  line-height: 16px;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+@utility type-body-lg {
+  font-size: 16px;
+  line-height: 24px;
+  font-weight: 400;
+}
+@utility type-body-md {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 400;
+}
+@utility type-body-sm {
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+}
+@utility type-numeric-lg {
+  font-size: 24px;
+  line-height: 32px;
+  letter-spacing: -0.5px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+@utility type-numeric-md {
+  font-size: 14px;
+  line-height: 20px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+@utility type-overline {
+  font-size: 11px;
+  line-height: 16px;
+  letter-spacing: 0.6px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+@utility type-mono-sm {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 400;
+}
+
+@layer base {
+  html,
+  body {
+    background: var(--ayk-color-bg-canvas);
+    color: var(--ayk-color-text-primary);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Date inputs use our leading calendar icon; the native picker still opens on click. */
+  input[type='date'] {
+    position: relative;
+  }
+  input[type='date']::-webkit-calendar-picker-indicator {
+    position: absolute;
+    inset: 0;
+    width: auto;
+    height: auto;
+    opacity: 0;
+    cursor: pointer;
+  }
+  :focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+}
+
+/*
+ * Motion — durations stay under 300ms; exits are quicker than entrances.
+ * Overlays use keyframes because Radix keeps the element mounted until its
+ * exit animation ends. Everything that can be re-triggered quickly uses transitions.
+ */
+:root {
+  --dur-press: 160ms;
+  --dur-pop: 180ms;
+  --dur-overlay: 240ms;
+}
+
+@keyframes ayk-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes ayk-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@keyframes ayk-modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+}
+@keyframes ayk-modal-out {
+  to {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+@keyframes ayk-panel-in {
+  from {
+    transform: translateX(100%);
+  }
+}
+@keyframes ayk-panel-out {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+.ayk-scrim[data-state='open'] {
+  animation: ayk-fade-in var(--dur-overlay) var(--ease-out);
+}
+.ayk-scrim[data-state='closed'] {
+  animation: ayk-fade-out 160ms var(--ease-out);
+}
+/* Modals aren't anchored to a trigger, so they scale from the centre. */
+.ayk-modal[data-state='open'] {
+  animation: ayk-modal-in var(--dur-overlay) var(--ease-out);
+}
+.ayk-modal[data-state='closed'] {
+  animation: ayk-modal-out 150ms var(--ease-out);
+}
+.ayk-panel[data-state='open'] {
+  animation: ayk-panel-in 280ms var(--ease-drawer);
+}
+.ayk-panel[data-state='closed'] {
+  animation: ayk-panel-out 200ms var(--ease-drawer);
+}
+
+/* Popovers grow from their trigger, never from nothing. */
+.ayk-pop {
+  transition:
+    opacity var(--dur-pop) var(--ease-out),
+    transform var(--dur-pop) var(--ease-out);
+  @starting-style {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+}
+
+/* Reduced motion: keep the fades that explain what happened, drop the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .ayk-modal[data-state='open'],
+  .ayk-panel[data-state='open'] {
+    animation: ayk-fade-in 160ms ease;
+  }
+  .ayk-modal[data-state='closed'],
+  .ayk-panel[data-state='closed'] {
+    animation: ayk-fade-out 120ms ease;
+  }
+  .ayk-pop {
+    @starting-style {
+      transform: none;
+    }
+  }
+}
