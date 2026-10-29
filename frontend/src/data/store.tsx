@@ -8,7 +8,7 @@ import { createClient } from '../lib/supabase/client'
 import { allocate, customerBills, customerStatement, describeAllocation, sumLeft, supplierBalance, supplierBills, supplierCharged, supplierStatement } from './ledger'
 import { loadRemote, type Remote } from './remote'
 import type { TablesInsert } from '../lib/supabase/database.types'
-import type { PaymentMethod } from './sales'
+import { amountOf, type PaymentMethod } from './sales'
 import { farmTodayISO } from './session'
 import { Splash } from './SessionProvider'
 import { useCurrentUser } from './sessionContext'
@@ -81,6 +81,14 @@ export function TradeProvider({ children }: { children: ReactNode }) {
   function withSupplier<T>(id: string, run: (s: (typeof suppliers)[number]) => T, none: T): T {
     const s = suppliers.find((x) => x.id === id)
     return s ? run(s) : none
+  }
+
+  /** What's still owed on one sale after its own payment and any payments since. */
+  function saleLeft(receipt: string) {
+    const sale = sales.find((s) => s.receipt === receipt)
+    if (!sale) return 0
+    if (sale.pendingApproval || sale.customerId === 'one-off') return Math.max(0, amountOf(sale) - sale.paid)
+    return customerOpenBills(sale.customerId).find((b) => b.ref === receipt)?.left ?? 0
   }
 
   const customerOpenBills = (id: string) => {
@@ -264,15 +272,30 @@ export function TradeProvider({ children }: { children: ReactNode }) {
         }),
       ),
 
+    // A payment row for that sale (money in, dated today) rather than an edit of the sale: the edit
+    // window would refuse that, and the cash would be dated on the day of the sale.
     recordSalePayment(receipt, amount, m) {
       const sale = sales.find((s) => s.receipt === receipt)
+      if (!sale || sale.customerId === 'one-off') {
+        toast.error('One-off buyers pay in full at the sale.')
+        return Promise.resolve(false)
+      }
       return write(() =>
-        db
-          .from('sales')
-          .update({ amount_paid: (sale?.paid ?? 0) + amount, payment_method: dbMethod(m) })
-          .eq('id', lookups.saleId.get(receipt)!),
+        db.from('payments').insert({
+          paid_on: today,
+          direction: 'in',
+          customer_id: Number(sale.customerId),
+          sale_id: lookups.saleId.get(receipt)!,
+          amount,
+          method: dbMethod(m) ?? 'cash',
+          notes: `${receipt} ${amount >= saleLeft(receipt) ? 'in full' : 'part'}`,
+          recorded_by: user.id,
+          // ref (P-0001) is set by a database trigger.
+        } as TablesInsert<'payments'>),
       )
     },
+
+    saleLeft,
 
     addPurchase(p) {
       const kind = p.kind === 'Feed' ? 'feed' : p.kind === 'Birds' ? 'birds' : 'medication'
@@ -300,10 +323,10 @@ export function TradeProvider({ children }: { children: ReactNode }) {
       )
     },
 
-    recordPayment(p) {
+    async recordPayment(p) {
       const bills = p.direction === 'in' ? customerOpenBills(p.partyId) : withSupplier(p.partyId, (s) => supplierBills(s, books), [])
       const cleared = describeAllocation(allocate(bills, p.amount)) || 'Held as credit'
-      void write(() =>
+      const saved = await write(() =>
         db.from('payments').insert({
           paid_on: p.date,
           direction: p.direction,
@@ -317,7 +340,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
           // ref (P-/PP-0001) is set by a database trigger.
         } as TablesInsert<'payments'>),
       )
-      return cleared
+      return saved ? cleared : null
     },
 
     addPen: (pen) => write(() => db.from('pens').insert({ name: pen.name, capacity: pen.capacity, description: pen.description || null })),

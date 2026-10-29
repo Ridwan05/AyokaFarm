@@ -908,6 +908,7 @@ export type Database = {
           recorded_by: string
           ref: string
           reference: string | null
+          sale_id: number | null
           supplier_id: number | null
           updated_at: string
         }
@@ -926,6 +927,7 @@ export type Database = {
           recorded_by?: string
           ref: string
           reference?: string | null
+          sale_id?: number | null
           supplier_id?: number | null
           updated_at?: string
         }
@@ -944,6 +946,7 @@ export type Database = {
           recorded_by?: string
           ref?: string
           reference?: string | null
+          sale_id?: number | null
           supplier_id?: number | null
           updated_at?: string
         }

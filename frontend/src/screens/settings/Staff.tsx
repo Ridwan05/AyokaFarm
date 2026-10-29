@@ -105,7 +105,7 @@ export default function Staff() {
                   : p.role === 'pen-attendant-all'
                     ? [{ label: 'Works on all pens', disabled: true, onSelect: () => {} }]
                     : []),
-                { label: 'Reset password…', onSelect: () => setResetting(p), disabled: !p.active || (p.role === 'owner' && !isOwner) },
+                { label: 'Reset password…', onSelect: () => setResetting(p), disabled: !p.active || (!isOwner && !['pen-attendant', 'pen-attendant-all', 'store-keeper'].includes(p.role)) },
                 ...(isOwner && p.id !== myId ? [{ label: 'Change role…', disabled: !p.active, onSelect: () => setChangingRole(p) }] : []),
                 ...(isOwner
                   ? [

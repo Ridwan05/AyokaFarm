@@ -14,7 +14,7 @@ const METHOD = { cash: 'Cash', transfer: 'Transfer', POS: 'POS' } as const
 /** A printable receipt for one sale (Sales › ··· › Receipt PDF). */
 export default function ReceiptPrint() {
   const { ref = '' } = useParams<{ ref: string }>()
-  const { sales, customers, customerBalance, catalog } = useTrade()
+  const { sales, customers, customerBalance, catalog, saleLeft } = useTrade()
   const sale = sales.find((s) => s.receipt === decodeURIComponent(ref))
   if (!sale) return <Placeholder title="Receipt not found" />
 
@@ -22,7 +22,7 @@ export default function ReceiptPrint() {
   const { name, customer } = customerView(sale, customers)
   const total = amountOf(sale)
   const left = Math.max(0, total - sale.paid)
-  const status = saleStatus(sale)
+  const status = saleStatus(sale, saleLeft(sale.receipt))
   const time = sale.date.split(' ')[1] ?? ''
 
   return (

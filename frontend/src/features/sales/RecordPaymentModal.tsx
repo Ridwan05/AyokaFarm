@@ -6,7 +6,7 @@ import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { Modal } from '../../components/ui/Overlay'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { useToast } from '../../components/ui/toastContext'
-import { amountOf, type PaymentMethod, type Sale } from '../../data/sales'
+import type { PaymentMethod, Sale } from '../../data/sales'
 import { useTrade } from '../../data/tradeContext'
 import { formatNumber } from '../../lib/format'
 import { customerView } from './saleView'
@@ -14,9 +14,10 @@ import { customerView } from './saleView'
 const METHODS = ['Cash', 'Transfer', 'POS'] as const
 
 export function RecordPaymentModal({ sale, onClose }: { sale: Sale; onClose: () => void }) {
-  const { customers, recordSalePayment, customerBalance } = useTrade()
+  const { customers, recordSalePayment, customerBalance, saleLeft } = useTrade()
   const toast = useToast()
-  const left = amountOf(sale) - sale.paid
+  // After the sale's own payment and any payments since.
+  const left = saleLeft(sale.receipt)
   const [amount, setAmount] = useState(formatNumber(left))
   const [method, setMethod] = useState<(typeof METHODS)[number]>('Transfer')
   const [error, setError] = useState<string>()

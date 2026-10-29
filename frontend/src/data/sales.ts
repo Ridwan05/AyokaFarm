@@ -56,10 +56,11 @@ export const amountOf = (s: Sale) => s.qty * s.price
 
 export type SaleStatus = 'needs-approval' | 'on-credit' | 'part-paid' | 'paid'
 
-export function saleStatus(s: Sale): SaleStatus {
+/** `left`: what's still owed on the sale after every payment (trade.saleLeft); defaults to total − paid at sale. */
+export function saleStatus(s: Sale, left = amountOf(s) - s.paid): SaleStatus {
   if (s.pendingApproval) return 'needs-approval'
-  if (s.paid >= amountOf(s)) return 'paid'
-  return s.paid > 0 ? 'part-paid' : 'on-credit'
+  if (left <= 0) return 'paid'
+  return left < amountOf(s) ? 'part-paid' : 'on-credit'
 }
 
 const todayIso = farmTodayISO()

@@ -14,7 +14,7 @@ type Props = {
 }
 
 export function SalesTable({ sales, onOpen, onRecordPayment }: Props) {
-  const { customers, catalog } = useTrade()
+  const { customers, catalog, saleLeft } = useTrade()
   const toast = useToast()
 
   const columns: Column<Sale>[] = [
@@ -54,7 +54,7 @@ export function SalesTable({ sales, onOpen, onRecordPayment }: Props) {
       header: 'Status',
       width: 150,
       render: (s) => {
-        const b = statusBadge[saleStatus(s)]
+        const b = statusBadge[saleStatus(s, saleLeft(s.receipt))]
         return (
           <Badge dot tone={b.tone}>
             {b.label}

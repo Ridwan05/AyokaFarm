@@ -97,8 +97,9 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
       productId: product.id,
       qty: num(qty),
       price: num(price),
-      paid: belowMin ? 0 : paidNow,
-      method: paidNow && !belowMin ? m : undefined,
+      // Money taken at the gate is kept even if the price needs approval; the receipt waits for it.
+      paid: paidNow,
+      method: paidNow ? m : undefined,
       recordedBy: currentUser.name.split(' ')[0],
       pendingApproval: belowMin,
       allocations: usePens ? parsePortions(portions) : [],

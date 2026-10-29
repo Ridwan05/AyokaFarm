@@ -13,5 +13,7 @@ export type Payment = {
   reference: string | null
   amount: number
   cleared: string
+  /** The sale this payment was taken for; it is applied to that sale first. */
+  saleRef?: string
   by: string
 }

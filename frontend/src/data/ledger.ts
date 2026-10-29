@@ -50,11 +50,20 @@ function charges(c: Customer, sales: Sale[]): Charge[] {
 const customerPayments = (c: Customer, payments: Payment[]) =>
   payments.filter((p) => p.direction === 'in' && p.partyId === c.id).sort((a, b) => a.date.localeCompare(b.date))
 
-/** Open bills, oldest first: each sale's own payment applies to it; other payments clear the oldest first. */
+/**
+ * Open bills, oldest first: each sale's own payment applies to it; a payment taken for a particular
+ * sale clears that sale first; anything left (and general payments) clears the oldest first.
+ */
 export function customerBills(c: Customer, sales: Sale[], payments: Payment[]): Bill[] {
   const bills = charges(c, sales).map((ch) => ({ ref: ch.ref, date: ch.date, left: ch.amount - ch.paidAtSale }))
   for (const p of customerPayments(c, payments)) {
     let rest = p.amount
+    const target = p.saleRef ? bills.find((b) => b.ref === p.saleRef) : undefined
+    if (target) {
+      const applied = Math.min(target.left, rest)
+      target.left -= applied
+      rest -= applied
+    }
     for (const b of bills) {
       if (rest <= 0) break
       const applied = Math.min(b.left, rest)

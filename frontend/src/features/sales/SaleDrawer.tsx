@@ -36,8 +36,8 @@ export function SaleDrawer({ sale, onClose, onRecordPayment }: Props) {
   const product = productOf(sale)
   const { name, customer } = customerView(sale, customers)
   const total = amountOf(sale)
-  const left = total - sale.paid
-  const status = saleStatus(sale)
+  const left = trade.saleLeft(sale.receipt)
+  const status = saleStatus(sale, left)
   const pending = status === 'needs-approval'
   const time = sale.date.split(' ')[1]
   const approver = currentUser.name.split(' ')[0]

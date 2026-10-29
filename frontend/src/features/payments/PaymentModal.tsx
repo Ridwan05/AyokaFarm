@@ -67,8 +67,10 @@ export function PaymentModal({ direction: initialDirection = 'in', partyId, onCl
     setAmount(formatNumber(Math.max(isIn ? Math.min(100000, b) : b, 0)))
   }
 
-  const save = (p: NewPayment) => {
-    const cleared = trade.recordPayment(p)
+  const save = async (p: NewPayment) => {
+    const cleared = await trade.recordPayment(p)
+    // On failure the store has already shown why; keep the form open.
+    if (cleared === null) return
     toast(`₦${formatNumber(p.amount)} saved · ${cleared}`)
     onClose()
   }
@@ -86,13 +88,13 @@ export function PaymentModal({ direction: initialDirection = 'in', partyId, onCl
     const payment: NewPayment = { direction, partyId: party, amount: value, method: m, reference: reference.trim() || null, date }
     if (!online) {
       setQueued(payment)
-      onReconnect.current = () => save(payment)
+      onReconnect.current = () => void save(payment)
       window.addEventListener('online', onReconnect.current, { once: true })
       return
     }
     // Open the statement now, while the click still counts as the person's action (pop-up blockers).
     if (notify) window.open(`/print/statement/${isIn ? 'customer' : 'supplier'}/${party}`, '_blank')
-    save(payment)
+    void save(payment)
   }
 
   const hint = isIn

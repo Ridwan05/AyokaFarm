@@ -58,8 +58,10 @@ export type Trade = {
   productionRecords: ProductionRecord[]
   /** Saves the entry and takes its feed and medication out of stock. */
   addProductionRecord: (record: ProductionRecord) => Promise<boolean>
-  /** Payment outside a sale/purchase; clears the oldest bills first. Returns what it cleared (saving continues in the background). */
-  recordPayment: (payment: NewPayment) => string
+  /** Payment outside a sale/purchase; clears the oldest bills first. Resolves to what it cleared, or null if it didn't save. */
+  recordPayment: (payment: NewPayment) => Promise<string | null>
+  /** What is still owed on a sale after its own payment and any payments since (0 when cleared). */
+  saleLeft: (receipt: string) => number
   addPen: (pen: NewPen) => Promise<boolean>
   /** Places a flock, drawing its birds from bird stock (place_flock). */
   placeFlock: (flock: NewFlock) => Promise<boolean>

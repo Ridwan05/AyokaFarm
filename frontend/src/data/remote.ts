@@ -583,6 +583,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
       }
     })
 
+  const saleRefById = new Map(saleRows.map((s) => [s.id, s.ref]))
   const payments = paymentRows.map<Payment>((p) => ({
     ref: p.ref,
     date: p.paid_on,
@@ -592,6 +593,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
     reference: p.reference,
     amount: Number(p.amount),
     cleared: p.notes ?? '',
+    saleRef: p.sale_id ? saleRefById.get(p.sale_id) : undefined,
     by: first(profileName.get(p.recorded_by)),
   }))
 

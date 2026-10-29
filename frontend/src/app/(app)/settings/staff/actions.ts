@@ -73,6 +73,9 @@ export async function setStaffActive(profileId: string, active: boolean): Promis
   return banError ? fail(banError.message) : { ok: true }
 }
 
+/** Roles whose passwords a farm manager may reset. */
+const FARM_MANAGER_RESETS = ['pen_attendant', 'pen_attendant_all', 'store_keeper']
+
 export async function resetStaffPassword(profileId: string, password: string): Promise<Result> {
   const role = await callerRole()
   if (role !== 'owner' && role !== 'farm_manager') return fail('Only the owner or farm manager can reset passwords.')
@@ -80,6 +83,11 @@ export async function resetStaffPassword(profileId: string, password: string): P
   const admin = createSecretClient()
   const { data: target } = await admin.from('profiles').select('role_id').eq('id', profileId).single()
   if (target?.role_id === 'owner' && role !== 'owner') return fail('Only an owner can reset an owner’s password.')
+  // A farm manager resets passwords for pen attendants and store keepers only: resetting anyone with
+  // wider access (accounts sees payroll and finance) would let them sign in as that person.
+  if (role === 'farm_manager' && !FARM_MANAGER_RESETS.includes(target?.role_id ?? '')) {
+    return fail('Only the owner can reset this person’s password.')
+  }
   const { error } = await admin.auth.admin.updateUserById(profileId, { password })
   return error ? fail(error.message) : { ok: true }
 }

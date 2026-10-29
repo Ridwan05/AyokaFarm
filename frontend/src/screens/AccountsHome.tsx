@@ -199,7 +199,7 @@ export default function AccountsHome() {
             {today.map((s, i) => {
               const c = trade.customers.find((x) => x.id === s.customerId)
               const p = products.find((x) => x.id === s.productId)!
-              const status = saleStatus(s)
+              const status = saleStatus(s, trade.saleLeft(s.receipt))
               return (
                 <ListRow
                   key={s.receipt}
