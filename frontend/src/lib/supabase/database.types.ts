@@ -1,5 +1,3 @@
-// Generated from the live Supabase schema (MCP generate_typescript_types). Regenerate after schema changes.
-
 export type Json =
   | string
   | number
@@ -884,7 +882,15 @@ export type Database = {
           stock_units_per_unit?: number | null
           unit?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "products_bird_type_id_fkey"
+            columns: ["bird_type_id"]
+            isOneToOne: false
+            referencedRelation: "bird_types"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       profiles: {
         Row: {
@@ -1124,30 +1130,6 @@ export type Database = {
           },
         ]
       }
-      sale_allocations: {
-        Row: {
-          flock_id: number | null
-          id: number
-          pen_id: number
-          quantity: number
-          sale_id: number
-        }
-        Insert: {
-          flock_id?: number | null
-          id?: never
-          pen_id: number
-          quantity: number
-          sale_id: number
-        }
-        Update: {
-          flock_id?: number | null
-          id?: never
-          pen_id?: number
-          quantity?: number
-          sale_id?: number
-        }
-        Relationships: []
-      }
       roles: {
         Row: {
           created_at: string
@@ -1171,6 +1153,52 @@ export type Database = {
           name?: string
         }
         Relationships: []
+      }
+      sale_allocations: {
+        Row: {
+          flock_id: number | null
+          id: number
+          pen_id: number
+          quantity: number
+          sale_id: number
+        }
+        Insert: {
+          flock_id?: number | null
+          id?: never
+          pen_id: number
+          quantity: number
+          sale_id: number
+        }
+        Update: {
+          flock_id?: number | null
+          id?: never
+          pen_id?: number
+          quantity?: number
+          sale_id?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sale_allocations_flock_id_fkey"
+            columns: ["flock_id"]
+            isOneToOne: false
+            referencedRelation: "flocks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_allocations_pen_id_fkey"
+            columns: ["pen_id"]
+            isOneToOne: false
+            referencedRelation: "pens"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sale_allocations_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sales: {
         Row: {
@@ -1762,7 +1790,37 @@ export type Database = {
     Functions: {
       record_sale: {
         Args: { portions?: Json; sale: Json }
-        Returns: Database["public"]["Tables"]["sales"]["Row"]
+        Returns: {
+          amount_paid: number
+          approval: Database["public"]["Enums"]["sale_approval"]
+          approved_at: string | null
+          approved_by: string | null
+          buyer_name: string | null
+          created_at: string
+          customer_id: number | null
+          delete_reason: string | null
+          deleted_at: string | null
+          deleted_by: string | null
+          flock_id: number | null
+          id: number
+          notes: string | null
+          payment_method: Database["public"]["Enums"]["payment_method"] | null
+          pen_id: number | null
+          product_id: number
+          quantity: number
+          recorded_by: string
+          ref: string
+          sold_on: string
+          total: number | null
+          unit_price: number
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sales"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       set_sale_allocations: {
         Args: { portions: Json; sale_id: number }
