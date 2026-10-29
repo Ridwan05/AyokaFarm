@@ -627,7 +627,15 @@ export type Database = {
           recorded_by?: string | null
           ref?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "finance_entries_recorded_by_fkey"
+            columns: ["recorded_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       fixed_assets: {
         Row: {
@@ -678,7 +686,15 @@ export type Database = {
           salvage_value?: number
           useful_life_months?: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fixed_assets_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       flock_placements: {
         Row: {
@@ -2533,9 +2549,20 @@ export type Database = {
         | "admin"
         | "payroll"
         | "finance"
+      asset_category:
+        | "land"
+        | "buildings"
+        | "equipment"
+        | "machinery"
+        | "vehicles"
       customer_type: "regular" | "one_off"
-      asset_category: "land" | "buildings" | "equipment" | "machinery" | "vehicles"
-      finance_kind: "opening_cash" | "capital_in" | "drawing" | "loan_received" | "loan_repaid" | "other_income"
+      finance_kind:
+        | "opening_cash"
+        | "capital_in"
+        | "drawing"
+        | "loan_received"
+        | "loan_repaid"
+        | "other_income"
       flock_status: "active" | "closed"
       loan_kind: "advance" | "loan"
       loan_status: "pending" | "active" | "repaid" | "cancelled"
@@ -2712,8 +2739,24 @@ export const Constants = {
         "parties",
         "admin",
         "payroll",
+        "finance",
+      ],
+      asset_category: [
+        "land",
+        "buildings",
+        "equipment",
+        "machinery",
+        "vehicles",
       ],
       customer_type: ["regular", "one_off"],
+      finance_kind: [
+        "opening_cash",
+        "capital_in",
+        "drawing",
+        "loan_received",
+        "loan_repaid",
+        "other_income",
+      ],
       flock_status: ["active", "closed"],
       loan_kind: ["advance", "loan"],
       loan_status: ["pending", "active", "repaid", "cancelled"],
