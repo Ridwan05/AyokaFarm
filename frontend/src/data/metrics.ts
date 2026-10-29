@@ -241,16 +241,22 @@ type PurchaseRow = History['purchases'][number]
 const purchaseTotal = (p: PurchaseRow) => Number(p.total ?? p.quantity * p.unit_price)
 
 /** Weighted average cost of one stock unit (a bag of feed, a gram/vial of medication) from purchases. */
+/** Stock units that actually arrived on a purchase (received less sent back). */
+export const receivedUnits = (p: PurchaseRow) =>
+  (Number(p.received_quantity ?? p.quantity) - Number(p.returned_quantity ?? 0)) * Number(p.stock_units_per_unit || 1)
+
 export function unitCost(history: History, item: { feedTypeId?: number | null; medicationId?: number | null }) {
-  const buys = history.purchases.filter((p) => (item.feedTypeId ? p.feed_type_id === item.feedTypeId : p.medication_id === item.medicationId))
-  const units = sum(buys, (p) => Number(p.quantity) * Number(p.stock_units_per_unit || 1))
-  return safeDiv(sum(buys, purchaseTotal), units) ?? 0
+  const all = history.purchases.filter((p) => (item.feedTypeId ? p.feed_type_id === item.feedTypeId : p.medication_id === item.medicationId))
+  // What was paid ÷ what arrived, over received purchases (orders not yet received don't count).
+  const received = all.filter((p) => p.status === 'received')
+  if (received.length) return safeDiv(sum(received, purchaseTotal), sum(received, receivedUnits)) ?? 0
+  return safeDiv(sum(all, purchaseTotal), sum(all, (p) => Number(p.quantity) * Number(p.stock_units_per_unit || 1))) ?? 0
 }
 
 /** Cost of a medication unit from the batch it came from, or the average. */
 export function medicationUnitCost(history: History, medicationId: number, purchaseId: number | null) {
   const p = purchaseId ? history.purchases.find((x) => x.id === purchaseId) : undefined
-  return p ? purchaseTotal(p) / (Number(p.quantity) * Number(p.stock_units_per_unit || 1)) : unitCost(history, { medicationId })
+  return p && receivedUnits(p) > 0 ? purchaseTotal(p) / receivedUnits(p) : unitCost(history, { medicationId })
 }
 
 export type PenMoney = { penId: number; revenue: number; feed: number; medication: number; birds: number; overhead: number; direct: number; birdDays: number; eggs: number; feedKg: number }

@@ -315,16 +315,19 @@ export type Database = {
           id: number
           is_active: boolean
           name: string
+          statement_line: string
         }
         Insert: {
           id?: never
           is_active?: boolean
           name: string
+          statement_line?: string
         }
         Update: {
           id?: never
           is_active?: boolean
           name?: string
+          statement_line?: string
         }
         Relationships: []
       }
@@ -581,6 +584,99 @@ export type Database = {
           is_active?: boolean
           name?: string
           reorder_level_bags?: number
+        }
+        Relationships: []
+      }
+      finance_entries: {
+        Row: {
+          account: string
+          amount: number
+          counterparty: string | null
+          created_at: string
+          entry_on: string
+          id: number
+          kind: Database["public"]["Enums"]["finance_kind"]
+          loan_term: string | null
+          notes: string | null
+          recorded_by: string | null
+          ref: string
+        }
+        Insert: {
+          account: string
+          amount: number
+          counterparty?: string | null
+          created_at?: string
+          entry_on?: string
+          id?: never
+          kind: Database["public"]["Enums"]["finance_kind"]
+          loan_term?: string | null
+          notes?: string | null
+          recorded_by?: string | null
+          ref?: string
+        }
+        Update: {
+          account?: string
+          amount?: number
+          counterparty?: string | null
+          created_at?: string
+          entry_on?: string
+          id?: never
+          kind?: Database["public"]["Enums"]["finance_kind"]
+          loan_term?: string | null
+          notes?: string | null
+          recorded_by?: string | null
+          ref?: string
+        }
+        Relationships: []
+      }
+      fixed_assets: {
+        Row: {
+          acquired_on: string
+          category: Database["public"]["Enums"]["asset_category"]
+          cost: number
+          created_at: string
+          created_by: string | null
+          disposal_account: string | null
+          disposal_amount: number | null
+          disposed_on: string | null
+          id: number
+          name: string
+          notes: string | null
+          paid_from: string | null
+          salvage_value: number
+          useful_life_months: number | null
+        }
+        Insert: {
+          acquired_on: string
+          category: Database["public"]["Enums"]["asset_category"]
+          cost: number
+          created_at?: string
+          created_by?: string | null
+          disposal_account?: string | null
+          disposal_amount?: number | null
+          disposed_on?: string | null
+          id?: never
+          name: string
+          notes?: string | null
+          paid_from?: string | null
+          salvage_value?: number
+          useful_life_months?: number | null
+        }
+        Update: {
+          acquired_on?: string
+          category?: Database["public"]["Enums"]["asset_category"]
+          cost?: number
+          created_at?: string
+          created_by?: string | null
+          disposal_account?: string | null
+          disposal_amount?: number | null
+          disposed_on?: string | null
+          id?: never
+          name?: string
+          notes?: string | null
+          paid_from?: string | null
+          salvage_value?: number
+          useful_life_months?: number | null
         }
         Relationships: []
       }
@@ -2436,7 +2532,10 @@ export type Database = {
         | "parties"
         | "admin"
         | "payroll"
+        | "finance"
       customer_type: "regular" | "one_off"
+      asset_category: "land" | "buildings" | "equipment" | "machinery" | "vehicles"
+      finance_kind: "opening_cash" | "capital_in" | "drawing" | "loan_received" | "loan_repaid" | "other_income"
       flock_status: "active" | "closed"
       loan_kind: "advance" | "loan"
       loan_status: "pending" | "active" | "repaid" | "cancelled"

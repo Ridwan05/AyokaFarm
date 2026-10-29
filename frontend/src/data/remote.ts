@@ -183,8 +183,12 @@ async function all<T>(q: { range: (from: number, to: number) => Page<T> }, what:
 export async function loadRemote(db: DB): Promise<Remote> {
   // A year and a bit, so year-to-date reports work, and never less than the oldest flock still in a
   // pen, so its rearing cost is complete. Farm-scale volumes keep this small.
-  const { data: oldest } = await db.from('flocks').select('placed_on').eq('status', 'active').order('placed_on').limit(1)
-  const since = oldest?.[0] && oldest[0].placed_on < daysAgo(400) ? oldest[0].placed_on : daysAgo(400)
+  // Also back to go-live, so the financial statements see every record since the opening balances.
+  const [{ data: oldest }, { data: live }] = await Promise.all([
+    db.from('flocks').select('placed_on').eq('status', 'active').order('placed_on').limit(1),
+    db.from('farm_settings').select('go_live_date').limit(1),
+  ])
+  const since = [daysAgo(400), oldest?.[0]?.placed_on, live?.[0]?.go_live_date].filter((d): d is string => Boolean(d)).sort()[0]
   const recent = daysAgo(8)
   const [
     settingsRows, productRows, feedTypeRows, medicationRows, categoryRows, reasonRows, penRows, flockRows, staffPenRows, profileRows,
