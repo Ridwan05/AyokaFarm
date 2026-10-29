@@ -8,6 +8,10 @@ import type { Catalog, History } from './remote'
 
 type Flock = History['flocks'][number]
 
+/** What a flock's birds placed in a date range cost. */
+export const placementCost = (history: History, flockId: number, r: { from: string; to: string }) =>
+  sum(history.placements.filter((p) => p.flock_id === flockId && inRange(p.placed_on, r)), (p) => p.birds * Number(p.cost_per_bird ?? 0))
+
 const laysEggs = (catalog: Catalog, flock: Flock) => catalog.birdTypes.find((b) => b.id === flock.bird_type_id)?.lays_eggs ?? false
 const minDate = (a: string, b: string) => (a < b ? a : b)
 const maxDate = (a: string, b: string) => (a > b ? a : b)
@@ -47,8 +51,8 @@ export function rearingCost(history: History, catalog: Catalog, flock: Flock, to
   const to = layingSince ? addDays(layingSince, -1) : end
   const from = flock.placed_on
   const m = to >= from ? penMoney(history, catalog, { from, to }).find((x) => x.penId === flock.pen_id) : undefined
-  // The flock's own bird purchases, whenever they were dated (often a few days before placement).
-  const birds = sum(history.purchases.filter((p) => p.kind === 'birds' && p.flock_id === flock.id), (p) => Number(p.total ?? p.quantity * p.unit_price))
+  // Birds placed in the flock up to the end of rearing, at what they cost (bird stock or typed by the owner).
+  const birds = placementCost(history, flock.id, { from: '0000-01-01', to })
   const rows = history.daily.filter((d) => d.flockId === flock.id && d.date >= from && d.date <= to)
   const doses = history.medLines.filter((l) => l.penId === flock.pen_id && inRange(l.date, { from, to })).length
   const total = birds + (m ? m.feed + m.medication + m.direct + m.overhead : 0)
@@ -113,16 +117,9 @@ export function spreadCharges(history: History, catalog: Catalog, r: { from: str
     const overlapTo = minDate(rear.to, r.to)
     if (overlapFrom <= overlapTo) {
       const m = penMoney(history, catalog, { from: overlapFrom, to: overlapTo }).find((x) => x.penId === flock.pen_id)
-      const birdsInPeriod = sum(
-        history.purchases.filter((p) => p.kind === 'birds' && p.flock_id === flock.id && inRange(p.purchased_on, r)),
-        (p) => Number(p.total ?? p.quantity * p.unit_price),
-      )
-      // penMoney() already counts bird purchases dated inside the overlap; don't count them twice.
-      const birdsInOverlap = sum(
-        history.purchases.filter((p) => p.kind === 'birds' && p.flock_id === flock.id && inRange(p.purchased_on, { from: overlapFrom, to: overlapTo })),
-        (p) => Number(p.total ?? p.quantity * p.unit_price),
-      )
-      line.moved += (m ? m.feed + m.medication + m.direct + m.overhead + m.birds : 0) - birdsInOverlap + birdsInPeriod
+      // penMoney() counts all birds placed in the pen; move only this flock's.
+      const otherBirds = (m?.birds ?? 0) - placementCost(history, flock.id, { from: overlapFrom, to: overlapTo })
+      line.moved += m ? m.feed + m.medication + m.direct + m.overhead + m.birds - otherBirds : 0
     }
     if (rear.layingSince && rear.total > 0) {
       const perDay = rear.total / days

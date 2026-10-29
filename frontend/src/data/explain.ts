@@ -52,7 +52,7 @@ export const explain = {
   penRevenue: () => 'This pen’s portions of sales (its quantity × the sale price), plus a share of sales not split by pen, in proportion to the eggs this pen collected.',
   feedCost: () => 'Bags used in daily entries × the average price paid a bag for that feed (from purchases).',
   medicationCost: () => 'Each dose given × the cost a unit of the batch it came from (purchase price ÷ units bought).',
-  birdCost: () => 'Bird purchases for this pen’s flock in the period.',
+  birdCost: () => 'Birds placed in this pen in the period × their cost a bird (from the bird purchase they came from). A bird purchase is stock until it’s placed.',
   penExpenses: () => 'Expenses recorded against this pen.',
   overheadShare: () => 'General farm expenses (not tied to a pen) shared between pens by bird-days: birds in the pen × days in the period.',
   margin: () => 'Revenue − feed − medication − birds − pen expenses − share of farm costs.',
@@ -65,7 +65,7 @@ export const explain = {
   // ── Rearing (placement → point of lay) ──
   rearingTotal: () => 'Birds bought for this flock + feed + medication + this pen’s expenses + its share of farm costs, from placement to the day before it started laying.',
   rearingSoFar: () => 'Costs since placement up to today. It becomes the flock’s rearing cost once the start of lay is marked.',
-  rearingBirds: () => 'Bird purchases recorded for this flock, whatever day they were dated.',
+  rearingBirds: () => 'Birds placed in this flock × their cost a bird: the purchase price ÷ birds received for birds from stock, or the cost the owner typed for birds not from a purchase.',
   rearingFeed: () => 'Bags used in this flock’s daily entries while rearing × the average price paid a bag.',
   rearingMedication: () => 'Doses given in this pen while rearing × the cost of the batch each came from.',
   costPerHenAtLay: () => 'Rearing cost ÷ birds in the pen at the start of the first laying day.',

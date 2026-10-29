@@ -5,6 +5,8 @@ export type PurchaseKind = 'Feed' | 'Birds' | 'Medication'
 export type PurchaseEvent = { title: string; detail: string; time: string }
 
 export type Purchase = {
+  /** Birds only: what type, breed and age they arrive at (they go to bird stock until placed). */
+  bird?: { birdTypeId: number; breed: string | null; ageDays: number }
   ref: string
   /** ISO date */
   date: string

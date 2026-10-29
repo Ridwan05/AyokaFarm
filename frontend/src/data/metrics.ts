@@ -281,7 +281,8 @@ export function penMoney(history: History, catalog: Catalog, r: { from: string; 
   }
   for (const l of history.medLines.filter((x) => inRange(x.date, r))) get(l.penId).medication += l.quantity * medicationUnitCost(history, l.medicationId, l.purchaseId)
   const flockPen = new Map(history.flocks.map((f) => [f.id, f.pen_id]))
-  for (const p of history.purchases.filter((x) => x.kind === 'birds' && inRange(x.purchased_on, r) && x.flock_id)) get(flockPen.get(p.flock_id!)!).birds += purchaseTotal(p)
+  // Birds cost a pen when they are placed in it (from bird stock, at the purchase's cost a bird).
+  for (const pl of history.placements.filter((x) => inRange(x.placed_on, r))) get(flockPen.get(pl.flock_id)!).birds += pl.birds * Number(pl.cost_per_bird ?? 0)
 
   const sales = history.sales.filter((s) => s.approval === 'approved' && inRange(s.sold_on, r))
   const totalEggs = sum([...out.values()], (m) => m.eggs)

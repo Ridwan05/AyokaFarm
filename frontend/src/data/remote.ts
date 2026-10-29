@@ -119,11 +119,18 @@ export type History = {
   expenses: Row<'expenses'>[]
   payments: Row<'payments'>[]
   flocks: Row<'flocks'>[]
+  /** Where each flock's birds came from (bird stock or not from a purchase), with cost a bird. */
+  placements: Row<'flock_placements'>[]
 }
 
 export type Catalog = {
   settings: Row<'farm_settings'> | null
+  /** Active pens. `bird_types` is the bird type of the flock in the pen now (null when empty). */
   pens: (Row<'pens'> & { bird_types: { name: string; lays_eggs: boolean } | null })[]
+  /** Every pen, including inactive ones (Settings, Edit pen). */
+  allPens: Row<'pens'>[]
+  /** Received bird purchases and how many birds are still in stock. */
+  birdStock: Database['public']['Views']['bird_stock']['Row'][]
   birdTypes: Row<'bird_types'>[]
   feedTypes: Row<'feed_types'>[]
   feedTargets: Row<'feed_targets'>[]
@@ -182,7 +189,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
   const [
     settingsRows, productRows, feedTypeRows, medicationRows, categoryRows, reasonRows, penRows, flockRows, staffPenRows, profileRows,
     customerRows, supplierRows, purchaseRows, saleRows, paymentRows, expenseRows, dailyRows, recordRows, medLineRows, levelRows, stockDayRows, batchRows,
-    birdTypeRows, feedTargetRows, adjustmentRows, medMovementRows, allocationRows,
+    birdTypeRows, feedTargetRows, adjustmentRows, medMovementRows, allocationRows, placementRows, birdStockRows,
   ] = await Promise.all([
     all(db.from('farm_settings').select('*'), 'settings'),
     all(db.from('products').select('*').order('id'), 'products'),
@@ -190,7 +197,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
     all(db.from('medications').select('*').order('id'), 'medications'),
     all(db.from('expense_categories').select('*').order('id'), 'expense categories'),
     all(db.from('adjustment_reasons').select('*').order('id'), 'adjustment reasons'),
-    all(db.from('pens').select('*, bird_types(name, lays_eggs)').eq('is_active', true).order('id'), 'pens'),
+    all(db.from('pens').select('*').order('id'), 'pens'),
     all(db.from('flocks').select('*').order('placed_on'), 'flocks'),
     all(db.from('staff_pens').select('*'), 'pen assignments'),
     all(db.from('profiles').select('*'), 'staff'),
@@ -211,10 +218,21 @@ export async function loadRemote(db: DB): Promise<Remote> {
     all(db.from('stock_adjustments').select('*').gte('adjusted_on', since).order('adjusted_on', { ascending: false }), 'stock adjustments'),
     all(db.from('stock_movements').select('*').eq('item', 'medication').gte('moved_on', since).order('moved_on', { ascending: false }).order('id'), 'medication movements'),
     all(db.from('sale_allocations').select('*').order('id'), 'sale portions'),
+    all(db.from('flock_placements').select('*').order('id'), 'flock placements'),
+    all(db.from('bird_stock').select('*').order('received_on', { ascending: false }).order('purchase_id'), 'bird stock'),
   ])
   const allFlockRows = flockRows
   // Most screens only care about the flock in each pen now.
   const activeFlocks = allFlockRows.filter((f) => f.status === 'active')
+  // A pen's bird type is the type of the flock in it now; pens themselves only have a description.
+  const allPenRows = penRows
+  const birdTypeById = new Map(birdTypeRows.map((b) => [b.id, b]))
+  const activePens = allPenRows
+    .filter((p) => p.is_active)
+    .map((p) => {
+      const bird = birdTypeById.get(activeFlocks.find((f) => f.pen_id === p.id)?.bird_type_id ?? -1)
+      return { ...p, bird_types: bird ? { name: bird.name, lays_eggs: bird.lays_eggs } : null }
+    })
 
   const settings = settingsRows[0]
   if (settings) {
@@ -335,7 +353,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
   for (const sp of staffPenRows) attendantsByPen.set(sp.pen_id, [...(attendantsByPen.get(sp.pen_id) ?? []), first(profileName.get(sp.profile_id))])
   const recordMeta = new Map(recordRows.map((r) => [r.id, r]))
 
-  const penViews = penRows.map((p) => {
+  const penViews = activePens.map((p) => {
     const flock = flockByPen.get(p.id)
     const layers = p.bird_types?.lays_eggs ?? false
     const type: Pen['type'] = layers ? 'Layers' : 'Broilers'
@@ -662,10 +680,13 @@ export async function loadRemote(db: DB): Promise<Remote> {
       expenses: expenseRows,
       payments: paymentRows,
       flocks: allFlockRows,
+      placements: placementRows,
     },
     catalog: {
       settings: settings ?? null,
-      pens: penRows,
+      pens: activePens,
+      allPens: allPenRows,
+      birdStock: birdStockRows,
       birdTypes: birdTypeRows,
       feedTypes: feedTypeRows,
       feedTargets: feedTargetRows,

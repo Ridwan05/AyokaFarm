@@ -12,11 +12,13 @@ import type { PaymentMethod } from './sales'
 import { farmTodayISO } from './session'
 import { Splash } from './SessionProvider'
 import { useCurrentUser } from './sessionContext'
-import { TradeContext, type Trade } from './tradeContext'
+import { TradeContext, type BirdSource, type Trade } from './tradeContext'
 
 // The farm's records, loaded from Supabase. Screens read and write through useTrade(); every write
 // goes to the database (where triggers calculate refs, stock, bird counts and approvals) and then
 // the records are reloaded. Row-level security decides what each person can see and change.
+
+const toSources = (sources: BirdSource[]) => sources.map((x) => ({ purchase_id: x.purchaseId, birds: x.birds, cost_per_bird: x.costPerBird ?? null }))
 
 const dbMethod = (m: PaymentMethod | undefined) => (m === 'POS' ? 'pos' : m) ?? null
 
@@ -289,6 +291,9 @@ export function TradeProvider({ children }: { children: ReactNode }) {
           status: kind === 'birds' ? 'received' : 'ordered',
           received_on: kind === 'birds' ? p.date : null,
           notes: kind === 'birds' ? p.item : null,
+          bird_type_id: kind === 'birds' ? (p.bird?.birdTypeId ?? null) : null,
+          breed: kind === 'birds' ? (p.bird?.breed ?? null) : null,
+          bird_age_days: kind === 'birds' ? (p.bird?.ageDays ?? 0) : 0,
           recorded_by: user.id,
           // ref (PF-/PB-/PM-0001) is set by a database trigger.
         } as TablesInsert<'purchases'>),
@@ -315,30 +320,32 @@ export function TradeProvider({ children }: { children: ReactNode }) {
       return cleared
     },
 
-    async addPen(pen) {
-      const { data: bird } = await db.from('bird_types').select('id').eq('name', pen.type === 'Layers' ? 'Layer' : 'Broiler').single()
-      return write(() => db.from('pens').insert({ name: pen.name, capacity: pen.capacity, bird_type_id: bird?.id ?? null }))
-    },
+    addPen: (pen) => write(() => db.from('pens').insert({ name: pen.name, capacity: pen.capacity, description: pen.description || null })),
 
-    async placeFlock(f) {
-      const { data: bird } = await db.from('bird_types').select('id').eq('name', f.type === 'Layers' ? 'Layer' : 'Broiler').single()
-      if (!bird) {
-        toast.error('Bird type not found')
-        return false
-      }
-      return write(() =>
-        db.from('flocks').insert({
-          code: f.code,
-          pen_id: f.penId,
-          bird_type_id: bird.id,
-          breed: f.breed,
-          placed_on: f.placedOn,
-          age_at_placement_days: f.ageAtPlacementDays,
-          birds_placed: f.birds,
-          created_by: user.id,
+    updatePen: (penId, patch) => write(() => db.from('pens').update(patch).eq('id', penId)),
+
+    updateFlock: (flockId, patch) => write(() => db.from('flocks').update(patch).eq('id', flockId)),
+
+    setFlockSources: (flockId, sources) => write(() => db.rpc('set_flock_sources', { flock_id: flockId, sources: toSources(sources) })),
+
+    addBirdsToFlock: (flockId, placedOn, sources) =>
+      write(() => db.rpc('add_birds_to_flock', { flock_id: flockId, placed_on: placedOn, sources: toSources(sources) })),
+
+    placeFlock: (f) =>
+      write(() =>
+        db.rpc('place_flock', {
+          flock: {
+            code: f.code,
+            pen_id: f.penId,
+            bird_type_id: f.birdTypeId,
+            breed: f.breed || null,
+            placed_on: f.placedOn,
+            age_at_placement_days: f.ageAtPlacementDays,
+            notes: f.notes || null,
+          },
+          sources: toSources(f.sources),
         }),
-      )
-    },
+      ),
   }
 
   return <TradeContext.Provider value={value}>{children}</TradeContext.Provider>

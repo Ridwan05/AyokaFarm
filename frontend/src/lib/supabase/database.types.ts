@@ -665,6 +665,7 @@ export type Database = {
           bird_type_id: number | null
           capacity: number
           created_at: string
+          description: string | null
           id: number
           is_active: boolean
           name: string
@@ -673,6 +674,7 @@ export type Database = {
           bird_type_id?: number | null
           capacity: number
           created_at?: string
+          description?: string | null
           id?: never
           is_active?: boolean
           name: string
@@ -681,6 +683,7 @@ export type Database = {
           bird_type_id?: number | null
           capacity?: number
           created_at?: string
+          description?: string | null
           id?: never
           is_active?: boolean
           name?: string
@@ -694,6 +697,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      flock_placements: {
+        Row: {
+          birds: number
+          cost_per_bird: number | null
+          created_at: string
+          created_by: string | null
+          flock_id: number
+          id: number
+          placed_on: string
+          purchase_id: number | null
+        }
+        Insert: {
+          birds: number
+          cost_per_bird?: number | null
+          created_at?: string
+          created_by?: string | null
+          flock_id: number
+          id?: never
+          placed_on: string
+          purchase_id?: number | null
+        }
+        Update: {
+          birds?: number
+          cost_per_bird?: number | null
+          created_at?: string
+          created_by?: string | null
+          flock_id?: number
+          id?: never
+          placed_on?: string
+          purchase_id?: number | null
+        }
+        Relationships: []
       }
       production_medications: {
         Row: {
@@ -955,6 +991,9 @@ export type Database = {
         Row: {
           amount_paid: number
           batch_no: string | null
+          bird_age_days: number
+          bird_type_id: number | null
+          breed: string | null
           created_at: string
           delete_reason: string | null
           deleted_at: string | null
@@ -987,6 +1026,9 @@ export type Database = {
         Insert: {
           amount_paid?: number
           batch_no?: string | null
+          bird_age_days?: number
+          bird_type_id?: number | null
+          breed?: string | null
           created_at?: string
           delete_reason?: string | null
           deleted_at?: string | null
@@ -1019,6 +1061,9 @@ export type Database = {
         Update: {
           amount_paid?: number
           batch_no?: string | null
+          bird_age_days?: number
+          bird_type_id?: number | null
+          breed?: string | null
           created_at?: string
           delete_reason?: string | null
           deleted_at?: string | null
@@ -1613,6 +1658,24 @@ export type Database = {
       }
     }
     Views: {
+      bird_stock: {
+        Row: {
+          bird_age_days: number | null
+          bird_type: string | null
+          bird_type_id: number | null
+          breed: string | null
+          cost_per_bird: number | null
+          in_stock: number | null
+          placed: number | null
+          purchase_id: number | null
+          received: number | null
+          received_on: string | null
+          ref: string | null
+          supplier: string | null
+          supplier_id: number | null
+        }
+        Relationships: []
+      }
       customer_balances: {
         Row: {
           balance: number | null
@@ -1803,6 +1866,18 @@ export type Database = {
       }
     }
     Functions: {
+      add_birds_to_flock: {
+        Args: { flock_id: number; placed_on: string; sources: Json }
+        Returns: undefined
+      }
+      place_flock: {
+        Args: { flock: Json; sources: Json }
+        Returns: Database["public"]["Tables"]["flocks"]["Row"]
+      }
+      set_flock_sources: {
+        Args: { flock_id: number; sources: Json }
+        Returns: undefined
+      }
       record_sale: {
         Args: { portions?: Json; sale: Json }
         Returns: {

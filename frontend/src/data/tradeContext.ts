@@ -61,7 +61,16 @@ export type Trade = {
   /** Payment outside a sale/purchase; clears the oldest bills first. Returns what it cleared (saving continues in the background). */
   recordPayment: (payment: NewPayment) => string
   addPen: (pen: NewPen) => Promise<boolean>
+  /** Places a flock, drawing its birds from bird stock (place_flock). */
   placeFlock: (flock: NewFlock) => Promise<boolean>
+  /** Owner: pen name, capacity, description, active. */
+  updatePen: (penId: number, patch: PenPatch) => Promise<boolean>
+  /** Owner: flock details. Start of lay and closing have their own screens. */
+  updateFlock: (flockId: number, patch: FlockPatch) => Promise<boolean>
+  /** Owner: replace where the flock's first-day birds came from (and so birds placed). */
+  setFlockSources: (flockId: number, sources: BirdSource[]) => Promise<boolean>
+  /** Add birds to a flock after placement (top-up from stock). */
+  addBirdsToFlock: (flockId: number, placedOn: string, sources: BirdSource[]) => Promise<boolean>
   /** The farm_settings row (null before setup). The same values are in farmSettings. */
   settings: Catalog['settings']
   /** Up to 400 days of production, stock and money records, for dashboards and reports (see metrics.ts). */
@@ -72,8 +81,12 @@ export type Trade = {
   reload: () => Promise<void>
 }
 
-export type NewPen = { name: string; type: 'Layers' | 'Broilers'; capacity: number }
-export type NewFlock = { code: string; penId: number; type: 'Layers' | 'Broilers'; breed: string; placedOn: string; ageAtPlacementDays: number; birds: number }
+export type NewPen = { name: string; capacity: number; description?: string }
+export type PenPatch = Partial<{ name: string; capacity: number; description: string | null; is_active: boolean }>
+/** Where placed birds come from: a bird purchase in stock, or (owner only) not from a purchase. */
+export type BirdSource = { purchaseId: number | null; birds: number; costPerBird?: number | null }
+export type FlockPatch = Partial<{ code: string; breed: string | null; placed_on: string; age_at_placement_days: number; bird_type_id: number; notes: string | null }>
+export type NewFlock = { code: string; penId: number; birdTypeId: number; breed: string; placedOn: string; ageAtPlacementDays: number; sources: BirdSource[]; notes?: string }
 
 export const TradeContext = createContext<Trade | null>(null)
 
