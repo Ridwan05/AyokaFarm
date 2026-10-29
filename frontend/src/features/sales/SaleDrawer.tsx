@@ -1,5 +1,7 @@
 import { Button } from '../../components/ui/Button'
 import { DetailSection, History } from '../../components/ui/Detail'
+import { explainMoney } from '../../data/explainMoney'
+import { explain } from '../../data/explain'
 import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { Drawer } from '../../components/ui/Overlay'
 import { useToast } from '../../components/ui/toastContext'
@@ -88,7 +90,7 @@ export function SaleDrawer({ sale, onClose, onRecordPayment }: Props) {
           {naira(sale.price)} a {product.unit.replace(/s$/, '')}
           {sale.price === product.price && customer ? ' · last price' : ''}
         </KeyValueRow>
-        <KeyValueRow label="Total" strong calculated>
+        <KeyValueRow label="Total" strong calculated={explain.saleTotal()}>
           {naira(total)}
         </KeyValueRow>
       </DetailSection>
@@ -99,16 +101,16 @@ export function SaleDrawer({ sale, onClose, onRecordPayment }: Props) {
           {naira(sale.paid)}
           {sale.method ? ` · ${sale.method}` : ''}
         </KeyValueRow>
-        <KeyValueRow label="Left on this sale" calculated>
+        <KeyValueRow label="Left on this sale" calculated={explain.leftOnSale()}>
           {naira(Math.max(left, 0))}
         </KeyValueRow>
         {customer &&
           (pending ? (
-            <KeyValueRow label={`${customer.short}’s balance now`} strong calculated>
+            <KeyValueRow label={`${customer.short}’s balance now`} strong calculated={explain.customerBalance()}>
               {naira(balance)}
             </KeyValueRow>
           ) : (
-            <KeyValueRow label={`${customer.short}’s balance after`} strong calculated>
+            <KeyValueRow label={`${customer.short}’s balance after`} strong calculated={explainMoney.balanceAfterSale()}>
               {left > 0 ? `${naira(balance - left)} → ${naira(balance)}` : naira(balance)}
             </KeyValueRow>
           ))}

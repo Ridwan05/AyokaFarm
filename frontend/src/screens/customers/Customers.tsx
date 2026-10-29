@@ -26,6 +26,8 @@ import { PaymentModal } from '../../features/payments/PaymentModal'
 import { downloadCsv } from '../../lib/export'
 import { formatNaira } from '../../lib/format'
 import { Presence } from '../../components/ui/Overlay'
+import { InfoTip } from '../../components/ui/InfoTip'
+import { explain } from '../../data/explain'
 
 const SORTS = ['Biggest balance first', 'Oldest bill first', 'Name A–Z'] as const
 
@@ -130,7 +132,10 @@ export default function Customers() {
       </div>
 
       <Card className="flex-row flex-wrap items-center gap-x-4 gap-y-2 px-5 py-4">
-        <span className="type-label-md text-fg-primary">Aging</span>
+        <span className="flex items-center gap-1.5 type-label-md text-fg-primary">
+          Aging
+          <InfoTip label="Aging">{explain.ageing()}</InfoTip>
+        </span>
         <AgingBar aging={totals} className="w-full shrink-0 lg:w-[424px]" />
         <span className="hidden flex-1 lg:block" />
         {agingLegend().map((l) => (

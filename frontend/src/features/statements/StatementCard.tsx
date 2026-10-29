@@ -9,6 +9,8 @@ import type { StatementLine } from '../../data/ledger'
 import { period, todayISO } from '../../data/metrics'
 import { downloadCsv } from '../../lib/export'
 import { formatNaira, formatNumber } from '../../lib/format'
+import { InfoTip } from '../../components/ui/InfoTip'
+import { explainMoney } from '../../data/explainMoney'
 
 /** Since go-live, this month and last month; from/to are left out for "everything". */
 function ranges() {
@@ -104,7 +106,10 @@ export function StatementCard({ lines, side, balance, onDownload, exportName }: 
         <span className="flex-1 type-body-sm text-fg-secondary">
           Closing balance on {dmy(todayISO())} · payments {side === 'customer' ? 'are applied to the oldest unpaid sale first' : 'clear the oldest purchase first'}
         </span>
-        <span className="type-numeric-lg text-fg-primary">₦ {formatNumber(balance)}</span>
+        <span className="flex items-center gap-1.5">
+          <InfoTip label="Closing balance">{explainMoney.closingBalance()}</InfoTip>
+          <span className="type-numeric-lg text-fg-primary">₦ {formatNumber(balance)}</span>
+        </span>
       </div>
     </Card>
   )

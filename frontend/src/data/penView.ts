@@ -93,7 +93,7 @@ export function penKpis(history: History, catalog: Catalog, penId: number): Kpi[
         points: true,
         digits: 1,
         context: 'Last 7 days vs the 7 before',
-        info: 'Eggs collected ÷ live hens',
+        info: 'Eggs collected ÷ hens at the start of the day, for this pen. The change compares the last 7 days with the 7 before.',
         spark: spark.map((d) => rows.find((r) => r.date === d)?.layingRate ?? 0),
       })
     : kpi({
@@ -106,7 +106,7 @@ export function penKpis(history: History, catalog: Catalog, penId: number): Kpi[
         digits: 1,
         goodWhen: 'neither',
         context: `Last 7 days · tolerance ±${farmSettings.feedVariancePct}%`,
-        info: 'Feed used against the expected amount for the birds’ age',
+        info: 'Feed used (bags × kg a bag) compared with birds × grams a bird a day for the flock’s age (Settings → Feed & targets).',
         spark: spark.map((d) => rows.find((r) => r.date === d)?.variancePct ?? 0),
       })
 
@@ -119,7 +119,7 @@ export function penKpis(history: History, catalog: Catalog, penId: number): Kpi[
       previous: liveThen,
       goodWhen: 'neither',
       context: `of ${placed.toLocaleString('en-NG')} placed · vs 7 days ago`,
-      info: 'Birds alive in this pen: the latest closing count',
+      info: 'The closing count from this pen’s latest daily entry: birds placed less every death recorded.',
       spark: spark.map((d) => liveOn(rows, placed, d)),
     }),
     kpi({
@@ -132,7 +132,7 @@ export function penKpis(history: History, catalog: Catalog, penId: number): Kpi[
       digits: 1,
       goodWhen: 'down',
       context: `${(placed - live).toLocaleString('en-NG')} birds since placement`,
-      info: 'Birds lost since placement ÷ birds placed',
+      info: 'All deaths recorded since the flock was placed ÷ birds placed.',
       spark: spark.map((d) => lostPct(liveOn(rows, placed, d))),
     }),
     third,
@@ -143,7 +143,7 @@ export function penKpis(history: History, catalog: Catalog, penId: number): Kpi[
       current: margin,
       previous: marginPrev,
       context: `vs same days of ${previous(month).from.slice(0, 7) === month.from.slice(0, 7) ? 'last period' : new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'UTC' }).format(new Date(`${previous(month).from}T00:00:00Z`))}`,
-      info: 'Sales from this pen minus feed, medication, birds and its share of costs',
+      info: 'This month’s sales for the pen (plus its share of egg-store sales) − feed, medication, birds, pen expenses and its share of farm costs.',
       spark: spark.map((d) => money({ from: month.from, to: d < month.from ? month.from : d }) ?? 0),
     }),
   ]

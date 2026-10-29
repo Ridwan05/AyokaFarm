@@ -18,6 +18,7 @@ import { useTrade } from '../data/tradeContext'
 import { isAttendant } from '../lib/access'
 import { cn } from '../lib/cn'
 import { formatNumber, formatShortDate, formatSignedPct } from '../lib/format'
+import { explain } from '../data/explain'
 import { farmSettings } from '../data/farmSettings'
 
 type Draft = {
@@ -225,13 +226,13 @@ export default function ProductionEntry() {
           <CardHeader title="Birds" />
           <div className="grid grid-cols-1 gap-4 px-5 pb-5 sm:grid-cols-3">
             <Field label="Opening" auto hint="Yesterday’s closing">
-              {(id) => <AutoInput id={id} value={formatNumber(ctx.opening)} />}
+              {(id) => <AutoInput id={id} value={formatNumber(ctx.opening)} label="Opening" info="Yesterday’s closing count for this flock, or the birds placed if this is the first entry." />}
             </Field>
             <Field label="Died today" error={diedError}>
               {(id) => <Stepper id={id} value={draft.died} onChange={(v) => set('died', v)} invalid={!!diedError} />}
             </Field>
             <Field label="Closing" auto hint="Opening − died">
-              {(id) => <AutoInput id={id} value={formatNumber(closing)} />}
+              {(id) => <AutoInput id={id} value={formatNumber(closing)} label="Closing" info="Opening birds − birds that died today." />}
             </Field>
           </div>
           {overMortality && (
@@ -269,7 +270,7 @@ export default function ProductionEntry() {
               )}
             </Field>
             <Field label="Feed used" auto hint={`Expected ${formatNumber(Math.round(expectedKg))} kg · ${ctx.gramsPerBird} g a bird`}>
-              {(id) => <AutoInput id={id} value={`${formatNumber(Math.round(feedKg))} kg`} />}
+              {(id) => <AutoInput id={id} value={`${formatNumber(Math.round(feedKg))} kg`} label="Feed used" info="Bags used × kg in a bag of the chosen feed (Settings → Feed & targets)." />}
             </Field>
             <Field
               label="vs expected"
@@ -278,7 +279,7 @@ export default function ProductionEntry() {
             >
               {(id) => (
                 <div className={cn('rounded-md', varianceOff && '[&_output]:text-fg-warning')}>
-                  <AutoInput id={id} value={variance === null ? '—' : formatSignedPct(variance)} />
+                  <AutoInput id={id} value={variance === null ? '—' : formatSignedPct(variance)} label="vs expected" info={explain.feedVsExpected()} />
                 </div>
               )}
             </Field>
@@ -299,7 +300,7 @@ export default function ProductionEntry() {
                 {(id) => <TextInput id={id} inputMode="numeric" pattern="[0-9]*" placeholder="0" value={draft.cracked} onChange={(e) => set('cracked', e.target.value.replace(/\D/g, ''))} />}
               </Field>
               <Field label="Laying rate" auto hint={`${formatNumber(eggs ?? 0)} eggs`}>
-                {(id) => <AutoInput id={id} value={layingRate === null ? '—' : `${layingRate.toFixed(1)}%`} />}
+                {(id) => <AutoInput id={id} value={layingRate === null ? '—' : `${layingRate.toFixed(1)}%`} label="Laying rate" info={`Eggs collected (crates × ${farmSettings.eggsPerCrate} + loose) ÷ opening birds.`} />}
               </Field>
             </div>
           </Card>

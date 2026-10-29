@@ -1,6 +1,7 @@
 import { Calculator, CalendarDays, ChevronDown, Search, type LucideIcon } from 'lucide-react'
 import { useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes } from 'react'
 import { cn } from '../../lib/cn'
+import { InfoTip } from './InfoTip'
 
 type FieldProps = {
   label: string
@@ -65,14 +66,21 @@ export function DateInput(props: Omit<TextInputProps, 'type' | 'leadingIcon'>) {
 }
 
 /** Read-only computed value. */
-export function AutoInput({ id, value, prefix }: { id?: string; value: string; prefix?: string }) {
+/** A value the form works out. `info` says how; it's shown from the icon. */
+export function AutoInput({ id, value, prefix, info, label = 'This value' }: { id?: string; value: string; prefix?: string; info?: string; label?: string }) {
   return (
     <div className="flex h-12 w-full items-center gap-2 rounded-md bg-subtle px-3">
       {prefix && <span className="type-label-lg text-fg-tertiary">{prefix}</span>}
       <output id={id} className="flex-1 type-label-lg text-fg-primary">
         {value}
       </output>
-      <Calculator size={20} strokeWidth={1.5} className="text-icon-secondary" />
+      {info ? (
+        <InfoTip label={label} size={18}>
+          {info}
+        </InfoTip>
+      ) : (
+        <Calculator size={20} strokeWidth={1.5} className="text-icon-secondary" />
+      )}
     </div>
   )
 }

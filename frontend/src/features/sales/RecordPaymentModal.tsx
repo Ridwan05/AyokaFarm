@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Button } from '../../components/ui/Button'
 import { Field, SummaryBox, TextInput } from '../../components/ui/Form'
+import { explainMoney } from '../../data/explainMoney'
 import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { Modal } from '../../components/ui/Overlay'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
@@ -71,10 +72,10 @@ export function RecordPaymentModal({ sale, onClose }: { sale: Sale; onClose: () 
         </div>
         {customer && (
           <SummaryBox>
-            <KeyValueRow label={`${customer.short} owes now`} calculated>
+            <KeyValueRow label={`${customer.short} owes now`} calculated={explainMoney.balanceNow()}>
               ₦{formatNumber(customerBalance(customer.id))}
             </KeyValueRow>
-            <KeyValueRow label="New balance" strong>
+            <KeyValueRow label="New balance" strong calculated={explainMoney.newBalancePayment()}>
               ₦{formatNumber(customerBalance(customer.id) - value)}
             </KeyValueRow>
           </SummaryBox>

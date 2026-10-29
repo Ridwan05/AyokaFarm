@@ -2,6 +2,7 @@ import { Package, Truck } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Button } from '../../components/ui/Button'
 import { AutoInput, Field, SelectInput, SummaryBox, TextInput } from '../../components/ui/Form'
+import { explainMoney } from '../../data/explainMoney'
 import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { Drawer } from '../../components/ui/Overlay'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
@@ -109,7 +110,7 @@ export function ReceiveDeliveryDrawer({ onClose }: { onClose: () => void }) {
               {(id) => <TextInput id={id} inputMode="numeric" suffix={unitWord} value={sentBack} onChange={(e) => setSentBack(e.target.value)} />}
             </Field>
             <SummaryBox>
-              <KeyValueRow label={`${order.item} in store now`} calculated>
+              <KeyValueRow label={`${order.item} in store now`} calculated={explainMoney.inStoreNow()}>
                 {formatNumber(inStore)} {order.stockUnit}
               </KeyValueRow>
               <KeyValueRow label="+ Into the store">
@@ -118,7 +119,7 @@ export function ReceiveDeliveryDrawer({ onClose }: { onClose: () => void }) {
               <KeyValueRow label="− Sent back">
                 {num(sentBack)} {unitWord}
               </KeyValueRow>
-              <KeyValueRow label={`${order.item} after saving`} strong calculated>
+              <KeyValueRow label={`${order.item} after saving`} strong calculated={explainMoney.afterReceiving()}>
                 {formatNumber(inStore + intoStore)} {order.stockUnit}
               </KeyValueRow>
             </SummaryBox>

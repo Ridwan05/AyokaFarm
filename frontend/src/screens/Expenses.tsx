@@ -6,6 +6,9 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { Button } from '../components/ui/Button'
 import { Card, CardHeader } from '../components/ui/Card'
 import { SearchInput } from '../components/ui/Form'
+import { explainMoney } from '../data/explainMoney'
+import { explain } from '../data/explain'
+import { InfoTip } from '../components/ui/InfoTip'
 import { KeyValueRow } from '../components/ui/KeyValueRow'
 import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Select } from '../components/ui/Select'
@@ -115,8 +118,9 @@ export default function Expenses() {
 
       <div className="flex flex-col gap-4 lg:flex-row">
         <Card className="min-w-0 flex-1 px-5 pt-4 pb-5">
-          <div className="flex items-baseline gap-2 pb-2">
+          <div className="flex items-center gap-2 pb-2">
             <h2 className="type-h3 text-fg-primary">By category</h2>
+            <InfoTip label="By category">{explainMoney.byCategory()}</InfoTip>
             <span className="type-body-sm text-fg-tertiary">{spanLabel(range)}</span>
           </div>
           {byCategory.length === 0 && <p className="py-4 type-body-md text-fg-tertiary">No expenses in this period.</p>}
@@ -136,19 +140,24 @@ export default function Expenses() {
 
         <Card className="w-full shrink-0 lg:w-[380px] gap-1 px-5 pt-4 pb-5">
           <h2 className="type-h3 text-fg-primary">Where it goes</h2>
-          <p className="flex items-baseline gap-2 py-2">
+          <p className="flex items-center gap-2 py-2">
             <span className="type-display-lg text-fg-primary">₦{(total / 1e6).toFixed(2)}M</span>
             <span className="type-body-md text-fg-tertiary">{period.toLowerCase()}</span>
+            <InfoTip label="Total expenses">{explainMoney.expensesTotal()}</InfoTip>
           </p>
-          <KeyValueRow label="Tied to a pen">{formatNaira(tied)}</KeyValueRow>
-          <KeyValueRow label="General overhead">{formatNaira(total - tied)}</KeyValueRow>
-          <KeyValueRow label="Shared by bird-days" calculated>
+          <KeyValueRow label="Tied to a pen" calculated={explainMoney.tiedToPen()}>
+            {formatNaira(tied)}
+          </KeyValueRow>
+          <KeyValueRow label="General overhead" calculated={explainMoney.generalOverhead()}>
+            {formatNaira(total - tied)}
+          </KeyValueRow>
+          <KeyValueRow label="Shared by bird-days" calculated={explain.sharedByBirdDays()}>
             {pensWithBirds} pen{pensWithBirds === 1 ? '' : 's'}
           </KeyValueRow>
-          <KeyValueRow label="Receipts attached">
+          <KeyValueRow label="Receipts attached" calculated={explainMoney.receiptsAttached()}>
             {withReceipt} of {inPeriod.length}
           </KeyValueRow>
-          <KeyValueRow label={`vs ${spanLabel(before)}`} strong>
+          <KeyValueRow label={`vs ${spanLabel(before)}`} strong calculated={explainMoney.expensesVs(spanLabel(before))}>
             {pctChange(total, expenseTotal(expenses, before))}
           </KeyValueRow>
         </Card>

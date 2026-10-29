@@ -4,6 +4,8 @@ import { Pill, Warehouse } from 'lucide-react'
 import { useState } from 'react'
 import { Badge, type Tone } from '../../components/ui/Badge'
 import { Card, CardHeader } from '../../components/ui/Card'
+import { InfoTip } from '../../components/ui/InfoTip'
+import { explain } from '../../data/explain'
 import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { KpiCard } from '../../components/ui/KpiCard'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
@@ -153,10 +155,10 @@ export default function MedicationLedgerReport() {
   const list = (pens: number[]) => (pens.length <= 1 ? `Pen ${pens[0]}` : `Pens ${pens.slice(0, -1).join(', ')} and ${pens[pens.length - 1]}`)
 
   const kpis = [
-    kpi({ label: 'Medication used', ...nairaKpi(usedCost), current: null, previous: null, goodWhen: 'neither', context: 'added to pen costs', info: 'Cost of medication used in pens, at purchase price', spark: FLAT }),
-    kpi({ label: 'Treatments', value: String(used.length), unit: 'given', current: null, previous: null, goodWhen: 'neither', context: treatedPens.length ? list(treatedPens) : 'none in this range', info: 'Doses recorded in pen entries', spark: FLAT }),
-    kpi({ label: 'Written off', value: String(writtenOff.length), unit: writtenOff.length === 1 ? 'adjustment' : 'adjustments', current: null, previous: null, goodWhen: 'neither', context: writtenOff.length ? naira(writtenOff.reduce((n, r) => n + r.cost, 0)) : 'nothing written off', info: 'Stock reduced after a count', spark: FLAT }),
-    kpi({ label: 'Withdrawals in force', value: String(inForce.length), unit: inForce.length === 1 ? 'pen' : 'pens', current: null, previous: null, goodWhen: 'neither', context: inForce.length ? inForce.map((w) => `Pen ${w.penId} to ${dayMonth(w.clearFrom)}`).join(' · ') : 'all pens clear', info: 'Pens whose eggs and birds cannot be sold yet', spark: FLAT }),
+    kpi({ label: 'Medication used', ...nairaKpi(usedCost), current: null, previous: null, goodWhen: 'neither', context: 'added to pen costs', info: 'Each dose given in the period × the cost a unit of its batch (purchase price ÷ units bought).', spark: FLAT }),
+    kpi({ label: 'Treatments', value: String(used.length), unit: 'given', current: null, previous: null, goodWhen: 'neither', context: treatedPens.length ? list(treatedPens) : 'none in this range', info: 'Medication lines saved in daily entries during the period.', spark: FLAT }),
+    kpi({ label: 'Written off', value: String(writtenOff.length), unit: writtenOff.length === 1 ? 'adjustment' : 'adjustments', current: null, previous: null, goodWhen: 'neither', context: writtenOff.length ? naira(writtenOff.reduce((n, r) => n + r.cost, 0)) : 'nothing written off', info: 'Stock adjustments that took medication out of stock (counts, breakage, expiry) in the period.', spark: FLAT }),
+    kpi({ label: 'Withdrawals in force', value: String(inForce.length), unit: inForce.length === 1 ? 'pen' : 'pens', current: null, previous: null, goodWhen: 'neither', context: inForce.length ? inForce.map((w) => `Pen ${w.penId} to ${dayMonth(w.clearFrom)}`).join(' · ') : 'all pens clear', info: 'Pens where the last dose + the medication’s withdrawal days hasn’t passed yet.', spark: FLAT }),
   ]
 
   const exportRows = () =>
@@ -187,7 +189,10 @@ export default function MedicationLedgerReport() {
       <div className="flex flex-col gap-4 lg:flex-row">
         <Card className="min-w-0 flex-1 px-5 pt-4 pb-5">
           <div className="flex items-baseline gap-2 pb-2">
-            <h2 className="type-h3 text-fg-primary">Cost by pen</h2>
+            <h2 className="flex items-center gap-1.5 type-h3 text-fg-primary">
+              Cost by pen
+              <InfoTip label="Cost by pen">{explain.medicationCost()} Added up for each pen over the range.</InfoTip>
+            </h2>
             <span className="type-body-sm text-fg-tertiary">{range.label} · flows into Profit & loss (FR-MED-4)</span>
           </div>
           <ul className="flex flex-col">
@@ -226,7 +231,7 @@ export default function MedicationLedgerReport() {
                 <div className="my-3 h-1.5 rounded-full bg-subtle">
                   <div className="h-1.5 rounded-full bg-icon-info" style={{ width: `${(day / w.days) * 100}%` }} />
                 </div>
-                <KeyValueRow label="Clear to sell from" strong calculated>
+                <KeyValueRow label="Clear to sell from" strong calculated={explain.withdrawal()}>
                   {weekdayDayMonth(w.clearFrom)}
                 </KeyValueRow>
               </div>

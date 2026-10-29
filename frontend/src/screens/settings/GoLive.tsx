@@ -213,10 +213,10 @@ export default function GoLive() {
                 {customerRows.filter((r) => r.opening > 0).length} of {customerRows.length}
               </KeyValueRow>
               <KeyValueRow label="Still to confirm">{pending.length ? `${pending.length} (${pending.map((p) => p.name).join(', ')})` : 'None'}</KeyValueRow>
-              <KeyValueRow label="Customers owed the farm" calculated>
+              <KeyValueRow label="Customers owed the farm" calculated="Every customer’s opening balance added up: what they owed on the go-live date.">
                 {formatNaira(customerRows.reduce((n, r) => n + r.opening, 0))}
               </KeyValueRow>
-              <KeyValueRow label="The farm owed suppliers" strong calculated>
+              <KeyValueRow label="The farm owed suppliers" strong calculated="Every supplier’s opening balance added up: what the farm owed them on the go-live date.">
                 {formatNaira(supplierRows.reduce((n, r) => n + r.opening, 0))}
               </KeyValueRow>
             </SummaryBox>

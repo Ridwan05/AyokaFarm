@@ -79,10 +79,10 @@ export default function WeeklyCount() {
   }
 
   const kpis: Kpi[] = [
-    { label: 'Counted', value: String(counted.length), unit: `of ${items.length} items`, delta: counted.length === items.length ? 'Done' : 'In progress', trend: 'flat', sentiment: 'neutral', context: span, info: 'Items counted this week', spark: FLAT },
-    { label: 'Matched', value: String(counted.length - differences.length), unit: 'items', delta: '—', trend: 'flat', sentiment: 'neutral', context: 'as the app expected', info: 'Counts equal to what the app expected', spark: FLAT },
-    { label: 'Differences', value: String(differences.length), unit: bigger.length ? `need ${manager}` : 'small', delta: missingReason.length ? `${missingReason.length} need a reason` : 'Saved', trend: 'flat', sentiment: 'neutral', context: 'with reasons', info: 'Counts that differ from the app', spark: FLAT },
-    { label: 'Value adjusted', value: (value / 1000).toFixed(1), unit: 'thousand ₦', delta: differences.map((i) => `${diffOf(i)! > 0 ? '+' : '−'}${formatNumber(Math.abs(diffOf(i)!))} ${i.unit === 'bags' && Math.abs(diffOf(i)!) === 1 ? 'bag' : i.unit}`).join(' · ') || 'None', trend: 'flat', sentiment: 'neutral', context: 'at average cost', info: 'Value of the stock differences', spark: FLAT },
+    { label: 'Counted', value: String(counted.length), unit: `of ${items.length} items`, delta: counted.length === items.length ? 'Done' : 'In progress', trend: 'flat', sentiment: 'neutral', context: span, info: 'Items with a count entered on this screen, out of all feed and medication items.', spark: FLAT },
+    { label: 'Matched', value: String(counted.length - differences.length), unit: 'items', delta: '—', trend: 'flat', sentiment: 'neutral', context: 'as the app expected', info: 'Counted items where the count equals the stock the app expected (opening + received − used ± earlier counts).', spark: FLAT },
+    { label: 'Differences', value: String(differences.length), unit: bigger.length ? `need ${manager}` : 'small', delta: missingReason.length ? `${missingReason.length} need a reason` : 'Saved', trend: 'flat', sentiment: 'neutral', context: 'with reasons', info: 'Counted items where the count is different from the stock the app expected. Big differences need a manager to approve.', spark: FLAT },
+    { label: 'Value adjusted', value: (value / 1000).toFixed(1), unit: 'thousand ₦', delta: differences.map((i) => `${diffOf(i)! > 0 ? '+' : '−'}${formatNumber(Math.abs(diffOf(i)!))} ${i.unit === 'bags' && Math.abs(diffOf(i)!) === 1 ? 'bag' : i.unit}`).join(' · ') || 'None', trend: 'flat', sentiment: 'neutral', context: 'at average cost', info: 'Each difference × the average price paid a unit (from purchases), added up.', spark: FLAT },
   ]
 
   const columns: Column<Item>[] = [

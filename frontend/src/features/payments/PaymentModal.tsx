@@ -4,6 +4,9 @@ import { Alert } from '../../components/ui/Alert'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Checkbox, DateInput, Field, SelectInput, TextInput } from '../../components/ui/Form'
+import { explainMoney } from '../../data/explainMoney'
+import { explain } from '../../data/explain'
+import { InfoTip } from '../../components/ui/InfoTip'
 import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { Modal } from '../../components/ui/Overlay'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
@@ -168,7 +171,10 @@ export function PaymentModal({ direction: initialDirection = 'in', partyId, onCl
         )}
 
         <div className="flex flex-col rounded-lg bg-canvas px-4 pt-3 pb-2">
-          <p className="pb-1 type-overline text-fg-tertiary">{isIn ? 'Clears the oldest bills first' : 'Pays the oldest bills first'}</p>
+          <p className="flex items-center gap-1.5 pb-1 type-overline text-fg-tertiary">
+            {isIn ? 'Clears the oldest bills first' : 'Pays the oldest bills first'}
+            <InfoTip label="How the payment is applied">{explain.allocation()}</InfoTip>
+          </p>
           {allocation.length === 0 && <p className="py-2 type-body-sm text-fg-tertiary">No open bills — this is held as credit.</p>}
           {allocation.map((a) => {
             const full = a.applied >= a.before
@@ -190,7 +196,7 @@ export function PaymentModal({ direction: initialDirection = 'in', partyId, onCl
               </div>
             )
           })}
-          <KeyValueRow label={isIn ? 'New balance' : `We’ll owe ${current.short}`} strong calculated>
+          <KeyValueRow label={isIn ? 'New balance' : `We’ll owe ${current.short}`} strong calculated={explainMoney.newBalancePayment()}>
             ₦ {formatNumber(Math.max(balance - value, 0))}
           </KeyValueRow>
         </div>

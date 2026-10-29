@@ -6,6 +6,7 @@ import { saleISODate, type Aging, type Bill } from './ledger'
 import { addDays, ageBills, dayMonth, daysFrom, inRange, kpi, monthName, nairaKpi, num, period, previous, todayISO, type Range } from './metrics'
 import type { Payment } from './payments'
 import { totalOf, type Purchase, type PurchaseKind } from './purchases'
+import { explainMoney as em } from './explainMoney'
 import { amountOf, products, type Sale } from './sales'
 import type { Trade } from './tradeContext'
 
@@ -73,10 +74,10 @@ export function salesKpis(trade: Trade): Kpi[] {
     salesIn(trade.sales, r).reduce((n, s) => n + Math.min(s.paid, amountOf(s)), 0) +
     trade.payments.filter((p) => p.direction === 'in' && inRange(p.date, r)).reduce((n, p) => n + p.amount, 0)
   return [
-    kpi({ label: 'Sales this week', ...money(sold), current: sold, previous: salesTotal(trade.sales, before), context: 'vs same days last week', info: 'Approved sales since Monday', spark: weeks.map((w) => salesTotal(trade.sales, w)) }),
-    kpi({ label: 'Eggs sold', value: num(crates(now)), unit: 'crates', current: crates(now), previous: crates(before), context: crates(now) ? `avg ₦${num(eggValue / crates(now))} a crate` : 'none yet this week', info: 'Crates sold since Monday (whole and cracked)', spark: weeks.map(crates) }),
-    kpi({ label: 'Sold on credit', ...money(credit(now)), current: credit(now), previous: credit(before), goodWhen: 'down', context: 'unpaid at sale', info: 'Value of this week’s sales not paid at the time of sale', spark: weeks.map(credit) }),
-    kpi({ label: 'Collected', ...money(collected(now)), current: collected(now), previous: collected(before), context: sold ? `${Math.round((collected(now) / sold) * 100)}% of this week’s sales` : 'this week', info: 'Paid at sale plus payments received since Monday', spark: weeks.map(collected) }),
+    kpi({ label: 'Sales this week', ...money(sold), current: sold, previous: salesTotal(trade.sales, before), context: 'vs same days last week', info: em.salesThisWeek(), spark: weeks.map((w) => salesTotal(trade.sales, w)) }),
+    kpi({ label: 'Eggs sold', value: num(crates(now)), unit: 'crates', current: crates(now), previous: crates(before), context: crates(now) ? `avg ₦${num(eggValue / crates(now))} a crate` : 'none yet this week', info: em.eggsSold(), spark: weeks.map(crates) }),
+    kpi({ label: 'Sold on credit', ...money(credit(now)), current: credit(now), previous: credit(before), goodWhen: 'down', context: 'unpaid at sale', info: em.soldOnCredit(), spark: weeks.map(credit) }),
+    kpi({ label: 'Collected', ...money(collected(now)), current: collected(now), previous: collected(before), context: sold ? `${Math.round((collected(now) / sold) * 100)}% of this week’s sales` : 'this week', info: em.collectedWeek(), spark: weeks.map(collected) }),
   ]
 }
 
@@ -113,7 +114,7 @@ function latestPrice(purchases: Purchase[], kind: PurchaseKind) {
 
 function priceKpi(purchases: Purchase[], kind: PurchaseKind, unit: string): Kpi {
   const lp = latestPrice(purchases, kind)
-  if (!lp) return kpi({ label: 'Last price', value: '—', unit, current: null, previous: null, context: 'nothing bought yet', info: `Last price paid for ${kind.toLowerCase()}`, spark: FLAT })
+  if (!lp) return kpi({ label: 'Last price', value: '—', unit, current: null, previous: null, context: 'nothing bought yet', info: em.lastPrice(kind.toLowerCase()), spark: FLAT })
   return kpi({
     label: `${lp.last.item} price`,
     value: num(lp.last.price),
@@ -122,7 +123,7 @@ function priceKpi(purchases: Purchase[], kind: PurchaseKind, unit: string): Kpi 
     previous: lp.prev?.price ?? null,
     goodWhen: 'down',
     context: lp.prev ? `vs ₦${num(lp.prev.price)} on ${dayMonth(lp.prev.date)}` : `${lp.last.ref} · ${dayMonth(lp.last.date)}`,
-    info: `Last price paid for ${lp.last.item.toLowerCase()}`,
+    info: em.lastPrice(lp.last.item.toLowerCase()),
     spark: lp.history.length > 1 ? lp.history : FLAT,
   })
 }
@@ -135,9 +136,9 @@ export function purchaseKpis(trade: Trade, kind?: PurchaseKind): Kpi[] {
   const owed = owedFor(trade, kind)
   const owedContext = owed.owing.length ? owed.owing.slice(0, 2).map((x) => x.s.short).join(', ') : 'nothing owed'
   const owedTile = (label: string) =>
-    kpi({ label, ...money(owed.total), current: null, previous: null, goodWhen: 'neither', context: owedContext, info: `Unpaid ${kind ? kind.toLowerCase() + ' ' : ''}purchases`, spark: FLAT })
+    kpi({ label, ...money(owed.total), current: null, previous: null, goodWhen: 'neither', context: owedContext, info: em.owedFor(kind?.toLowerCase()), spark: FLAT })
   const bought = (label: string, k?: PurchaseKind) =>
-    kpi({ label, ...money(spent(purchases, now, k)), current: spent(purchases, now, k), previous: spent(purchases, before, k), goodWhen: 'neither', context: `${month} vs same days last month`, info: `${k ?? 'Feed, birds and medication'} bought this month`, spark: months.map((m) => spent(purchases, m, k)) })
+    kpi({ label, ...money(spent(purchases, now, k)), current: spent(purchases, now, k), previous: spent(purchases, before, k), goodWhen: 'neither', context: `${month} vs same days last month`, info: em.boughtThisMonth(k?.toLowerCase() ?? 'feed, birds and medication'), spark: months.map((m) => spent(purchases, m, k)) })
   const qty = (r: Span, k: PurchaseKind) => purchasesIn(purchases, r, k).reduce((n, p) => n + p.qty, 0)
   const last90 = { from: addDays(todayISO(), -89), to: todayISO() }
 
@@ -146,8 +147,8 @@ export function purchaseKpis(trade: Trade, kind?: PurchaseKind): Kpi[] {
     const feedBags = qty(now, 'Feed')
     return [
       bought('Bought this month'),
-      kpi({ label: 'Feed bought', ...money(spent(purchases, now, 'Feed')), current: spent(purchases, now, 'Feed'), previous: spent(purchases, before, 'Feed'), goodWhen: 'neither', context: feedBags ? `${num(feedBags)} bags · avg ₦${num(spent(purchases, now, 'Feed') / feedBags)} a bag` : 'none this month', info: 'Feed bought this month', spark: months.map((m) => spent(purchases, m, 'Feed')) }),
-      kpi({ label: 'Owed to suppliers', ...money(owed.total), current: null, previous: null, goodWhen: 'neither', context: overdue ? `₦${num(overdue)} past terms` : 'nothing overdue', info: 'Unpaid purchases and supplier expenses, all suppliers', spark: FLAT }),
+      kpi({ label: 'Feed bought', ...money(spent(purchases, now, 'Feed')), current: spent(purchases, now, 'Feed'), previous: spent(purchases, before, 'Feed'), goodWhen: 'neither', context: feedBags ? `${num(feedBags)} bags · avg ₦${num(spent(purchases, now, 'Feed') / feedBags)} a bag` : 'none this month', info: em.boughtThisMonth('feed'), spark: months.map((m) => spent(purchases, m, 'Feed')) }),
+      kpi({ label: 'Owed to suppliers', ...money(owed.total), current: null, previous: null, goodWhen: 'neither', context: overdue ? `₦${num(overdue)} past terms` : 'nothing overdue', info: em.owedToSuppliers(), spark: FLAT }),
       priceKpi(purchases, 'Feed', '₦ a bag'),
     ]
   }
@@ -157,15 +158,15 @@ export function purchaseKpis(trade: Trade, kind?: PurchaseKind): Kpi[] {
     const top = [...byItem.entries()].sort((a, b) => b[1] - a[1])
     return [
       bought('Feed bought this month', 'Feed'),
-      kpi({ label: 'Bags this month', value: num(qty(now, 'Feed')), unit: 'bags', current: qty(now, 'Feed'), previous: qty(before, 'Feed'), goodWhen: 'neither', context: top.length ? top.slice(0, 2).map(([i, q]) => `${i} ${num(q)}`).join(' · ') : 'none this month', info: 'Bags of feed bought this month', spark: months.map((m) => qty(m, 'Feed')) }),
+      kpi({ label: 'Bags this month', value: num(qty(now, 'Feed')), unit: 'bags', current: qty(now, 'Feed'), previous: qty(before, 'Feed'), goodWhen: 'neither', context: top.length ? top.slice(0, 2).map(([i, q]) => `${i} ${num(q)}`).join(' · ') : 'none this month', info: em.bagsBought(), spark: months.map((m) => qty(m, 'Feed')) }),
       owedTile('Owed for feed'),
       priceKpi(purchases, 'Feed', '₦ a bag'),
     ]
   }
   if (kind === 'Birds') {
     return [
-      kpi({ label: 'Birds bought this month', value: num(qty(now, 'Birds')), unit: 'birds', current: qty(now, 'Birds'), previous: qty(before, 'Birds'), goodWhen: 'neither', context: `${month} so far`, info: 'Birds bought this month', spark: months.map((m) => qty(m, 'Birds')) }),
-      kpi({ label: 'Last 90 days', value: num(qty(last90, 'Birds')), unit: 'birds', current: null, previous: null, goodWhen: 'neither', context: `${purchasesIn(purchases, last90, 'Birds').length} batches`, info: 'Birds bought in the last 90 days', spark: FLAT }),
+      kpi({ label: 'Birds bought this month', value: num(qty(now, 'Birds')), unit: 'birds', current: qty(now, 'Birds'), previous: qty(before, 'Birds'), goodWhen: 'neither', context: `${month} so far`, info: em.birdsBought(), spark: months.map((m) => qty(m, 'Birds')) }),
+      kpi({ label: 'Last 90 days', value: num(qty(last90, 'Birds')), unit: 'birds', current: null, previous: null, goodWhen: 'neither', context: `${purchasesIn(purchases, last90, 'Birds').length} batches`, info: em.birds90(), spark: FLAT }),
       owedTile('Owed for birds'),
       priceKpi(purchases, 'Birds', '₦ a bird'),
     ]
@@ -174,9 +175,9 @@ export function purchaseKpis(trade: Trade, kind?: PurchaseKind): Kpi[] {
   const expiring = trade.catalog.batches.filter((b) => b.onHand > 0 && b.expiry && daysFrom(todayISO(), b.expiry) <= warn)
   return [
     bought('Medication bought this month', 'Medication'),
-    kpi({ label: 'Last 90 days', ...money(spent(purchases, last90, 'Medication')), current: null, previous: null, goodWhen: 'neither', context: `${purchasesIn(purchases, last90, 'Medication').length} orders`, info: 'Medication bought in the last 90 days', spark: FLAT }),
+    kpi({ label: 'Last 90 days', ...money(spent(purchases, last90, 'Medication')), current: null, previous: null, goodWhen: 'neither', context: `${purchasesIn(purchases, last90, 'Medication').length} orders`, info: em.medication90(), spark: FLAT }),
     owedTile('Owed for medication'),
-    kpi({ label: `Expiring in ${warn} days`, value: String(expiring.length), unit: expiring.length === 1 ? 'batch' : 'batches', current: null, previous: null, goodWhen: 'neither', context: expiring[0] ? `${expiring[0].batchNo ?? 'batch'} · ${dayMonth(expiring[0].expiry!)}` : 'none', info: `Medication batches still in stock that expire within ${warn} days`, spark: FLAT }),
+    kpi({ label: `Expiring in ${warn} days`, value: String(expiring.length), unit: expiring.length === 1 ? 'batch' : 'batches', current: null, previous: null, goodWhen: 'neither', context: expiring[0] ? `${expiring[0].batchNo ?? 'batch'} · ${dayMonth(expiring[0].expiry!)}` : 'none', info: em.expiringBatches(), spark: FLAT }),
   ]
 }
 
@@ -195,10 +196,10 @@ export function paymentKpis(trade: Trade): Kpi[] {
   const owing = trade.customers.filter((c) => trade.customerBalance(c.id) > 0).length
   const topOut = [...new Set(out.map((p) => p.partyId))].map((id) => trade.suppliers.find((s) => s.id === id)?.name).filter(Boolean)
   return [
-    kpi({ label: 'Received this week', ...money(sumOf(received)), current: sumOf(received), previous: sumOf(paid(trade.payments, 'in', before)), context: 'vs same days last week', info: 'Payments received outside a sale, since Monday', spark: weeks.map((w) => sumOf(paid(trade.payments, 'in', w))) }),
-    kpi({ label: 'By transfer', value: String(share('transfer')), unit: '%', current: null, previous: null, goodWhen: 'neither', context: received.length ? `cash ${share('cash')}% · POS ${share('POS')}%` : 'nothing received yet', info: 'Share of this week’s payments received, by method', spark: FLAT }),
-    kpi({ label: 'Paid to suppliers', ...money(sumOf(out)), current: sumOf(out), previous: sumOf(paid(trade.payments, 'out', before)), goodWhen: 'neither', context: topOut.length ? topOut.slice(0, 2).join(', ') : 'none this week', info: 'Payments made to suppliers since Monday', spark: weeks.map((w) => sumOf(paid(trade.payments, 'out', w))) }),
-    kpi({ label: 'Still owed to the farm', ...money(owed), current: null, previous: null, goodWhen: 'neither', context: `${owing} customer${owing === 1 ? '' : 's'}`, info: 'All customer balances', spark: FLAT }),
+    kpi({ label: 'Received this week', ...money(sumOf(received)), current: sumOf(received), previous: sumOf(paid(trade.payments, 'in', before)), context: 'vs same days last week', info: em.receivedWeek(), spark: weeks.map((w) => sumOf(paid(trade.payments, 'in', w))) }),
+    kpi({ label: 'By transfer', value: String(share('transfer')), unit: '%', current: null, previous: null, goodWhen: 'neither', context: received.length ? `cash ${share('cash')}% · POS ${share('POS')}%` : 'nothing received yet', info: em.byTransfer(), spark: FLAT }),
+    kpi({ label: 'Paid to suppliers', ...money(sumOf(out)), current: sumOf(out), previous: sumOf(paid(trade.payments, 'out', before)), goodWhen: 'neither', context: topOut.length ? topOut.slice(0, 2).join(', ') : 'none this week', info: em.paidToSuppliers(), spark: weeks.map((w) => sumOf(paid(trade.payments, 'out', w))) }),
+    kpi({ label: 'Still owed to the farm', ...money(owed), current: null, previous: null, goodWhen: 'neither', context: `${owing} customer${owing === 1 ? '' : 's'}`, info: em.owedToFarm(), spark: FLAT }),
   ]
 }
 
@@ -268,10 +269,10 @@ export function customerKpis(trade: Trade): Kpi[] {
   const b = payStats(trade, before)
   const over = farmSettings.overdueDebtDays
   return [
-    kpi({ label: 'Owed to the farm', ...money(total), current: null, previous: null, goodWhen: 'neither', context: `${owing.length} customer${owing.length === 1 ? '' : 's'}`, info: 'All customer balances', spark: FLAT }),
-    kpi({ label: `Over ${over} days`, ...money(overdueTotal), current: null, previous: null, goodWhen: 'neither', context: overdue.length ? overdue.slice(0, 2).map((r) => r.c.short).join(', ') : 'nobody overdue', info: `Bills unpaid for more than ${over} days`, spark: FLAT }),
-    kpi({ label: 'Average days to pay', value: a.avgDays === null ? '—' : num(a.avgDays), unit: 'days', current: a.avgDays, previous: b.avgDays, points: true, digits: 0, goodWhen: 'down', context: 'last 90 days vs the 90 before', info: 'Average time from a credit sale to its full payment, for sales paid off in the last 90 days', spark: FLAT }),
-    kpi({ label: 'Paid within 30 days', value: a.onTime === null ? '—' : num(a.onTime), unit: '%', current: a.onTime, previous: b.onTime, points: true, digits: 0, context: 'of credit sales', info: 'Credit sales from the last 90 days (at least 30 days old) paid off within 30 days', spark: FLAT }),
+    kpi({ label: 'Owed to the farm', ...money(total), current: null, previous: null, goodWhen: 'neither', context: `${owing.length} customer${owing.length === 1 ? '' : 's'}`, info: em.owedToFarm(), spark: FLAT }),
+    kpi({ label: `Over ${over} days`, ...money(overdueTotal), current: null, previous: null, goodWhen: 'neither', context: overdue.length ? overdue.slice(0, 2).map((r) => r.c.short).join(', ') : 'nobody overdue', info: em.overdueCustomers(), spark: FLAT }),
+    kpi({ label: 'Average days to pay', value: a.avgDays === null ? '—' : num(a.avgDays), unit: 'days', current: a.avgDays, previous: b.avgDays, points: true, digits: 0, goodWhen: 'down', context: 'last 90 days vs the 90 before', info: em.avgDaysToPay(), spark: FLAT }),
+    kpi({ label: 'Paid within 30 days', value: a.onTime === null ? '—' : num(a.onTime), unit: '%', current: a.onTime, previous: b.onTime, points: true, digits: 0, context: 'of credit sales', info: em.paidWithin30(), spark: FLAT }),
   ]
 }
 
@@ -287,10 +288,10 @@ export function supplierKpis(trade: Trade): Kpi[] {
   const active = trade.suppliers.filter((s) => trade.purchases.some((p) => p.supplierId === s.id && inRange(p.date, last90)) || trade.expenses.some((e) => e.supplierId === s.id && inRange(e.date, last90)))
   const kinds = new Set(active.map((s) => s.kind))
   return [
-    kpi({ label: 'We owe', ...money(owe.reduce((n, r) => n + r.balance, 0)), current: null, previous: null, goodWhen: 'neither', context: `${owe.length} supplier${owe.length === 1 ? '' : 's'} · ${overdue ? `₦${num(overdue)} past terms` : 'nothing overdue'}`, info: 'Unpaid purchases and supplier expenses', spark: FLAT }),
-    kpi({ label: 'Credit with suppliers', ...money(-credit.reduce((n, r) => n + r.balance, 0)), current: null, previous: null, goodWhen: 'neither', context: credit.length ? credit.slice(0, 2).map((r) => r.s.short).join(', ') : 'none', info: 'Money suppliers hold for us', spark: FLAT }),
-    kpi({ label: 'Bought this month', ...money(spent(trade.purchases, now)), current: spent(trade.purchases, now), previous: spent(trade.purchases, before), goodWhen: 'neither', context: `${monthName(now.to)} vs same days last month`, info: 'Purchases this month', spark: monthsBack().map((m) => spent(trade.purchases, m)) }),
-    kpi({ label: 'Active suppliers', value: String(active.length), unit: '', current: null, previous: null, goodWhen: 'neither', context: `${kinds.size} kind${kinds.size === 1 ? '' : 's'} of supply`, info: 'Suppliers used in the last 90 days', spark: FLAT }),
+    kpi({ label: 'We owe', ...money(owe.reduce((n, r) => n + r.balance, 0)), current: null, previous: null, goodWhen: 'neither', context: `${owe.length} supplier${owe.length === 1 ? '' : 's'} · ${overdue ? `₦${num(overdue)} past terms` : 'nothing overdue'}`, info: em.owedToSuppliers(), spark: FLAT }),
+    kpi({ label: 'Credit with suppliers', ...money(-credit.reduce((n, r) => n + r.balance, 0)), current: null, previous: null, goodWhen: 'neither', context: credit.length ? credit.slice(0, 2).map((r) => r.s.short).join(', ') : 'none', info: em.supplierCredit(), spark: FLAT }),
+    kpi({ label: 'Bought this month', ...money(spent(trade.purchases, now)), current: spent(trade.purchases, now), previous: spent(trade.purchases, before), goodWhen: 'neither', context: `${monthName(now.to)} vs same days last month`, info: em.boughtThisMonth('feed, birds and medication'), spark: monthsBack().map((m) => spent(trade.purchases, m)) }),
+    kpi({ label: 'Active suppliers', value: String(active.length), unit: '', current: null, previous: null, goodWhen: 'neither', context: `${kinds.size} kind${kinds.size === 1 ? '' : 's'} of supply`, info: em.activeSuppliers(), spark: FLAT }),
   ]
 }
 

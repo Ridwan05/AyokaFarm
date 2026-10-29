@@ -8,6 +8,8 @@ import { Alert, AlertAction } from '../../components/ui/Alert'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card, CardHeader } from '../../components/ui/Card'
+import { InfoTip } from '../../components/ui/InfoTip'
+import { explain } from '../../data/explain'
 import { NumberCell, Table, TextCell, type Column } from '../../components/ui/Table'
 import { feedTypes, type FeedType } from '../../data/inventory'
 import { useToast } from '../../components/ui/toastContext'
@@ -124,7 +126,10 @@ export default function FeedStock() {
         >
           {keeper
             ? `Suggested: ${low.bags} bags${about}${from}. ${manager.charAt(0).toUpperCase() + manager.slice(1)} decides and ${owner} places the order; the bags appear here when you receive them.`
-            : `Suggested order: ${low.bags} bags${about}${from}${low.lastPrice !== null ? ` · last price ₦${formatNumber(low.lastPrice)} per bag on ${dayMonth(low.lastDate!)}` : ''}. Saving the purchase adds the bags here automatically.`}
+            : `Suggested order: ${low.bags} bags${about}${from}${low.lastPrice !== null ? ` · last price ₦${formatNumber(low.lastPrice)} per bag on ${dayMonth(low.lastDate!)}` : ''}. Saving the purchase adds the bags here automatically.`}{' '}
+          <InfoTip label="Suggested order">
+            {explain.reorderSuggestion()} Supplier and price are from the last purchase of this feed.
+          </InfoTip>
         </Alert>
       )}
 
@@ -152,16 +157,28 @@ function FeedCard({ feed, selected, onSelect }: { feed: FeedType; selected: bool
   const inUse = feed.daysOfCover !== null
   const low = inUse && feed.daysOfCover! <= farmSettings.lowStockDays
   return (
-    <button
-      type="button"
+    // A div acting as a button, so the info icon inside can be its own button.
+    <div
+      role="button"
+      tabIndex={0}
       aria-pressed={selected}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return
+        e.preventDefault()
+        onSelect()
+      }}
       className={cn(
         'flex min-w-0 flex-1 cursor-pointer flex-col items-start gap-2 rounded-xl bg-surface px-5 py-4 text-left',
         selected ? 'border-[1.5px] border-line-brand' : 'border border-line hover:border-line-strong',
       )}
     >
-      <span className="type-label-md text-fg-secondary">{feed.name}</span>
+      <span className="flex w-full items-center gap-1.5 type-label-md text-fg-secondary">
+        <span className="min-w-0 flex-1 truncate">{feed.name}</span>
+        <InfoTip label={`${feed.name} in store`}>
+          Bags = {explain.stockOnHand().charAt(0).toLowerCase() + explain.stockOnHand().slice(1)} {explain.daysOfCover()}
+        </InfoTip>
+      </span>
       <span className="flex items-baseline gap-1.5">
         <span className="type-display-lg text-fg-primary">{formatNumber(feed.bags)}</span>
         <span className="type-body-md text-fg-tertiary">bags</span>
@@ -172,6 +189,6 @@ function FeedCard({ feed, selected, onSelect }: { feed: FeedType; selected: bool
       <span className="type-body-sm text-fg-tertiary">
         {inUse ? `Reorder at ${feed.reorderAt} bags · ${feed.bagsPerDay} bags/day` : feed.note}
       </span>
-    </button>
+    </div>
   )
 }

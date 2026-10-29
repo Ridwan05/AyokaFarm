@@ -136,11 +136,13 @@ export function PlaceFlockDrawer({ open, onClose }: Props) {
           {(id) => <DateInput id={id} value={date} onChange={(e) => setDate(e.target.value)} />}
         </Field>
         <SummaryBox>
-          <KeyValueRow label="Feed plan" calculated>{defaults.feedPlan}</KeyValueRow>
-          <KeyValueRow label="Expected feed, day 1" calculated>
+          <KeyValueRow label="Feed plan" calculated="The feed bands set for this bird type in Settings → Feed & targets.">
+            {defaults.feedPlan}
+          </KeyValueRow>
+          <KeyValueRow label="Expected feed, day 1" calculated="Birds placed × grams a bird a day for their age at placement (Settings → Feed & targets).">
             {formatNumber(birdCount)} × {defaults.day1Grams} g = {formatNumber(day1Kg)} kg
           </KeyValueRow>
-          <KeyValueRow label="Age at placement" calculated>
+          <KeyValueRow label="Age at placement" calculated="Day-old chicks start at 0; point-of-lay birds arrive older, and their age counts from hatch.">
             {AGE_AT_PLACEMENT[kind] ? `${AGE_AT_PLACEMENT[kind] / 7} weeks` : 'Day-old'}
           </KeyValueRow>
           <KeyValueRow label="First entry due" strong>

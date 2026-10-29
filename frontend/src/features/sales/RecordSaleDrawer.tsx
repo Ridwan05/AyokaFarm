@@ -3,6 +3,7 @@ import { useState, type FormEvent } from 'react'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { AutoInput, Field, SelectInput, SummaryBox, TextInput } from '../../components/ui/Form'
+import { explainMoney } from '../../data/explainMoney'
 import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { Drawer } from '../../components/ui/Overlay'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
@@ -185,12 +186,12 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
         <SegmentedControl fullWidth label="Payment method" options={METHODS} value={method} onChange={setMethod} />
         {customer && (
           <SummaryBox>
-            <KeyValueRow label={`${customer.short} owes now`} calculated>
+            <KeyValueRow label={`${customer.short} owes now`} calculated={explainMoney.balanceNow()}>
               ₦ {formatNumber(balance)}
             </KeyValueRow>
             <KeyValueRow label="+ This sale">₦ {formatNumber(total)}</KeyValueRow>
             <KeyValueRow label="− Paid now">₦ {formatNumber(paidNow)}</KeyValueRow>
-            <KeyValueRow label="New balance" strong calculated>
+            <KeyValueRow label="New balance" strong calculated={explainMoney.newBalanceSale()}>
               ₦ {formatNumber(balance + total - paidNow)}
             </KeyValueRow>
           </SummaryBox>

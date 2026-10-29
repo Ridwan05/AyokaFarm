@@ -2,6 +2,7 @@ import { Button } from '../../components/ui/Button'
 import { DetailSection, History } from '../../components/ui/Detail'
 import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { Drawer } from '../../components/ui/Overlay'
+import { explain } from '../../data/explain'
 import { medicationStatus, type Medication } from '../../data/inventory'
 import { dayMonth, todayISO, weekdayDayMonth, withdrawals } from '../../data/metrics'
 import { useTrade } from '../../data/tradeContext'
@@ -47,15 +48,15 @@ export function MedicationDrawer({ medication: m, onClose }: { medication: Medic
       }
     >
       <DetailSection title="Stock">
-        <KeyValueRow label="In store" strong>
+        <KeyValueRow label="In store" strong calculated={explain.medicationOnHand()}>
           {qty(stock)}
         </KeyValueRow>
         <KeyValueRow label="Reorder at">{qty(m.reorderAt)}</KeyValueRow>
-        <KeyValueRow label="Withdrawal">
+        <KeyValueRow label="Withdrawal" calculated={explain.withdrawal()}>
           {m.withdrawalDays === null ? '—' : `${m.withdrawalDays} days${inForce.length ? ` · ${inForce.map((w) => `Pen ${w.penId} until ${weekdayDayMonth(w.clearFrom)}`).join(', ')}` : ''}`}
         </KeyValueRow>
         <KeyValueRow label="Last used">{lastUsed ? `${dayMonth(lastUsed.moved_on)} · ${lastUsed.pen_id ? `Pen ${lastUsed.pen_id}` : '—'}` : '—'}</KeyValueRow>
-        <KeyValueRow label="Status" calculated>
+        <KeyValueRow label="Status" calculated={explain.medicationStatus()}>
           {medicationStatus({ ...m, stock, inUseBy: inForce[0]?.penId }).label}
         </KeyValueRow>
       </DetailSection>
@@ -66,8 +67,12 @@ export function MedicationDrawer({ medication: m, onClose }: { medication: Medic
             {b.expiry ? ` · expires ${b.expiry.slice(8, 10)}/${b.expiry.slice(5, 7)}/${b.expiry.slice(0, 4)}` : ''}
           </KeyValueRow>
         ))}
-        {opening > 0 && <KeyValueRow label="Opening stock">{qty(opening)} · no batch recorded</KeyValueRow>}
-        <KeyValueRow label="Last delivered" calculated>
+        {opening > 0 && (
+          <KeyValueRow label="Opening stock" calculated={`${explain.openingMedication()} Shown as stock in store − what is left in the batches.`}>
+            {qty(opening)} · no batch recorded
+          </KeyValueRow>
+        )}
+        <KeyValueRow label="Last delivered" calculated="The latest delivery received for this medication, from the stock records.">
           {lastIn ? `${dayMonth(lastIn.moved_on)} · ${qty(Number(lastIn.quantity))}` : '—'}
         </KeyValueRow>
       </DetailSection>

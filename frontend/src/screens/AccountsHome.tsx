@@ -14,6 +14,7 @@ import { RowMenu } from '../components/ui/Menu'
 import { NumberCell, PrimaryCell, Table, TextCell, type Column } from '../components/ui/Table'
 import type { Customer } from '../data/customers'
 import { daysBetween, type Bill } from '../data/ledger'
+import { explainMoney } from '../data/explainMoney'
 import { farmSettings } from '../data/farmSettings'
 import { addDays, kpi, lastDays, nowHM, todayISO } from '../data/metrics'
 import { FLAT, approvers, overdueToSuppliers, salesIn } from '../data/moneyKpis'
@@ -28,6 +29,7 @@ import { statusBadge } from '../features/sales/saleView'
 import { dayMonth } from '../features/purchases/purchaseView'
 import { formatLongDate, formatNaira, formatNumber, greeting } from '../lib/format'
 import { Presence } from '../components/ui/Overlay'
+import { InfoTip } from '../components/ui/InfoTip'
 
 const CHASE_ROWS = 5
 const thousands = (n: number) => String(Math.round(n / 1000))
@@ -65,10 +67,10 @@ export default function AccountsHome() {
   const firstCustomer = first && trade.customers.find((c) => c.id === first.customerId)
 
   const kpis: Kpi[] = [
-    kpi({ label: 'Sold today', value: thousands(sold), unit: 'thousand ₦', current: sold, previous: soldOn(yesterday), context: waiting.length ? `${approved.length} sales · + ₦${formatNumber(waiting.reduce((n, s) => n + amountOf(s), 0))} waiting` : `${approved.length} sales · vs yesterday`, info: 'Approved sales today', spark: days.map(soldOn) }),
-    kpi({ label: 'Collected today', value: thousands(collected), unit: 'thousand ₦', current: collected, previous: collectedOn(yesterday), context: sold ? `${Math.round((collected / sold) * 100)}% of today’s sales` : 'of today’s sales', info: 'Paid at the time of sale today', spark: days.map(collectedOn) }),
-    kpi({ label: 'Owed to the farm', value: (owed / 1e6).toFixed(2), unit: 'million ₦', current: null, previous: null, goodWhen: 'neither', context: `${owing.length} customer${owing.length === 1 ? '' : 's'}`, info: 'All customer balances', spark: FLAT }),
-    kpi({ label: 'We owe suppliers', value: thousands(weOwe.reduce((n, x) => n + x.balance, 0)), unit: 'thousand ₦', current: null, previous: null, goodWhen: 'neither', context: `${weOwe.length} supplier${weOwe.length === 1 ? '' : 's'} · ${overdue ? `₦${formatNumber(overdue)} past terms` : 'nothing overdue'}`, info: 'Unpaid purchases and supplier expenses', spark: FLAT }),
+    kpi({ label: 'Sold today', value: thousands(sold), unit: 'thousand ₦', current: sold, previous: soldOn(yesterday), context: waiting.length ? `${approved.length} sales · + ₦${formatNumber(waiting.reduce((n, s) => n + amountOf(s), 0))} waiting` : `${approved.length} sales · vs yesterday`, info: explainMoney.soldToday(), spark: days.map(soldOn) }),
+    kpi({ label: 'Collected today', value: thousands(collected), unit: 'thousand ₦', current: collected, previous: collectedOn(yesterday), context: sold ? `${Math.round((collected / sold) * 100)}% of today’s sales` : 'of today’s sales', info: explainMoney.collectedToday(), spark: days.map(collectedOn) }),
+    kpi({ label: 'Owed to the farm', value: (owed / 1e6).toFixed(2), unit: 'million ₦', current: null, previous: null, goodWhen: 'neither', context: `${owing.length} customer${owing.length === 1 ? '' : 's'}`, info: explainMoney.owedToFarmNet(), spark: FLAT }),
+    kpi({ label: 'We owe suppliers', value: thousands(weOwe.reduce((n, x) => n + x.balance, 0)), unit: 'thousand ₦', current: null, previous: null, goodWhen: 'neither', context: `${weOwe.length} supplier${weOwe.length === 1 ? '' : 's'} · ${overdue ? `₦${formatNumber(overdue)} past terms` : 'nothing overdue'}`, info: explainMoney.owedToSuppliers(), spark: FLAT }),
   ]
 
   const chase: ChaseRow[] = owing
@@ -156,8 +158,9 @@ export default function AccountsHome() {
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         <Card className="min-w-0 flex-1 px-6 pt-5 pb-3">
-          <div className="flex items-baseline gap-2 pb-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pb-2">
             <h2 className="type-h3 text-fg-primary">Bills to pay</h2>
+            <InfoTip label="Bills to pay">{explainMoney.owedToSuppliers()}</InfoTip>
             <span className="type-body-sm text-fg-tertiary">
               ₦{formatNumber(weOwe.reduce((n, x) => n + x.balance, 0))} to {weOwe.length} suppliers
               {credit.map((x) => ` · ${x.s.short} holds ₦${formatNumber(-x.balance)} credit for us`).join('')}
@@ -184,8 +187,9 @@ export default function AccountsHome() {
           </ul>
         </Card>
         <Card className="min-w-0 flex-1 px-6 pt-5 pb-3">
-          <div className="flex items-baseline gap-2 pb-2">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pb-2">
             <h2 className="type-h3 text-fg-primary">Today’s sales</h2>
+            <InfoTip label="Today’s sales">{explainMoney.todaysSales()}</InfoTip>
             <span className="type-body-sm text-fg-tertiary">
               {today.length} receipts · ₦{formatNumber(today.reduce((n, s) => n + amountOf(s), 0))}
               {waiting.length ? ` incl. ${waiting.length} waiting` : ''}

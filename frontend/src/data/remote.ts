@@ -15,6 +15,7 @@ import { pens as penList, type Pen } from './pens'
 import type { ProductionRecord } from './production'
 import type { Purchase, PurchaseKind } from './purchases'
 import { products, type PaymentMethod, type Product, type ProductKind, type Sale } from './sales'
+import { explain } from './explain'
 import { farmSettings } from './farmSettings'
 import { farmTodayISO, initialsOf, roleFromDb } from './session'
 import { feedBands, staff, type StaffMember } from './settings'
@@ -363,10 +364,10 @@ export async function loadRemote(db: DB): Promise<Remote> {
       attention: status.tone === 'danger' ? 1 : status.tone === 'warning' ? 2 : status.tone === 'neutral' ? 3 : 4,
       stats: [
         layers
-          ? { label: 'Laying', value: todayRow?.laying_rate_pct === null || todayRow?.laying_rate_pct === undefined ? null : `${Number(todayRow.laying_rate_pct).toFixed(1)}%` }
-          : { label: 'Age', value: flock ? `wk ${week}` : null },
-        { label: 'Died today', value: todayRow ? String(todayRow.mortality) : null, tone: spike ? 'danger' : 'default' },
-        { label: 'Feed vs exp.', value: pct(todayRow?.feed_variance_pct), tone: off ? 'warning' : 'default' },
+          ? { label: 'Laying', value: todayRow?.laying_rate_pct === null || todayRow?.laying_rate_pct === undefined ? null : `${Number(todayRow.laying_rate_pct).toFixed(1)}%`, info: 'Eggs collected today ÷ hens at the start of the day.' }
+          : { label: 'Age', value: flock ? `wk ${week}` : null, info: explain.flockWeek() },
+        { label: 'Died today', value: todayRow ? String(todayRow.mortality) : null, tone: spike ? 'danger' : 'default', info: explain.diedToday() },
+        { label: 'Feed vs exp.', value: pct(todayRow?.feed_variance_pct), tone: off ? 'warning' : 'default', info: explain.feedVsExpected() },
       ],
       footer: !flock ? 'No flock placed' : todayRow ? `Today recorded by ${first(profileName.get(meta?.recorded_by ?? ''))} · ${time}` : 'Not recorded yet today',
       staff: (attendantsByPen.get(p.id) ?? []).join(', ') || '—',

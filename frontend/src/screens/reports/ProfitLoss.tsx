@@ -6,6 +6,8 @@ import { useRouter } from 'next/navigation'
 import { DivergingBars } from '../../components/charts/DivergingBars'
 import { Alert, AlertAction } from '../../components/ui/Alert'
 import { Card, CardHeader } from '../../components/ui/Card'
+import { InfoTip } from '../../components/ui/InfoTip'
+import { explain } from '../../data/explain'
 import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { KpiCard } from '../../components/ui/KpiCard'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
@@ -98,10 +100,10 @@ export default function ProfitLoss() {
   const label = type.toLowerCase().replace(/s$/, '')
 
   const kpis = [
-    kpi({ label: `${type.replace(/s$/, '')} revenue`, ...nairaKpi(revenue), current: revenue, previous: prevRevenue, context: 'vs previous period', info: `Sales from ${label} pens, with egg-store sales shared by eggs collected`, spark: FLAT }),
-    kpi({ label: `${type.replace(/s$/, '')} costs`, ...nairaKpi(costs), current: costs, previous: prevCosts, goodWhen: 'down', context: costs ? `feed is ${num((feed / costs) * 100)}%` : 'no costs yet', info: 'Feed and medication used, bird purchases and shared overhead', spark: FLAT }),
-    kpi({ label: `${type.replace(/s$/, '')} margin`, ...nairaKpi(margin), current: pct(margin, revenue), previous: pct(prevRevenue - prevCosts, prevRevenue), points: true, digits: 1, context: revenue ? `${num((margin / revenue) * 100, 1)}% of revenue` : 'no revenue yet', info: 'Revenue minus costs', spark: FLAT }),
-    kpi({ label: 'Broilers in progress', value: String(growing.length), unit: growing.length === 1 ? 'flock' : 'flocks', current: null, previous: null, goodWhen: 'neither', context: growing.length ? `${nairaShort(growingSpent)} spent so far` : 'none growing', info: 'Broiler flocks not yet sold', spark: FLAT }),
+    kpi({ label: `${type.replace(/s$/, '')} revenue`, ...nairaKpi(revenue), current: revenue, previous: prevRevenue, context: 'vs previous period', info: `Approved sales tied to ${label} pens, plus egg-store sales shared between pens by the eggs each collected.`, spark: FLAT }),
+    kpi({ label: `${type.replace(/s$/, '')} costs`, ...nairaKpi(costs), current: costs, previous: prevCosts, goodWhen: 'down', context: costs ? `feed is ${num((feed / costs) * 100)}%` : 'no costs yet', info: 'Feed used × average bag price + medication doses × batch cost + bird purchases + pen expenses + general expenses shared by bird-days.', spark: FLAT }),
+    kpi({ label: `${type.replace(/s$/, '')} margin`, ...nairaKpi(margin), current: pct(margin, revenue), previous: pct(prevRevenue - prevCosts, prevRevenue), points: true, digits: 1, context: revenue ? `${num((margin / revenue) * 100, 1)}% of revenue` : 'no revenue yet', info: 'Revenue − costs. The change compares the margin as a % of revenue with the previous period.', spark: FLAT }),
+    kpi({ label: 'Broilers in progress', value: String(growing.length), unit: growing.length === 1 ? 'flock' : 'flocks', current: null, previous: null, goodWhen: 'neither', context: growing.length ? `${nairaShort(growingSpent)} spent so far` : 'none growing', info: 'Active broiler flocks. Their costs so far are shown below; profit shows once the birds are sold.', spark: FLAT }),
   ]
 
   // Unit costs, layers only.
@@ -157,7 +159,10 @@ export default function ProfitLoss() {
           <div className="flex flex-col gap-4 lg:flex-row">
             <Card className="min-w-0 flex-1 px-5 pt-4 pb-5">
               <div className="flex items-baseline gap-2 pb-2">
-                <h2 className="type-h3 text-fg-primary">Margin by pen</h2>
+                <h2 className="flex items-center gap-1.5 type-h3 text-fg-primary">
+                  Margin by pen
+                  <InfoTip label="Margin by pen">{explain.margin()} Egg-store sales are shared between pens by the eggs each collected.</InfoTip>
+                </h2>
                 <span className="type-body-sm text-fg-tertiary">{rangeText}</span>
               </div>
               <DivergingBars
@@ -176,19 +181,19 @@ export default function ProfitLoss() {
                   <h2 className="type-h3 text-fg-primary">Cost per output</h2>
                   <span className="type-body-sm text-fg-tertiary">Layers · {rangeText}</span>
                 </div>
-                <KeyValueRow label="Cost to produce a crate" calculated>
+                <KeyValueRow label="Cost to produce a crate" calculated={explain.costPerCrate()}>
                   {costPerCrate !== null ? naira(costPerCrate) : '—'}
                 </KeyValueRow>
-                <KeyValueRow label="Average selling price" calculated>
+                <KeyValueRow label="Average selling price" calculated={explain.avgSellingPrice()}>
                   {price !== null ? naira(price) : '—'}
                 </KeyValueRow>
-                <KeyValueRow label="Feed per crate" calculated>
+                <KeyValueRow label="Feed per crate" calculated={explain.feedPerCrate()}>
                   {crates ? `${num(total(rows, (r) => r.feedKg) / crates, 1)} kg` : '—'}
                 </KeyValueRow>
-                <KeyValueRow label="Feed cost per bird" calculated>
+                <KeyValueRow label="Feed cost per bird" calculated={explain.feedCostPerBird()}>
                   {birdsAvg ? naira(feed / birdsAvg) : '—'}
                 </KeyValueRow>
-                <KeyValueRow label="Margin per crate" strong>
+                <KeyValueRow label="Margin per crate" strong calculated="Average selling price − cost to produce a crate.">
                   {costPerCrate !== null && price !== null ? naira(price - costPerCrate) : '—'}
                 </KeyValueRow>
               </Card>
@@ -199,7 +204,10 @@ export default function ProfitLoss() {
             <CardHeader title={`By pen · ${rangeText}`} meta={<span className="type-body-sm text-fg-tertiary">{type}</span>} action={{ label: 'Export', onClick: exportRows }} />
             <Table columns={columns} rows={rows} rowKey={(p) => String(p.penId)} />
             <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-b-xl bg-canvas px-5 py-3 type-label-md">
-              <span className="flex-1 text-fg-primary">All {label} pens</span>
+              <span className="flex flex-1 items-center gap-1.5 text-fg-primary">
+                All {label} pens
+                <InfoTip label="Totals">The pens above added up. Margin % = margin ÷ revenue.</InfoTip>
+              </span>
               <span className="text-fg-secondary">Revenue {nairaShort(revenue)}</span>
               <span className="text-fg-secondary">Costs {nairaShort(costs)}</span>
               <span className="text-fg-secondary">

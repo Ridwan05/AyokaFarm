@@ -7,12 +7,14 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card, CardHeader } from '../components/ui/Card'
+import { InfoTip } from '../components/ui/InfoTip'
 import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Select } from '../components/ui/Select'
 import { NumberCell, PrimaryCell, Table, TextCell, type Column } from '../components/ui/Table'
 import { AddPenModal } from '../features/pens/AddPenModal'
 import { PlaceFlockDrawer } from '../features/pens/PlaceFlockDrawer'
 import { pens, type Pen, type Stat } from '../data/pens'
+import { explain } from '../data/explain'
 import { penName } from '../data/farmViews'
 import { dayMonth, penCost, penMoney } from '../data/metrics'
 import { useTrade, type Trade } from '../data/tradeContext'
@@ -125,7 +127,10 @@ function PenTile({ pen }: { pen: Pen }) {
 
       <div className="flex flex-col gap-1.5">
         <div className="flex items-center">
-          <span className="flex-1 type-body-sm text-fg-secondary">Live birds</span>
+          <span className="flex flex-1 items-center gap-1.5 type-body-sm text-fg-secondary">
+            Live birds
+            <InfoTip label="Live birds">{explain.liveBirds()} Shown against the pen’s capacity.</InfoTip>
+          </span>
           <span className="type-numeric-md text-fg-primary">
             {formatNumber(pen.liveBirds)} / {formatNumber(pen.capacity)}
           </span>
@@ -152,7 +157,10 @@ function PenTile({ pen }: { pen: Pen }) {
 function StatBlock({ stat }: { stat: Stat }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-      <span className="truncate type-overline text-fg-tertiary">{stat.label}</span>
+      <span className="flex min-w-0 items-center gap-1 type-overline text-fg-tertiary">
+        <span className="truncate">{stat.label}</span>
+        {stat.info && <InfoTip label={stat.label} size={12}>{stat.info}</InfoTip>}
+      </span>
       <span
         className={cn(
           'type-numeric-md',

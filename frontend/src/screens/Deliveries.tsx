@@ -10,6 +10,7 @@ import { KpiCard, type Kpi } from '../components/ui/KpiCard'
 import { NumberCell, PrimaryCell, Table, TextCell, type Column } from '../components/ui/Table'
 import { Tabs } from '../components/ui/Tabs'
 import type { Delivery, Order } from '../data/deliveries'
+import { explainMoney } from '../data/explainMoney'
 import { useTrade } from '../data/tradeContext'
 import { ReceiveDeliveryDrawer } from '../features/stock/ReceiveDeliveryDrawer'
 import { inRange, kpi, num, roleWithName } from '../data/metrics'
@@ -39,10 +40,10 @@ export default function Deliveries() {
   const accounts = [roleWithName(catalog, 'owner', 'the owner'), roleWithName(catalog, 'sales_accounts', 'accounts')].join(' and ')
 
   const kpis: Kpi[] = [
-    kpi({ label: 'Received this week', value: String(receivedIn(week.now).length), unit: 'deliveries', current: receivedIn(week.now).length, previous: receivedIn(week.before).length, goodWhen: 'neither', context: receivers.length ? `by ${receivers.join(', ')}` : 'none yet this week', info: 'Feed and medication deliveries received since Monday', spark: weeksBack().map((w) => receivedIn(w).length) }),
-    kpi({ label: 'Due now', value: String(orders.length), unit: orders.length === 1 ? 'delivery' : 'deliveries', current: null, previous: null, goodWhen: 'neither', context: orders.length ? orders.map((o) => o.ref).slice(0, 3).join(', ') : 'nothing on order', info: 'Orders placed but not yet received', spark: FLAT }),
-    kpi({ label: 'Sent back', value: num(sentBack), unit: 'items', current: null, previous: null, goodWhen: 'neither', context: `${month.now.label} so far`, info: 'Damaged items the driver took back this month', spark: FLAT }),
-    kpi({ label: 'Feed received', value: num(feedIn(month.now)), unit: 'bags', current: feedIn(month.now), previous: feedIn(month.before), goodWhen: 'neither', context: `${month.now.label} vs same days last month`, info: 'Bags of feed received into the store this month', spark: weeksBack().map(feedIn) }),
+    kpi({ label: 'Received this week', value: String(receivedIn(week.now).length), unit: 'deliveries', current: receivedIn(week.now).length, previous: receivedIn(week.before).length, goodWhen: 'neither', context: receivers.length ? `by ${receivers.join(', ')}` : 'none yet this week', info: explainMoney.deliveriesWeek(), spark: weeksBack().map((w) => receivedIn(w).length) }),
+    kpi({ label: 'Due now', value: String(orders.length), unit: orders.length === 1 ? 'delivery' : 'deliveries', current: null, previous: null, goodWhen: 'neither', context: orders.length ? orders.map((o) => o.ref).slice(0, 3).join(', ') : 'nothing on order', info: explainMoney.dueNow(), spark: FLAT }),
+    kpi({ label: 'Sent back', value: num(sentBack), unit: 'items', current: null, previous: null, goodWhen: 'neither', context: `${month.now.label} so far`, info: explainMoney.sentBack(), spark: FLAT }),
+    kpi({ label: 'Feed received', value: num(feedIn(month.now)), unit: 'bags', current: feedIn(month.now), previous: feedIn(month.before), goodWhen: 'neither', context: `${month.now.label} vs same days last month`, info: explainMoney.feedReceived(), spark: weeksBack().map(feedIn) }),
   ]
 
   const columns: Column<Row>[] = [

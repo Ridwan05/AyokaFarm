@@ -13,6 +13,8 @@ import { downloadCsv } from '../../lib/export'
 import { SalesFilterBar } from '../../features/sales/SalesFilterBar'
 import { SaleOverlays, type SaleOverlay } from '../../features/sales/SaleOverlays'
 import { SalesTable } from '../../features/sales/SalesTable'
+import { InfoTip } from '../../components/ui/InfoTip'
+import { explainMoney } from '../../data/explainMoney'
 
 export default function AllSales() {
   const { sales, customers } = useTrade()
@@ -44,8 +46,9 @@ export default function AllSales() {
         <CardHeader
           title={`${f.period} · ${spanLabel(f.range)}`}
           meta={
-            <span className="type-body-sm text-fg-tertiary">
+            <span className="flex items-center gap-1.5 type-body-sm text-fg-tertiary">
               {f.visible.length} sales · ₦{(total / 1e6).toFixed(2)}M
+              <InfoTip label="Sales total">{explainMoney.salesListTotal()}</InfoTip>
             </span>
           }
         />

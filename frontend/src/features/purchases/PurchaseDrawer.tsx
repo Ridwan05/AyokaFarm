@@ -1,4 +1,6 @@
 import { Button } from '../../components/ui/Button'
+import { explainMoney } from '../../data/explainMoney'
+import { explain } from '../../data/explain'
 import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { Drawer } from '../../components/ui/Overlay'
 import { DetailSection, History } from '../../components/ui/Detail'
@@ -45,17 +47,19 @@ export function PurchaseDrawer({ purchase: p, onClose, onPay }: { purchase: Purc
           {naira(p.price)} {p.per}
         </KeyValueRow>
         {p.received && <KeyValueRow label="Received">{p.received}</KeyValueRow>}
-        <KeyValueRow label="Total" strong calculated>
+        <KeyValueRow label="Total" strong calculated={explainMoney.purchaseTotal()}>
           {naira(total)}
         </KeyValueRow>
       </DetailSection>
       <DetailSection title="Payment">
         <KeyValueRow label="Status">{purchaseStatus(p, paid).label}</KeyValueRow>
-        <KeyValueRow label="Paid">{naira(paid)}</KeyValueRow>
-        <KeyValueRow label={left < 0 ? 'Overpaid' : 'Left to pay'} calculated>
+        <KeyValueRow label="Paid" calculated={explainMoney.purchasePaid()}>
+          {naira(paid)}
+        </KeyValueRow>
+        <KeyValueRow label={left < 0 ? 'Overpaid' : 'Left to pay'} calculated={explainMoney.leftToPay()}>
           {naira(Math.abs(left))}
         </KeyValueRow>
-        <KeyValueRow label={`${supplier.short} balance now`} strong calculated>
+        <KeyValueRow label={`${supplier.short} balance now`} strong calculated={explain.supplierBalance()}>
           {balance > 0 ? `${naira(balance)} we owe` : balance < 0 ? `${naira(-balance)} credit` : '₦0'}
         </KeyValueRow>
       </DetailSection>

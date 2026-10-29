@@ -9,6 +9,8 @@ export type Stat = {
   /** null renders an em dash */
   value: string | null
   tone?: 'default' | 'warning' | 'danger'
+  /** How the value is calculated (info icon). */
+  info?: string
 }
 
 export type Pen = {

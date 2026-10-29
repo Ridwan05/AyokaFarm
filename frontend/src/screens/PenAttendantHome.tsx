@@ -7,6 +7,7 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card, CardHeader } from '../components/ui/Card'
+import { InfoTip } from '../components/ui/InfoTip'
 import { Presence } from '../components/ui/Overlay'
 import { pensToday } from '../data/dashboard'
 import { pens } from '../data/pens'
@@ -19,6 +20,7 @@ import { AddExpenseModal } from '../features/expenses/AddExpenseModal'
 import { canSeePen } from '../lib/access'
 import { cn } from '../lib/cn'
 import { formatLongDate, formatNaira, formatNumber, formatSignedPct, greeting } from '../lib/format'
+import { explain } from '../data/explain'
 import { farmSettings } from '../data/farmSettings'
 import { penName } from '../data/farmViews'
 
@@ -82,13 +84,14 @@ export default function PenAttendantHome() {
 
               {recorded ? (
                 <dl className="grid grid-cols-3 gap-2 px-4 pt-3 pb-4">
-                  <Stat label="Died" value={String(p.died)} />
+                  <Stat label="Died" value={String(p.died)} info={explain.diedToday()} />
                   <Stat
                     label="Feed vs exp."
                     value={p.feedVsExpected === null ? '—' : formatSignedPct(p.feedVsExpected)}
                     warn={p.feedVsExpected !== null && Math.abs(p.feedVsExpected) > farmSettings.feedVariancePct}
+                    info={explain.feedVsExpected()}
                   />
-                  <Stat label="Laying" value={p.layingRate === null ? '—' : `${p.layingRate.toFixed(1)}%`} />
+                  <Stat label="Laying" value={p.layingRate === null ? '—' : `${p.layingRate.toFixed(1)}%`} info="Eggs collected today ÷ hens at the start of the day." />
                 </dl>
               ) : (
                 <div className="px-4 pt-3 pb-4">
@@ -130,10 +133,15 @@ export default function PenAttendantHome() {
   )
 }
 
-function Stat({ label, value, warn }: { label: string; value: string; warn?: boolean }) {
+function Stat({ label, value, warn, info }: { label: string; value: string; warn?: boolean; info: string }) {
   return (
-    <div className="flex flex-col gap-0.5">
-      <dt className="type-body-sm text-fg-tertiary">{label}</dt>
+    <div className="flex min-w-0 flex-col gap-0.5">
+      <dt className="flex items-center gap-1 type-body-sm text-fg-tertiary">
+        <span className="truncate">{label}</span>
+        <InfoTip label={label} size={12}>
+          {info}
+        </InfoTip>
+      </dt>
       <dd className={cn('type-numeric-md', warn ? 'text-fg-warning' : 'text-fg-primary')}>{value}</dd>
     </div>
   )

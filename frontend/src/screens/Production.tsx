@@ -9,11 +9,13 @@ import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card, CardHeader } from '../components/ui/Card'
+import { InfoTip } from '../components/ui/InfoTip'
 import { KpiCard } from '../components/ui/KpiCard'
 import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Select } from '../components/ui/Select'
 import { NumberCell, PrimaryCell, Table, TextCell, type Column } from '../components/ui/Table'
 import { pensToday, type PenToday } from '../data/dashboard'
+import { explain } from '../data/explain'
 import { farmSettings } from '../data/farmSettings'
 import { penKind, penName } from '../data/farmViews'
 import {
@@ -253,7 +255,12 @@ export default function Production() {
         />
         <Table columns={columns} rows={rows} rowKey={(p) => String(p.penId)} onRowClick={(p) => router.push(`/pens/${p.penId}`)} />
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-b-xl bg-canvas px-5 py-3 type-label-md">
-          <span className="flex-1 text-fg-primary">Farm total · {range.label}</span>
+          <span className="flex flex-1 items-center gap-1.5 text-fg-primary">
+            Farm total · {range.label}
+            <InfoTip label="Farm total">
+              The pens above added up. Feed % = feed used vs expected for the birds’ age; crates = eggs ÷ {farmSettings.eggsPerCrate}; laying = eggs ÷ hens at the start of each day.
+            </InfoTip>
+          </span>
           <span className="text-fg-secondary">{formatNumber(died)} died</span>
           <span className="text-fg-secondary">
             {feed.toFixed(1)} bags feed{variance !== null && ` (${formatSignedPct(variance)})`}
@@ -327,7 +334,7 @@ function productionKpis(daily: DailyRow[], range: Range, prev: Range, cur: Daily
       current: eggs,
       previous: sum(old, (d) => d.eggs ?? 0) || null,
       context: vs,
-      info: `Crates of ${per} collected across layer pens`,
+      info: `Eggs collected in daily entries ÷ ${per} eggs a crate, across layer pens, compared with the period before.`,
       spark: spark.map((d) => sum(day(d), (r) => r.eggs ?? 0) / per),
     }),
     kpi({
@@ -339,7 +346,7 @@ function productionKpis(daily: DailyRow[], range: Range, prev: Range, cur: Daily
       points: true,
       digits: 1,
       context: `${layerPens} layer pens`,
-      info: 'Eggs collected ÷ laying hens',
+      info: 'Eggs collected ÷ hens at the start of each day, layer pens only, compared with the period before.',
       spark: spark.map((d) => layingRate(day(d)) ?? 0),
     }),
     kpi({
@@ -350,7 +357,7 @@ function productionKpis(daily: DailyRow[], range: Range, prev: Range, cur: Daily
       previous: old.length ? sum(old, (d) => d.mortality) : null,
       goodWhen: 'down',
       context: `${(mortalityPct(cur) ?? 0).toFixed(2)}% · ${vs}`,
-      info: 'Birds that died, all pens',
+      info: 'Deaths recorded in daily entries for all pens, compared with the period before.',
       spark: spark.map((d) => sum(day(d), (r) => r.mortality)),
     }),
     kpi({
@@ -361,7 +368,7 @@ function productionKpis(daily: DailyRow[], range: Range, prev: Range, cur: Daily
       previous: old.length ? sum(old, (d) => d.feedBags) : null,
       goodWhen: 'neither',
       context: expectedBags ? `vs ${expectedBags.toFixed(1)} expected` : vs,
-      info: 'Bags of feed used, all pens',
+      info: 'Bags of feed recorded in daily entries for all pens, compared with the period before.',
       spark: spark.map((d) => sum(day(d), (r) => r.feedBags)),
     }),
   ]
@@ -374,6 +381,7 @@ function TodayCard({ rows, canRecord }: { rows: PenToday[]; canRecord: (penId: n
     <Card>
       <CardHeader
         title={`Today · ${formatShortDate(farm.today)}`}
+        info={`${explain.entriesRecorded()} Laying = eggs collected ÷ hens at the start of the day.`}
         meta={
           <span className="type-body-sm text-fg-tertiary">
             {done} of {rows.length} recorded · due by {farmSettings.missingEntryCutoff}

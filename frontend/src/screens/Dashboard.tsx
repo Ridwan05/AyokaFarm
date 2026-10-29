@@ -8,6 +8,7 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card, CardHeader, CardLink } from '../components/ui/Card'
+import { InfoTip } from '../components/ui/InfoTip'
 import { KpiCard } from '../components/ui/KpiCard'
 import { RowMenu } from '../components/ui/Menu'
 import { SegmentedControl } from '../components/ui/SegmentedControl'
@@ -15,6 +16,7 @@ import { Select } from '../components/ui/Select'
 import { NumberCell, PrimaryCell, Table, type Column } from '../components/ui/Table'
 import { FEED_COVER_FULL_DAYS, pensToday, type Alert, type PenToday } from '../data/dashboard'
 import { deriveAlerts } from '../data/derivedAlerts'
+import { explain } from '../data/explain'
 import { farmSettings } from '../data/farmSettings'
 import { alertRow, dateLabels, penKind, penName } from '../data/farmViews'
 import { feedTypes } from '../data/inventory'
@@ -112,8 +114,9 @@ export default function Dashboard() {
         <Select label="Pen" leadingIcon={Warehouse} options={penOptions} value={pen} onChange={setPen} />
         <Select label="Bird type" leadingIcon={Bird} options={BIRD_FILTERS} value={birds} onChange={setBirds} />
         <span className="flex-1" />
-        <p className="type-body-sm whitespace-nowrap text-fg-tertiary">
+        <p className="flex items-center gap-1.5 type-body-sm whitespace-nowrap text-fg-tertiary">
           {updated ? `Updated ${timeOf(updated)}` : 'No entries yet today'} · {recorded} of {rows.length} pens recorded
+          <InfoTip label="Pens recorded">{explain.entriesRecorded()} “Updated” is the time the latest entry was saved.</InfoTip>
         </p>
       </div>
 
@@ -179,7 +182,7 @@ function dashboardKpis(trade: Trade, r: Range, penOk: (id: number) => boolean, f
       previous: birdsOn(prev.to) || null,
       goodWhen: 'neither',
       context: `${flocks.length} pens`,
-      info: 'Birds alive across active flocks: the latest closing count of each',
+      info: 'Each active flock’s closing count from its latest daily entry (birds placed less deaths), added up across the pens shown.',
       spark: sparkDates.map(birdsOn),
     }),
     kpi({
@@ -191,7 +194,7 @@ function dashboardKpis(trade: Trade, r: Range, penOk: (id: number) => boolean, f
       points: true,
       digits: 1,
       context: lay === null ? 'No layer entries' : `${layerPens} layer pens · ${vs}`,
-      info: 'Eggs collected ÷ laying hens, layer pens only',
+      info: 'Eggs collected ÷ hens at the start of the day, layer pens only. Change is compared with the previous period.',
       spark: sparkDates.map((d) => layingRate(rowsOn(history.daily, d, penOk)) ?? 0),
     }),
     kpi({
@@ -203,7 +206,7 @@ function dashboardKpis(trade: Trade, r: Range, penOk: (id: number) => boolean, f
       points: true,
       goodWhen: 'down',
       context: `${formatNumber(deaths)} birds · ${vs}`,
-      info: 'Birds that died ÷ birds at the start of each day',
+      info: 'Birds that died ÷ birds at the start of the day, across the pens shown. Change is compared with the previous period.',
       spark: sparkDates.map((d) => mortalityPct(rowsOn(history.daily, d, penOk)) ?? 0),
     }),
     kpi({
@@ -213,7 +216,7 @@ function dashboardKpis(trade: Trade, r: Range, penOk: (id: number) => boolean, f
       current: salesNow,
       previous: sales(prev),
       context: filtered ? `All pens · ${vs}` : vs,
-      info: 'Approved sales, all pens and the egg store',
+      info: 'Quantity × price of approved sales in the period (sales waiting for approval are left out), compared with the period before.',
       spark: sparkDates.map((d) => sales({ from: d, to: d })),
     }),
   ]
@@ -224,6 +227,7 @@ function NeedsAttention({ alerts, total }: { alerts: Alert[]; total: number }) {
     <Card className="min-w-0 flex-1">
       <CardHeader
         title="Needs attention"
+        info="Checked from the records each time the page opens: mortality and feed use against the thresholds in Settings, low or expiring stock, missing entries and overdue debts."
         meta={<Badge tone={total ? 'danger' : 'success'}>{total} open</Badge>}
         action={{ label: 'View all alerts', to: '/alerts' }}
       />
@@ -245,7 +249,7 @@ function NeedsAttention({ alerts, total }: { alerts: Alert[]; total: number }) {
 function FeedStock() {
   return (
     <Card className="w-full shrink-0 lg:w-[400px]">
-      <CardHeader title="Feed stock" action={{ label: 'Inventory', to: '/inventory' }} />
+      <CardHeader title="Feed stock" info={`${explain.daysOfCover()} The bar is full at ${FEED_COVER_FULL_DAYS} days.`} action={{ label: 'Inventory', to: '/inventory' }} />
       <div className="flex flex-col gap-5 px-5 pb-5">
         {feedTypes.map((feed) => {
           const days = feed.daysOfCover
@@ -273,7 +277,6 @@ function FeedStock() {
             </div>
           )
         })}
-        <p className="type-body-sm text-fg-tertiary">Days of cover = bags in store ÷ average daily use (last 7 days)</p>
       </div>
     </Card>
   )
@@ -307,7 +310,12 @@ function FeedChart({ trade, penOk, scope }: { trade: Trade; penOk: (id: number) 
     <Card className="min-w-0 flex-1 gap-4 px-5 pt-4 pb-5">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="flex min-w-[180px] flex-1 flex-col">
-          <h2 className="type-h3 text-fg-primary">Feed used vs expected</h2>
+          <h2 className="flex items-center gap-1.5 type-h3 text-fg-primary">
+            Feed used vs expected
+            <InfoTip label="Feed used vs expected">
+              Actual = bags used in daily entries × kg a bag. Expected = birds × grams a bird a day for their age (Settings → Feed & targets); the band is ±{farmSettings.feedVariancePct}%.
+            </InfoTip>
+          </h2>
           <p className="type-body-sm text-fg-tertiary">{scope} · kg per day · {dates.length === 30 ? 'last 30 days' : `last ${dates.length} days with entries`}</p>
         </div>
         <Legend swatch={<span className="h-0.5 w-4 bg-chart-1" />} label="Actual" />
@@ -326,7 +334,7 @@ function FeedChart({ trade, penOk, scope }: { trade: Trade; penOk: (id: number) 
             formatY={(v) => `${formatNumber(v)} kg`}
             xLabels={dateLabels(dates)}
           />
-          <p className="flex flex-wrap gap-x-2 type-body-sm">
+          <p className="flex flex-wrap items-center gap-x-2 type-body-sm">
             {lastVar !== null && (
               <span className={cn('type-label-sm', Math.abs(lastVar) > farmSettings.feedVariancePct ? 'text-fg-warning' : 'text-fg-secondary')}>
                 {formatSignedPct(lastVar)} {relativeDay(dates[lastIdx]).toLowerCase()}
@@ -336,6 +344,7 @@ function FeedChart({ trade, penOk, scope }: { trade: Trade; penOk: (id: number) 
               {overall === null ? 'No feed targets set for these pens' : within ? 'Within tolerance overall' : `${formatSignedPct(overall)} overall — outside tolerance`}
               {worst && Math.abs(worst.variancePct!) > farmSettings.feedVariancePct && ` · largest gap ${penName(catalog, worst.penId)} (${formatSignedPct(worst.variancePct!)})`}
             </span>
+            <InfoTip label="Variance">(Feed used − expected) ÷ expected, for the latest day with entries and for all the days shown. Pens without a feed band are left out.</InfoTip>
           </p>
         </>
       ) : (
@@ -372,7 +381,10 @@ function Receivables({ trade }: { trade: Trade }) {
   return (
     <Card className="w-full shrink-0 lg:w-[400px] gap-4 px-5 pt-4 pb-5">
       <div className="flex items-center">
-        <h2 className="flex-1 type-h3 text-fg-primary">Owed to the farm</h2>
+        <h2 className="flex flex-1 items-center gap-1.5 type-h3 text-fg-primary">
+          Owed to the farm
+          <InfoTip label="Owed to the farm">{explain.customerBalance()} Added up over every customer who owes.</InfoTip>
+        </h2>
         <CardLink to="/customers">Debtors</CardLink>
       </div>
       <p className="flex items-baseline gap-2">
@@ -386,6 +398,12 @@ function Receivables({ trade }: { trade: Trade }) {
           {buckets.map((b, i) => (b.amount > 0 ? <span key={b.label} className={cn('h-2.5 rounded-xs', b.overdue ? BUCKET_COLORS[2] : BUCKET_COLORS[i])} style={{ flexGrow: b.amount }} /> : null))}
         </div>
       )}
+      <p className="-mb-2 flex items-center gap-1.5 type-overline text-fg-tertiary">
+        By age
+        <InfoTip label="By age" size={12}>
+          {explain.ageing()}
+        </InfoTip>
+      </p>
       <ul className="flex flex-col gap-2">
         {buckets.map((b, i) => (
           <li key={b.label} className="flex items-center gap-2">
@@ -398,7 +416,12 @@ function Receivables({ trade }: { trade: Trade }) {
       <hr className="border-line-subtle" />
       <div className="flex items-center gap-2">
         <div className="flex flex-1 flex-col">
-          <span className="type-label-md text-fg-primary">Owed to suppliers</span>
+          <span className="flex items-center gap-1.5 type-label-md text-fg-primary">
+            Owed to suppliers
+            <InfoTip label="Owed to suppliers">
+              {explain.supplierBalance()} Past terms = {explain.pastTerms().charAt(0).toLowerCase() + explain.pastTerms().slice(1)}
+            </InfoTip>
+          </span>
           <span className="type-body-sm text-fg-tertiary">
             {supplierOwed.length} {supplierOwed.length === 1 ? 'supplier' : 'suppliers'} · {overdue > 0 ? `${formatNaira(overdue)} past terms` : 'nothing overdue'}
           </span>
@@ -463,6 +486,7 @@ function PensToday({ rows, recorded }: { rows: PenToday[]; recorded: number }) {
     <Card>
       <CardHeader
         title="Pens today"
+        info={`${explain.entriesRecorded()} Feed vs expected and laying come from each pen’s entry.`}
         meta={
           <span className="type-body-sm text-fg-tertiary">
             {recorded} of {rows.length} recorded

@@ -19,6 +19,9 @@ import { todayISO } from '../../data/metrics'
 import { formatNaira, formatNumber } from '../../lib/format'
 import Placeholder from '../Placeholder'
 import { Presence } from '../../components/ui/Overlay'
+import { InfoTip } from '../../components/ui/InfoTip'
+import { explain } from '../../data/explain'
+import { explainMoney } from '../../data/explainMoney'
 
 const dmy = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
 
@@ -60,17 +63,29 @@ export default function Statement() {
 
       <div className="flex flex-col gap-4 lg:flex-row">
         <Card className="flex-1 gap-2 p-5">
-          <span className="type-body-md text-fg-secondary">Balance owed</span>
+          <span className="flex items-center gap-1.5 type-body-md text-fg-secondary">
+            Balance owed
+            <InfoTip label="Balance owed">{explain.customerBalance()}</InfoTip>
+          </span>
           <span className="type-display-lg text-fg-primary">₦{formatNumber(balance)}</span>
-          {a.over60 > 0 && <span className="type-body-sm text-fg-danger">₦{formatNumber(a.over60)} is over {farmSettings.overdueDebtDays} days</span>}
+          {a.over60 > 0 && (
+            <span className="flex items-center gap-1.5 type-body-sm text-fg-danger">
+              ₦{formatNumber(a.over60)} is over {farmSettings.overdueDebtDays} days
+              <InfoTip label="Overdue">{explain.overdue()}</InfoTip>
+            </span>
+          )}
           {latest && (
-            <span className="type-body-sm text-fg-tertiary">
+            <span className="flex items-center gap-1.5 type-body-sm text-fg-tertiary">
               Last payment ₦{formatNumber(latest.amount)} · {latest.date === todayISO() ? 'today' : dmy(latest.date)}
+              <InfoTip label="Last payment">{explainMoney.lastPayment()}</InfoTip>
             </span>
           )}
         </Card>
         <Card className="flex-1 gap-2 p-5">
-          <span className="type-body-md text-fg-secondary">Aging</span>
+          <span className="flex items-center gap-1.5 type-body-md text-fg-secondary">
+            Aging
+            <InfoTip label="Aging">{explain.ageing()}</InfoTip>
+          </span>
           <AgingBar aging={a} className="w-full" />
           {agingLegend().map((l) => (
             <div key={l.key} className="flex items-center gap-2">
@@ -86,9 +101,15 @@ export default function Statement() {
         </Card>
         <Card className="flex-1 gap-0 px-5 pt-4 pb-5">
           <span className="pb-1 type-body-md text-fg-secondary">Since go-live</span>
-          <KeyValueRow label="Sales">{formatNaira(sales)}</KeyValueRow>
-          <KeyValueRow label="Paid">{formatNaira(paid)}</KeyValueRow>
-          <KeyValueRow label="Oldest unpaid">{bills[0] ? `${daysBetween(bills[0].date)} days` : '—'}</KeyValueRow>
+          <KeyValueRow label="Sales" calculated={explainMoney.sinceGoLiveSales()}>
+            {formatNaira(sales)}
+          </KeyValueRow>
+          <KeyValueRow label="Paid" calculated={explainMoney.sinceGoLivePaid()}>
+            {formatNaira(paid)}
+          </KeyValueRow>
+          <KeyValueRow label="Oldest unpaid" calculated={explainMoney.oldestUnpaid()}>
+            {bills[0] ? `${daysBetween(bills[0].date)} days` : '—'}
+          </KeyValueRow>
           <span className="pt-1 type-body-sm text-fg-tertiary">Payments clear the oldest unpaid sale first</span>
         </Card>
       </div>

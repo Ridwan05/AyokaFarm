@@ -8,12 +8,14 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { Alert, AlertAction } from '../components/ui/Alert'
 import { Button } from '../components/ui/Button'
 import { Card, CardHeader } from '../components/ui/Card'
+import { InfoTip } from '../components/ui/InfoTip'
 import { KeyValueRow } from '../components/ui/KeyValueRow'
 import { KpiCard } from '../components/ui/KpiCard'
 import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { NumberCell, Table, TextCell, type Column } from '../components/ui/Table'
 import { Tabs } from '../components/ui/Tabs'
 import { farmSettings } from '../data/farmSettings'
+import { explain } from '../data/explain'
 import { penName } from '../data/farmViews'
 import { addDays, dayMonth, inRange, niceTicks, penCost, penMoney, period, timeOf, todayISO, weekdayDm, withdrawals, type Range } from '../data/metrics'
 import { flockFacts, mortalitySeries, modeLabel, penEntries, penFlock, penKpis, type DailyEntry } from '../data/penView'
@@ -141,9 +143,10 @@ function Overview({ penId }: { penId: number }) {
             labelLast={{ color: last > m.thresholdBirds ? 'var(--ayk-color-text-danger)' : 'var(--ayk-color-text-secondary)' }}
             colorFor={(v, i) => (v > threshold ? 'var(--ayk-color-bg-danger)' : i >= firstRising ? 'var(--ayk-color-chart-2)' : 'var(--ayk-color-chart-5)')}
           />
-          <p className="flex flex-wrap gap-x-2 type-body-sm">
+          <p className="flex flex-wrap items-center gap-x-2 type-body-sm">
             {m.risingDays > 0 && <span className="type-label-sm text-fg-warning">Rising {m.risingDays} days in a row</span>}
             <span className="text-fg-secondary">{m.typical}</span>
+            <InfoTip label="Typical day">{explain.typicalMortality()} The red line is the alert threshold: {farmSettings.mortalityAlertPct}% of the birds.</InfoTip>
           </p>
         </Card>
 
@@ -153,18 +156,20 @@ function Overview({ penId }: { penId: number }) {
           </div>
           <KeyValueRow label="Breed">{facts.breed}</KeyValueRow>
           <KeyValueRow label="Placed">{facts.placed}</KeyValueRow>
-          <KeyValueRow label="Age" calculated>
+          <KeyValueRow label="Age" calculated={explain.flockAge()}>
             {facts.age}
           </KeyValueRow>
           <KeyValueRow label="Birds placed">{formatNumber(facts.birdsPlaced)}</KeyValueRow>
-          <KeyValueRow label="Live now" calculated>
+          <KeyValueRow label="Live now" calculated={explain.liveBirds()}>
             {formatNumber(facts.liveNow)}
           </KeyValueRow>
           <KeyValueRow label="Feed type">{facts.feedType}</KeyValueRow>
-          <KeyValueRow label="Expected feed" calculated>
+          <KeyValueRow label="Expected feed" calculated={explain.expectedFeed()}>
             {facts.expectedFeed}
           </KeyValueRow>
-          <KeyValueRow label="Withdrawal">{facts.withdrawal}</KeyValueRow>
+          <KeyValueRow label="Withdrawal" calculated={explain.withdrawal()}>
+            {facts.withdrawal}
+          </KeyValueRow>
         </Card>
       </div>
 
@@ -275,7 +280,7 @@ function SalesTab({ penId }: { penId: number }) {
 
   return (
     <Card>
-      <CardHeader title="Sales from this pen" meta={<span className="type-body-sm text-fg-tertiary">{rows.length ? `${rows.length} sales · ${formatNaira(total)} approved` : 'Since records began'}</span>} />
+      <CardHeader title="Sales from this pen" info="Sales linked to this pen or its flock. The total adds up quantity × price for approved sales only." meta={<span className="type-body-sm text-fg-tertiary">{rows.length ? `${rows.length} sales · ${formatNaira(total)} approved` : 'Since records began'}</span>} />
       {rows.length ? (
         <Table columns={saleColumns} rows={rows} rowKey={(r) => String(r.id)} />
       ) : (
@@ -366,11 +371,11 @@ function CostsTab({ penId }: { penId: number }) {
   const birdDays = m?.birdDays ?? 0
   const lines: [string, number, string][] = m
     ? [
-        ['Feed', m.feed, 'Bags used in daily entries × average price paid'],
-        ['Medication', m.medication, 'Doses given × the batch’s price'],
-        ['Birds', m.birds, 'Bird purchases for this flock in the period'],
-        ['Pen expenses', m.direct, 'Expenses booked to this pen'],
-        ['Share of farm costs', m.overhead, 'General expenses shared by bird-days'],
+        ['Feed', m.feed, explain.feedCost()],
+        ['Medication', m.medication, explain.medicationCost()],
+        ['Birds', m.birds, explain.birdCost()],
+        ['Pen expenses', m.direct, explain.penExpenses()],
+        ['Share of farm costs', m.overhead, explain.overheadShare()],
       ]
     : []
 
@@ -391,20 +396,20 @@ function CostsTab({ penId }: { penId: number }) {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
           <Card className="min-w-0 flex-1 gap-1 px-5 pt-4 pb-5">
             <h2 className="pb-2 type-h3 text-fg-primary">Costs & profit · {range.label}</h2>
-            <KeyValueRow label="Sales" calculated>
+            <KeyValueRow label="Sales" calculated={explain.penRevenue()}>
               {formatNaira(m.revenue)}
             </KeyValueRow>
-            {lines.map(([label, value, hint]) => (
-              <div key={label} className="flex flex-col">
-                <KeyValueRow label={label} calculated>
-                  − {formatNaira(Math.round(value))}
-                </KeyValueRow>
-                <span className="-mt-1 pb-1 type-body-sm text-fg-tertiary">{hint}</span>
-              </div>
+            {lines.map(([label, value, how]) => (
+              <KeyValueRow key={label} label={label} calculated={how}>
+                − {formatNaira(Math.round(value))}
+              </KeyValueRow>
             ))}
             <hr className="my-2 border-line-subtle" />
             <p className="flex items-baseline">
-              <span className="flex-1 type-label-md text-fg-primary">Margin</span>
+              <span className="flex flex-1 items-center gap-2 type-label-md text-fg-primary">
+                Margin
+                <InfoTip label="Margin">{explain.margin()}</InfoTip>
+              </span>
               <span className={margin < 0 ? 'type-numeric-md text-fg-danger' : 'type-numeric-md text-fg-success'}>
                 {margin < 0 ? '−' : ''}
                 {formatNaira(Math.abs(Math.round(margin)))}
@@ -415,20 +420,24 @@ function CostsTab({ penId }: { penId: number }) {
             <h2 className="pb-2 type-h3 text-fg-primary">Unit costs</h2>
             {crates > 0 && (
               <>
-                <KeyValueRow label="Eggs collected">{formatNumber(Math.round(crates))} crates</KeyValueRow>
-                <KeyValueRow label="Cost per crate" calculated>
+                <KeyValueRow label="Eggs collected" calculated={explain.cratesCollected()}>
+                  {formatNumber(Math.round(crates))} crates
+                </KeyValueRow>
+                <KeyValueRow label="Cost per crate" calculated="All this pen’s costs in the period ÷ crates collected.">
                   {formatNaira(Math.round(cost / crates))}
                 </KeyValueRow>
-                <KeyValueRow label="Feed per crate" calculated>
+                <KeyValueRow label="Feed per crate" calculated={explain.feedPerCrate()}>
                   {(m.feedKg / crates).toFixed(1)} kg
                 </KeyValueRow>
               </>
             )}
-            <KeyValueRow label="Bird-days">{formatNumber(birdDays)}</KeyValueRow>
-            <KeyValueRow label="Cost per bird per day" calculated>
+            <KeyValueRow label="Bird-days" calculated="Birds at the start of each day, added up over the period (1,000 birds for 7 days = 7,000).">
+              {formatNumber(birdDays)}
+            </KeyValueRow>
+            <KeyValueRow label="Cost per bird per day" calculated={explain.costPerBirdDay()}>
               {birdDays ? `₦ ${(cost / birdDays).toFixed(1)}` : '—'}
             </KeyValueRow>
-            <KeyValueRow label="Feed per bird per day" calculated>
+            <KeyValueRow label="Feed per bird per day" calculated={explain.feedPerBirdDay()}>
               {birdDays ? `${((m.feedKg * 1000) / birdDays).toFixed(0)} g` : '—'}
             </KeyValueRow>
             {inRange(today, range) && <p className="pt-2 type-body-sm text-fg-tertiary">Figures to today; the period isn’t finished.</p>}

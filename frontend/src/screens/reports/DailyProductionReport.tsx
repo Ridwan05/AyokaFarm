@@ -4,6 +4,8 @@ import { Warehouse } from 'lucide-react'
 import { useState } from 'react'
 import { LineChart } from '../../components/charts/LineChart'
 import { Card, CardHeader } from '../../components/ui/Card'
+import { InfoTip } from '../../components/ui/InfoTip'
+import { explain } from '../../data/explain'
 import { KpiCard } from '../../components/ui/KpiCard'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { Select } from '../../components/ui/Select'
@@ -131,10 +133,10 @@ export default function DailyProductionReport() {
   const layerPens = rows.filter((r) => r.layers).length
 
   const kpis = [
-    kpi({ label: 'Eggs collected', value: formatNumber(Math.round(crates)), unit: 'crates', current: crates, previous: eggsPrev, context: 'vs previous period', info: 'Crates collected across layer pens', spark: spark((d) => rowsOn(history.daily, d, penOk).reduce((n, x) => n + (x.eggs ?? 0), 0)) }),
-    kpi({ label: 'Laying rate', value: num(layingRate(entries) ?? 0, 1), unit: '%', current: layingRate(entries), previous: layingRate(prevEntries), points: true, digits: 1, context: `${layerPens} layer ${layerPens === 1 ? 'pen' : 'pens'}, average`, info: 'Eggs ÷ hens over the period', spark: spark((d) => layingRate(rowsOn(history.daily, d, penOk))) }),
-    kpi({ label: 'Mortality', value: formatNumber(died), unit: 'birds', current: mortalityPct(entries), previous: mortalityPct(prevEntries), points: true, goodWhen: 'down', context: worst.length ? `highest: ${worst.map((w) => `Pen ${w.pen}`).join(' and ')}` : 'no deaths', info: 'Birds lost over the period; change is in % of birds', spark: spark((d) => rowsOn(history.daily, d, penOk).reduce((n, x) => n + x.mortality, 0)) }),
-    kpi({ label: 'Entries on time', value: formatNumber(recorded - late), unit: `of ${formatNumber(expected)}`, current: null, previous: null, goodWhen: 'neither', context: `${late} late · ${missing} missing`, info: 'Pen-day entries recorded on the day', spark: FLAT }),
+    kpi({ label: 'Eggs collected', value: formatNumber(Math.round(crates)), unit: 'crates', current: crates, previous: eggsPrev, context: 'vs previous period', info: 'Eggs collected in daily entries over the period ÷ eggs a crate, compared with the period before.', spark: spark((d) => rowsOn(history.daily, d, penOk).reduce((n, x) => n + (x.eggs ?? 0), 0)) }),
+    kpi({ label: 'Laying rate', value: num(layingRate(entries) ?? 0, 1), unit: '%', current: layingRate(entries), previous: layingRate(prevEntries), points: true, digits: 1, context: `${layerPens} layer ${layerPens === 1 ? 'pen' : 'pens'}, average`, info: 'Eggs collected ÷ hens at the start of each day, added up over the period, layer pens only.', spark: spark((d) => layingRate(rowsOn(history.daily, d, penOk))) }),
+    kpi({ label: 'Mortality', value: formatNumber(died), unit: 'birds', current: mortalityPct(entries), previous: mortalityPct(prevEntries), points: true, goodWhen: 'down', context: worst.length ? `highest: ${worst.map((w) => `Pen ${w.pen}`).join(' and ')}` : 'no deaths', info: 'Deaths recorded over the period. The change compares deaths ÷ birds at the start of each day with the period before.', spark: spark((d) => rowsOn(history.daily, d, penOk).reduce((n, x) => n + x.mortality, 0)) }),
+    kpi({ label: 'Entries on time', value: formatNumber(recorded - late), unit: `of ${formatNumber(expected)}`, current: null, previous: null, goodWhen: 'neither', context: `${late} late · ${missing} missing`, info: 'Entries saved on the day they were for, out of the days each flock was in its pen during the period.', spark: FLAT }),
   ]
 
   const exportRows = () =>
@@ -164,7 +166,10 @@ export default function DailyProductionReport() {
       {pens !== 'Broilers' && (
         <Card className="gap-4 px-5 pt-4 pb-5">
           <div className="flex items-baseline gap-2">
-            <h2 className="type-h3 text-fg-primary">Laying rate</h2>
+            <h2 className="flex items-center gap-1.5 type-h3 text-fg-primary">
+              Laying rate
+              <InfoTip label="Laying rate">{explain.layingRate()}</InfoTip>
+            </h2>
             <span className="type-body-sm text-fg-tertiary">Layers · % of hens laying each day</span>
           </div>
           {laying.length > 1 ? (
@@ -191,8 +196,9 @@ export default function DailyProductionReport() {
           <span className="text-fg-secondary">{formatNumber(Math.round(crates))} crates</span>
           <span className="text-fg-secondary">{formatNumber(died)} died</span>
           <span className="text-fg-secondary">{formatNumber(feed)} bags feed</span>
-          <span className="text-fg-secondary">
+          <span className="flex items-center gap-1.5 text-fg-secondary">
             {late} late · {missing} missing
+            <InfoTip label="Late and missing">{explain.missingEntries()} Crates = eggs ÷ {farmSettings.eggsPerCrate}.</InfoTip>
           </span>
         </div>
       </Card>

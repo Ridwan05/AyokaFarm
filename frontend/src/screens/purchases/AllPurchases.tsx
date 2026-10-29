@@ -14,6 +14,8 @@ import { PURCHASE_CSV_HEADER, purchaseCsvRows } from '../../features/purchases/p
 import { dayMonth } from '../../data/metrics'
 import { farmSettings } from '../../data/farmSettings'
 import { downloadCsv } from '../../lib/export'
+import { InfoTip } from '../../components/ui/InfoTip'
+import { explainMoney } from '../../data/explainMoney'
 
 const TABS = ['All', 'Feed', 'Birds', 'Medication'] as const
 
@@ -48,8 +50,9 @@ export default function AllPurchases() {
         <CardHeader
           title={farmSettings.goLiveDate ? `Since go-live · ${dayMonth(farmSettings.goLiveDate)} ${farmSettings.goLiveDate.slice(0, 4)}` : 'All purchases'}
           meta={
-            <span className="type-body-sm text-fg-tertiary">
+            <span className="flex items-center gap-1.5 type-body-sm text-fg-tertiary">
               {rows.length} purchases · ₦{(total / 1e6).toFixed(1)}M
+              <InfoTip label="Purchases total">{explainMoney.purchasesListTotal()}</InfoTip>
             </span>
           }
         />

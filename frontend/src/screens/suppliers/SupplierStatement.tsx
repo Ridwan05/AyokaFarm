@@ -16,8 +16,12 @@ import { PaymentModal } from '../../features/payments/PaymentModal'
 import { dayMonth } from '../../features/purchases/purchaseView'
 import { StatementCard } from '../../features/statements/StatementCard'
 import { formatNaira, formatNumber, formatShortDate, parseISODate } from '../../lib/format'
+import { cn } from '../../lib/cn'
 import Placeholder from '../Placeholder'
 import { Presence } from '../../components/ui/Overlay'
+import { InfoTip } from '../../components/ui/InfoTip'
+import { explain } from '../../data/explain'
+import { explainMoney } from '../../data/explainMoney'
 
 const addDays = (iso: string, days: number) => {
   const d = parseISODate(iso)
@@ -63,10 +67,14 @@ export default function SupplierStatement() {
 
       <div className="flex flex-col gap-4 lg:flex-row">
         <Card className="flex-1 gap-2 p-5">
-          <span className="type-body-md text-fg-secondary">{balance < 0 ? 'They hold for us' : 'We owe'}</span>
+          <span className="flex items-center gap-1.5 type-body-md text-fg-secondary">
+            {balance < 0 ? 'They hold for us' : 'We owe'}
+            <InfoTip label={balance < 0 ? 'They hold for us' : 'We owe'}>{explain.supplierBalance()}</InfoTip>
+          </span>
           <span className="type-display-lg text-fg-primary">₦{formatNumber(Math.abs(balance))}</span>
-          <span className={overdue ? 'type-body-sm text-fg-danger' : 'type-body-sm text-fg-secondary'}>
+          <span className={cn('flex items-center gap-1.5 type-body-sm', overdue ? 'text-fg-danger' : 'text-fg-secondary')}>
             {due ? `${overdue ? 'Overdue' : 'Nothing overdue'} · due ${formatShortDate(due)}` : balance < 0 ? 'Used against the next purchase' : 'Nothing owed'}
+            {due && <InfoTip label="Due date">{explainMoney.supplierDue()}</InfoTip>}
           </span>
           {last && (
             <span className="type-body-sm text-fg-tertiary">
@@ -75,7 +83,10 @@ export default function SupplierStatement() {
           )}
         </Card>
         <Card className="flex-1 gap-2 p-5">
-          <span className="type-body-md text-fg-secondary">Aging</span>
+          <span className="flex items-center gap-1.5 type-body-md text-fg-secondary">
+            Aging
+            <InfoTip label="Aging">{explain.ageing()}</InfoTip>
+          </span>
           <AgingBar aging={a} className="w-full" />
           {agingLegend().map((l) => (
             <div key={l.key} className="flex items-center gap-2">
@@ -87,8 +98,12 @@ export default function SupplierStatement() {
         </Card>
         <Card className="flex-1 gap-0 px-5 pt-4 pb-5">
           <span className="pb-1 type-body-md text-fg-secondary">Since go-live</span>
-          <KeyValueRow label="Bought">{formatNaira(bought)}</KeyValueRow>
-          <KeyValueRow label="Paid">{formatNaira(paid)}</KeyValueRow>
+          <KeyValueRow label="Bought" calculated={explainMoney.sinceGoLiveBought()}>
+            {formatNaira(bought)}
+          </KeyValueRow>
+          <KeyValueRow label="Paid" calculated={explainMoney.sinceGoLiveSupplierPaid()}>
+            {formatNaira(paid)}
+          </KeyValueRow>
           <KeyValueRow label="Purchases">{lines.filter((l) => l.charged !== null).length}</KeyValueRow>
           <span className="pt-1 type-body-sm text-fg-tertiary">Payments clear the oldest unpaid purchase first</span>
         </Card>

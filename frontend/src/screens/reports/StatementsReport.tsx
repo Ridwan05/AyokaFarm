@@ -17,6 +17,8 @@ import { cn } from '../../lib/cn'
 import { formatNumber } from '../../lib/format'
 import { ReportHeader } from './ReportHeader'
 import { Presence } from '../../components/ui/Overlay'
+import { InfoTip } from '../../components/ui/InfoTip'
+import { explain } from '../../data/explain'
 
 const dm = dmOf
 const dmy = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
@@ -169,7 +171,10 @@ export default function StatementsReport() {
                 <span className="flex-1 type-label-md text-fg-primary">
                   {isCustomer ? `Balance ${party.name} owes ${farmSettings.farmName}` : `Balance ${farmSettings.farmName} owes ${party.name}`}
                 </span>
-                <span className="type-h2 text-fg-primary">₦{formatNumber(Math.abs(party.balance))}</span>
+                <span className="flex items-center gap-1.5">
+                  <InfoTip label="Balance">{isCustomer ? explain.customerBalance() : explain.supplierBalance()}</InfoTip>
+                  <span className="type-h2 text-fg-primary">₦{formatNumber(Math.abs(party.balance))}</span>
+                </span>
               </div>
               <p className="type-body-sm text-fg-secondary">Every line comes from a recorded {isCustomer ? 'sale' : 'purchase'} or payment. Questions: {contact}.</p>
             </article>

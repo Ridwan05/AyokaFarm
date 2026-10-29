@@ -4,6 +4,8 @@ import { Package } from 'lucide-react'
 import { useState } from 'react'
 import { DivergingBars } from '../../components/charts/DivergingBars'
 import { Card, CardHeader } from '../../components/ui/Card'
+import { InfoTip } from '../../components/ui/InfoTip'
+import { explain } from '../../data/explain'
 import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { KpiCard } from '../../components/ui/KpiCard'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
@@ -100,10 +102,10 @@ export default function FeedLedgerReport() {
   const lowest = all.filter((f) => f.cover !== null).sort((a, b) => a.cover! - b.cover!)[0]
 
   const kpis = [
-    kpi({ label: 'Feed used', value: formatNumber(used), unit: 'bags', current: used, previous: prevUsed, goodWhen: 'neither', context: `${nairaShort(cost)} · ${range.label.toLowerCase()}`, info: 'Bags of feed used from pen entries', spark: FLAT }),
-    kpi({ label: 'Average cost', value: allAvg ? formatNumber(Math.round(allAvg)) : '—', unit: '₦ a bag', current: null, previous: null, goodWhen: 'neither', context: 'weighted average', info: 'Weighted average price paid for feed', spark: FLAT }),
-    kpi({ label: 'Farm variance', value: farmVar === null ? '—' : `${farmVar > 0 ? '+' : ''}${farmVar.toFixed(1)}`, unit: '%', current: null, previous: null, goodWhen: 'neither', context: farmVar === null ? 'no targets' : Math.abs(farmVar) <= tol ? `within ±${tol}%` : `outside ±${tol}%`, info: 'Feed used vs expected, all pens', spark: FLAT }),
-    kpi({ label: 'Lowest cover', value: lowest ? String(lowest.cover) : '—', unit: 'days', current: null, previous: null, goodWhen: 'neither', context: lowest ? `${lowest.name}${lowest.cover! <= farmSettings.lowStockDays ? ' · reorder suggested' : ''}` : 'no feed in use', info: 'Feed type with the fewest days of cover', spark: FLAT }),
+    kpi({ label: 'Feed used', value: formatNumber(used), unit: 'bags', current: used, previous: prevUsed, goodWhen: 'neither', context: `${nairaShort(cost)} · ${range.label.toLowerCase()}`, info: 'Bags taken out in daily entries over the period, compared with the period before. Cost = bags × average price a bag.', spark: FLAT }),
+    kpi({ label: 'Average cost', value: allAvg ? formatNumber(Math.round(allAvg)) : '—', unit: '₦ a bag', current: null, previous: null, goodWhen: 'neither', context: 'weighted average', info: 'Total paid for feed ÷ bags bought, so bigger purchases count for more.', spark: FLAT }),
+    kpi({ label: 'Farm variance', value: farmVar === null ? '—' : `${farmVar > 0 ? '+' : ''}${farmVar.toFixed(1)}`, unit: '%', current: null, previous: null, goodWhen: 'neither', context: farmVar === null ? 'no targets' : Math.abs(farmVar) <= tol ? `within ±${tol}%` : `outside ±${tol}%`, info: 'Feed used ÷ expected (birds × grams a bird a day for their age), all pens with a feed band, as a % above or below.', spark: FLAT }),
+    kpi({ label: 'Lowest cover', value: lowest ? String(lowest.cover) : '—', unit: 'days', current: null, previous: null, goodWhen: 'neither', context: lowest ? `${lowest.name}${lowest.cover! <= farmSettings.lowStockDays ? ' · reorder suggested' : ''}` : 'no feed in use', info: 'Bags in store ÷ average bags used a day over the last 7 days, for the feed that would run out first.', spark: FLAT }),
   ]
 
   const exportRows = () =>
@@ -133,7 +135,10 @@ export default function FeedLedgerReport() {
       <div className="flex flex-col gap-4 lg:flex-row">
         <Card className="min-w-0 flex-1 px-5 pt-4 pb-5">
           <div className="flex items-baseline gap-2 pb-2">
-            <h2 className="type-h3 text-fg-primary">Feed used vs expected, by pen</h2>
+            <h2 className="flex items-center gap-1.5 type-h3 text-fg-primary">
+              Feed used vs expected, by pen
+              <InfoTip label="Feed used vs expected">{explain.feedVsExpected()} Added up over the range for each pen.</InfoTip>
+            </h2>
             <span className="type-body-sm text-fg-tertiary">
               {range.label} · green band = ±{tol}% tolerance
             </span>
@@ -160,18 +165,15 @@ export default function FeedLedgerReport() {
             <span className="type-body-sm text-fg-tertiary">per {bagKg.size === 1 ? `${[...bagKg][0]} kg ` : ''}bag</span>
           </div>
           {priced.map((f) => (
-            <KeyValueRow key={f.name} label={f.name} calculated>
+            <KeyValueRow key={f.name} label={f.name} calculated={explain.weightedFeedCost()}>
               {naira(f.avgCost)}
             </KeyValueRow>
           ))}
           {!priced.length && <p className="type-body-sm text-fg-tertiary">No feed purchases recorded yet.</p>}
-          <KeyValueRow label="All feed" strong calculated>
+          <KeyValueRow label="All feed" strong calculated="Total paid for all feed ÷ all bags bought.">
             {allAvg ? naira(allAvg) : '—'}
           </KeyValueRow>
-          <p className="pt-3 type-body-sm text-fg-secondary">
-            Cost of feed used = bags used × the weighted average price paid for that feed. Opening stock has no price, so it is costed at the same average. This is what
-            Profit &amp; loss counts.
-          </p>
+          <p className="pt-3 type-body-sm text-fg-secondary">Opening stock has no price, so it is costed at the same average. This is what Profit &amp; loss counts.</p>
         </Card>
       </div>
 
@@ -184,7 +186,10 @@ export default function FeedLedgerReport() {
           </span>
           <span className="text-fg-secondary">Received {formatNumber(received)} bags</span>
           <span className="text-fg-secondary">Used {formatNumber(used)} bags</span>
-          <span className="text-fg-secondary">Cost of feed used {nairaShort(cost)}</span>
+          <span className="flex items-center gap-1.5 text-fg-secondary">
+            Cost of feed used {nairaShort(cost)}
+            <InfoTip label="Cost of feed used">{explain.feedUsedCost()}</InfoTip>
+          </span>
         </div>
       </Card>
     </>

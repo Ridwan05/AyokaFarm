@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import Link from 'next/link'
 import { cn } from '../../lib/cn'
+import { InfoTip } from './InfoTip'
 
 type CardProps = {
   children: ReactNode
@@ -19,14 +20,17 @@ type CardHeaderProps = {
   title: string
   /** Inline content after the title, e.g. a badge or a count. */
   meta?: ReactNode
+  /** How the card's figure is calculated, for cards whose header shows a calculated total. */
+  info?: ReactNode
   action?: { label: string; to?: string; onClick?: () => void }
   className?: string
 }
 
-export function CardHeader({ title, meta, action, className }: CardHeaderProps) {
+export function CardHeader({ title, meta, info, action, className }: CardHeaderProps) {
   return (
     <header className={cn('flex items-center gap-2 px-5 pt-4 pb-3', className)}>
       <h2 className="type-h3 text-fg-primary">{title}</h2>
+      {info && <InfoTip label={title}>{info}</InfoTip>}
       {meta}
       <span className="flex-1" />
       {action &&

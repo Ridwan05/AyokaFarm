@@ -6,6 +6,8 @@ import type { ReactNode } from 'react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Badge } from '../components/ui/Badge'
 import { Card, CardHeader } from '../components/ui/Card'
+import { InfoTip } from '../components/ui/InfoTip'
+import { explain } from '../data/explain'
 import { feedTypes, medications, medicationStatus } from '../data/inventory'
 import { daysFrom, todayISO } from '../data/metrics'
 import { farm } from '../data/session'
@@ -45,7 +47,12 @@ export default function StockHome() {
       </div>
 
       <section className="flex flex-col gap-3">
-        <h2 className="type-h3 text-fg-primary">Feed in the store</h2>
+        <h2 className="flex items-center gap-1.5 type-h3 text-fg-primary">
+          Feed in the store
+          <InfoTip label="Feed in the store">
+            Bags = {explain.stockOnHand().charAt(0).toLowerCase() + explain.stockOnHand().slice(1)} Days of cover = {explain.daysOfCover().charAt(0).toLowerCase() + explain.daysOfCover().slice(1)}
+          </InfoTip>
+        </h2>
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {feed.map((f) => {
             const inUse = f.daysOfCover !== null
@@ -68,7 +75,7 @@ export default function StockHome() {
 
       <div className="flex flex-col gap-6 lg:flex-row">
         <Card className="min-w-0 flex-1">
-          <CardHeader title="Medication" action={{ label: 'Open', to: '/inventory/medication' }} />
+          <CardHeader title="Medication" info={`Stock: ${explain.medicationOnHand()} ${explain.medicationStatus()}`} action={{ label: 'Open', to: '/inventory/medication' }} />
           <ul className="flex flex-col px-5 pb-3">
             {meds.map((m, i) => (
               <li key={m.name} className={`flex items-center gap-3 py-2.5 ${i < meds.length - 1 ? 'border-b border-line-subtle' : ''}`}>

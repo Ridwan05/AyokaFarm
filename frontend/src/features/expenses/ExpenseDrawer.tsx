@@ -1,5 +1,6 @@
 import { Button } from '../../components/ui/Button'
 import { DetailSection, History } from '../../components/ui/Detail'
+import { explainMoney } from '../../data/explainMoney'
 import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { Drawer } from '../../components/ui/Overlay'
 import type { Expense } from '../../data/expenses'
@@ -43,17 +44,17 @@ export function ExpenseDrawer({ expense: e, onClose }: { expense: Expense; onClo
 
       {e.pen !== null ? (
         <DetailSection title="Charged to one pen">
-          <KeyValueRow label={`Pen ${e.pen}`} calculated>
+          <KeyValueRow label={`Pen ${e.pen}`} calculated={explainMoney.wholeToPen()}>
             {naira(e.amount)} · all of it
           </KeyValueRow>
-          <KeyValueRow label="Other pens" calculated>
+          <KeyValueRow label="Other pens" calculated={explainMoney.wholeToPen()}>
             ₦0
           </KeyValueRow>
         </DetailSection>
       ) : (
-        <DetailSection title="Shared by bird-days">
+        <DetailSection title="Shared by birds in each pen">
           {byPen.map((p) => (
-            <KeyValueRow key={p.id} label={`Pen ${p.id}`} calculated>
+            <KeyValueRow key={p.id} label={`Pen ${p.id}`} calculated={explainMoney.splitByBirds()}>
               {naira(Math.round((e.amount * p.liveBirds) / totalBirds))}
             </KeyValueRow>
           ))}

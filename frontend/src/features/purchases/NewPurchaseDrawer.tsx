@@ -2,6 +2,7 @@ import { Package, Truck } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Button } from '../../components/ui/Button'
 import { AutoInput, Field, SelectInput, SummaryBox, TextInput } from '../../components/ui/Form'
+import { explainMoney } from '../../data/explainMoney'
 import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { Drawer } from '../../components/ui/Overlay'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
@@ -170,12 +171,12 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
           )}
         </Field>
         <SummaryBox>
-          <KeyValueRow label={`Owed to ${supplier.short} now`} calculated>
+          <KeyValueRow label={`Owed to ${supplier.short} now`} calculated={explainMoney.balanceNow()}>
             ₦ {formatNumber(owed)}
           </KeyValueRow>
           <KeyValueRow label="+ This purchase">₦ {formatNumber(total)}</KeyValueRow>
           <KeyValueRow label="− Paid now">₦ {formatNumber(paidNow)}</KeyValueRow>
-          <KeyValueRow label="New balance owed" strong calculated>
+          <KeyValueRow label="New balance owed" strong calculated={explainMoney.newBalancePurchase()}>
             ₦ {formatNumber(owed + total - paidNow)}
           </KeyValueRow>
         </SummaryBox>
