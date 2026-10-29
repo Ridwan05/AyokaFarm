@@ -13,14 +13,20 @@ import { KeyValueRow } from '../components/ui/KeyValueRow'
 import { KpiCard } from '../components/ui/KpiCard'
 import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { NumberCell, Table, TextCell, type Column } from '../components/ui/Table'
+import { Presence } from '../components/ui/Overlay'
 import { Tabs } from '../components/ui/Tabs'
+import { useToast } from '../components/ui/toastContext'
 import { farmSettings } from '../data/farmSettings'
 import { explain } from '../data/explain'
 import { penName } from '../data/farmViews'
 import { addDays, dayMonth, inRange, niceTicks, penCost, penMoney, period, timeOf, todayISO, weekdayDm, withdrawals, type Range } from '../data/metrics'
 import { flockFacts, mortalitySeries, modeLabel, penEntries, penFlock, penKpis, type DailyEntry } from '../data/penView'
 import { useCurrentUser } from '../data/sessionContext'
+import { rearingCost, suggestedLayStart } from '../data/rearing'
 import { useTrade } from '../data/tradeContext'
+import { CloseFlockDrawer } from '../features/pens/CloseFlockDrawer'
+import { LayStartModal } from '../features/pens/LayStartModal'
+import { CLOSE_REASONS, saveFlock } from '../features/pens/saveFlock'
 import { canRecordProduction, isAttendant } from '../lib/access'
 import { downloadCsv } from '../lib/export'
 import { formatCrates, formatNaira, formatNumber, formatSignedPct } from '../lib/format'
@@ -56,7 +62,11 @@ export default function PenDetail() {
       : null
 
   const title = facts?.title ?? penName(catalog, id)
-  const subtitle = facts ? `Flock ${facts.code} · ${facts.breed} · placed ${facts.placed} · week ${facts.week}` : 'No flock placed'
+  const subtitle = !facts
+    ? 'No flock placed'
+    : facts.flock.status === 'closed'
+      ? `Empty · last flock ${facts.code} closed ${dayMonth(facts.flock.closed_on!)} ${facts.flock.closed_on!.slice(0, 4)}`
+      : `Flock ${facts.code} · ${facts.breed} · placed ${facts.placed} · week ${facts.week}`
 
   return (
     <>
@@ -103,9 +113,31 @@ export default function PenDetail() {
 }
 
 function Overview({ penId }: { penId: number }) {
-  const { history, catalog } = useTrade()
+  const { history, catalog, reload } = useTrade()
+  const user = useCurrentUser()
+  const toast = useToast()
   const [unit, setUnit] = useState<'Birds' | '% of flock'>('Birds')
+  const [overlay, setOverlay] = useState<'lay' | 'close' | null>(null)
+  const [saving, setSaving] = useState(false)
   const facts = flockFacts(history, catalog, penId)!
+  const flock = facts.flock
+  const active = flock.status === 'active'
+  const layer = catalog.birdTypes.find((b) => b.id === flock.bird_type_id)?.lays_eggs ?? false
+  const layingSince = flock.laying_started_on ?? null
+  const firstEggs = layer ? suggestedLayStart(history, flock) : null
+  const suggested = layingSince ? null : firstEggs
+  // Managers mark the start of lay; only the owner closes a flock (the database enforces both).
+  const canMarkLay = layer && (user.role === 'owner' || user.role === 'farm-manager')
+  const canClose = active && user.role === 'owner'
+
+  const markSuggested = async () => {
+    if (!suggested) return
+    setSaving(true)
+    const ok = await saveFlock(flock.id, { laying_started_on: suggested })
+    if (ok) await reload()
+    setSaving(false)
+    if (ok) toast(`${flock.code} laying since ${weekdayDm(suggested)}`)
+  }
   const { rows } = penFlock(history, penId)
   const m = mortalitySeries(rows)
   const firstRising = m.risingDays ? m.birds.length - m.risingDays : m.birds.length
@@ -120,6 +152,21 @@ function Overview({ penId }: { penId: number }) {
 
   return (
     <>
+      {suggested && canMarkLay && (
+        <Alert
+          tone="info"
+          title={`First eggs recorded ${weekdayDm(suggested)} — mark as start of lay?`}
+          action={
+            <span className="flex flex-wrap gap-x-4 gap-y-1">
+              <AlertAction onClick={() => void markSuggested()}>{saving ? 'Saving…' : 'Use this date'}</AlertAction>
+              <AlertAction onClick={() => setOverlay('lay')}>Pick another date…</AlertAction>
+            </span>
+          }
+        >
+          Rearing cost stops the day before. Until it’s marked, reports use this date.
+        </Alert>
+      )}
+
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
         {penKpis(history, catalog, penId).map((kpi) => (
           <KpiCard key={kpi.label} kpi={kpi} />
@@ -170,8 +217,38 @@ function Overview({ penId }: { penId: number }) {
           <KeyValueRow label="Withdrawal" calculated={explain.withdrawal()}>
             {facts.withdrawal}
           </KeyValueRow>
+          {layer && (
+            <KeyValueRow label="Start of lay" calculated={explain.layStart()}>
+              {layingSince ? `Laying since ${weekdayDm(layingSince)}` : suggested ? `Not marked · eggs from ${weekdayDm(suggested)}` : 'Not laying yet'}
+            </KeyValueRow>
+          )}
+          {!active && flock.closed_on && (
+            <KeyValueRow label="Closed">
+              {weekdayDm(flock.closed_on)}
+              {flock.close_reason ? ` · ${CLOSE_LABEL[flock.close_reason] ?? flock.close_reason}` : ''}
+            </KeyValueRow>
+          )}
+          {(canMarkLay || canClose) && (
+            <div className="flex flex-wrap gap-2 pt-3">
+              {canMarkLay && (
+                <Button size="sm" onClick={() => setOverlay('lay')}>
+                  {layingSince ? 'Edit start of lay…' : 'Mark start of lay…'}
+                </Button>
+              )}
+              {canClose && (
+                <Button size="sm" variant="ghost" className="text-fg-danger" onClick={() => setOverlay('close')}>
+                  Close flock…
+                </Button>
+              )}
+            </div>
+          )}
         </Card>
       </div>
+
+      <RearingCard penId={penId} />
+
+      <Presence>{overlay === 'lay' && <LayStartModal flock={flock} suggested={firstEggs} onClose={() => setOverlay(null)} />}</Presence>
+      <Presence>{overlay === 'close' && <CloseFlockDrawer flock={flock} onClose={() => setOverlay(null)} />}</Presence>
 
       <Card>
         <CardHeader title="Daily entries" meta={<span className="type-body-sm text-fg-tertiary">Last 7 entries</span>} />
@@ -182,6 +259,66 @@ function Overview({ penId }: { penId: number }) {
         )}
       </Card>
     </>
+  )
+}
+
+const CLOSE_LABEL: Record<string, string> = Object.fromEntries(CLOSE_REASONS.map((r) => [r.value, r.label]))
+
+/** What the flock cost from placement to point of lay (layers) or to date (broilers). */
+function RearingCard({ penId }: { penId: number }) {
+  const { history, catalog } = useTrade()
+  const flock = flockFacts(history, catalog, penId)!.flock
+  const r = rearingCost(history, catalog, flock)
+  const title = r.layer
+    ? r.done
+      ? 'Rearing cost · placement → point of lay'
+      : `Rearing cost so far · week ${r.week}`
+    : `Cost · placement to ${flock.closed_on ? 'close' : 'date'}`
+  const howTotal = r.done || !r.layer ? explain.rearingTotal() : explain.rearingSoFar()
+  return (
+    <Card className="gap-1 px-5 pt-4 pb-5">
+      <div className="flex flex-wrap items-center gap-x-2 pb-2">
+        <h2 className="type-h3 text-fg-primary">{title}</h2>
+        <InfoTip label="Rearing cost">{howTotal}</InfoTip>
+        <span className="flex-1" />
+        <span className="type-body-sm text-fg-tertiary">{r.to >= r.from ? `${weekdayDm(r.from)} – ${weekdayDm(r.to)}` : 'Not started'}</span>
+      </div>
+      {r.provisional && r.layingSince && (
+        <p className="pb-1 type-body-sm text-fg-warning">Start of lay not marked — using first eggs ({weekdayDm(r.layingSince)}).</p>
+      )}
+      <div className="grid gap-x-8 lg:grid-cols-2">
+        <div className="flex min-w-0 flex-col">
+          <KeyValueRow label="Birds" calculated={explain.rearingBirds()}>
+            {formatNaira(Math.round(r.birds))}
+          </KeyValueRow>
+          <KeyValueRow label="Feed" calculated={explain.rearingFeed()}>
+            {formatNaira(Math.round(r.feed))} · {formatNumber(Math.round(r.feedBags))} bags
+          </KeyValueRow>
+          <KeyValueRow label="Medication" calculated={explain.rearingMedication()}>
+            {formatNaira(Math.round(r.medication))} · {formatNumber(r.doses)} doses
+          </KeyValueRow>
+        </div>
+        <div className="flex min-w-0 flex-col">
+          <KeyValueRow label="Pen expenses" calculated={explain.penExpenses()}>
+            {formatNaira(Math.round(r.penExpenses))}
+          </KeyValueRow>
+          <KeyValueRow label="Share of farm costs" calculated={explain.overheadShare()}>
+            {formatNaira(Math.round(r.overhead))}
+          </KeyValueRow>
+          {r.layer && r.perHen !== null && (
+            <KeyValueRow label="Cost per hen at lay" calculated={explain.costPerHenAtLay()}>
+              {formatNaira(Math.round(r.perHen))}
+            </KeyValueRow>
+          )}
+        </div>
+      </div>
+      <KeyValueRow label="Total" strong calculated={howTotal}>
+        {formatNaira(Math.round(r.total))}
+      </KeyValueRow>
+      <p className="type-body-sm text-fg-tertiary">
+        {formatNumber(Math.round(r.feedKg))} kg of feed{r.layer && r.hens ? ` · ${formatNumber(r.hens)} hens at point of lay` : ''}
+      </p>
+    </Card>
   )
 }
 

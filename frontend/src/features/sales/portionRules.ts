@@ -1,4 +1,4 @@
-import { liveBirdsByPen } from '../../data/metrics'
+import { birdsOnRecord } from '../../data/penView'
 import type { SalePortion } from '../../data/sales'
 import type { Trade } from '../../data/tradeContext'
 import { formatNumber } from '../../lib/format'
@@ -20,22 +20,12 @@ export function penChoices(trade: Pick<Trade, 'catalog' | 'history'>, productId:
   const { catalog, history } = trade
   const product = catalog.products.find((p) => String(p.id) === productId)
   const birds = product?.kind === 'birds'
-  const live = liveBirdsByPen(history)
   const exceptId = history.sales.find((s) => s.ref === exceptReceipt)?.id
   return catalog.pens
     .map((pen) => {
       const flock = history.flocks.find((f) => f.pen_id === pen.id && f.status === 'active')
       if (!flock || (birds && product?.bird_type_id && flock.bird_type_id !== product.bird_type_id)) return null
-      // Birds sold since the flock's latest entry haven't reached its count yet.
-      const lastEntry = history.daily.filter((d) => d.flockId === flock.id).reduce((m, d) => (d.date > m ? d.date : m), '')
-      const soldSince = history.saleAllocations
-        .filter((a) => a.flock_id === flock.id && a.sale_id !== exceptId)
-        .filter((a) => {
-          const s = history.sales.find((x) => x.id === a.sale_id)
-          return s && s.approval !== 'rejected' && s.sold_on >= lastEntry
-        })
-        .reduce((n, a) => n + Number(a.quantity), 0)
-      return { penId: pen.id, name: pen.name, birds: birds ? Math.max(0, (live.get(pen.id) ?? 0) - soldSince) : null }
+      return { penId: pen.id, name: pen.name, birds: birds ? birdsOnRecord(history, flock, exceptId) : null }
     })
     .filter((c): c is PenChoice => c !== null)
 }

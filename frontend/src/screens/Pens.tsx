@@ -17,7 +17,9 @@ import { pens, type Pen, type Stat } from '../data/pens'
 import { explain } from '../data/explain'
 import { penName } from '../data/farmViews'
 import { dayMonth, penCost, penMoney } from '../data/metrics'
+import { rearingCost } from '../data/rearing'
 import { useTrade, type Trade } from '../data/tradeContext'
+import { CLOSE_REASONS } from '../features/pens/saveFlock'
 import { cn } from '../lib/cn'
 import { formatNaira, formatNumber } from '../lib/format'
 import { Presence } from '../components/ui/Overlay'
@@ -103,6 +105,7 @@ function PenTile({ pen }: { pen: Pen }) {
   const { catalog } = useTrade()
   const Icon = pen.type === 'Layers' ? Egg : Bird
   const fill = Math.min(pen.liveBirds / pen.capacity, 1) * 100
+  const empty = pen.flock === '—'
   return (
     <Link
       href={`/pens/${pen.id}`}
@@ -116,12 +119,10 @@ function PenTile({ pen }: { pen: Pen }) {
           <span className="truncate type-label-lg text-fg-primary">
             {penName(catalog, pen.id)} · {pen.type}
           </span>
-          <span className="truncate type-body-sm text-fg-tertiary">
-            {pen.flock} · week {pen.week}
-          </span>
+          <span className="truncate type-body-sm text-fg-tertiary">{empty ? 'Empty · ready for a new flock' : `${pen.flock} · week ${pen.week}`}</span>
         </div>
-        <Badge tone={pen.status.tone} dot>
-          {pen.status.label}
+        <Badge tone={empty ? 'neutral' : pen.status.tone} dot>
+          {empty ? 'Empty' : pen.status.label}
         </Badge>
       </div>
 
@@ -186,6 +187,11 @@ type ClosedFlock = {
   mortalityPct: number
   /** null when the flock's life is older than the loaded records. */
   margin: number | null
+  reason: string
+  /** Placement → point of lay (layers) or to close (broilers); null when older than the loaded records. */
+  rearing: number | null
+  /** Layers only. */
+  perHen: number | null
 }
 
 /** Closed flocks, newest first: birds in and out from the daily entries, margin over the flock's life. */
@@ -199,6 +205,7 @@ function closedFlockRows({ history, catalog }: Trade): ClosedFlock[] {
       const lays = catalog.birdTypes.find((b) => b.id === f.bird_type_id)?.lays_eggs
       const closed = f.closed_on ?? rows.at(-1)?.date ?? f.placed_on
       const m = f.placed_on >= history.since ? penMoney(history, catalog, { from: f.placed_on, to: closed }).find((x) => x.penId === f.pen_id) : undefined
+      const rear = rearingCost(history, catalog, f)
       return {
         code: f.code,
         initials: f.code.slice(0, 1) + f.code.slice(-1),
@@ -211,6 +218,9 @@ function closedFlockRows({ history, catalog }: Trade): ClosedFlock[] {
         birdsOut: out,
         mortalityPct: (rows.reduce((n, d) => n + d.mortality, 0) * 100) / f.birds_placed,
         margin: m ? m.revenue - penCost(m) : null,
+        reason: CLOSE_REASONS.find((r) => r.value === f.close_reason)?.label ?? '—',
+        rearing: f.placed_on >= history.since ? rear.total : null,
+        perHen: lays && f.placed_on >= history.since ? rear.perHen : null,
       }
     })
 }
@@ -222,7 +232,7 @@ const flockColumns: Column<ClosedFlock>[] = [
     render: (f) => <PrimaryCell initials={f.initials} title={`${f.code} · ${f.type}`} subtitle={`${f.pen} · ${f.breed}`} />,
   },
   { key: 'placed', header: 'Placed', width: 120, render: (f) => <TextCell>{f.placed}</TextCell> },
-  { key: 'closed', header: 'Closed', width: 120, render: (f) => <TextCell>{f.closed}</TextCell> },
+  { key: 'closed', header: 'Closed', width: 150, render: (f) => <TextCell>{f.reason === '—' ? f.closed : `${f.closed} · ${f.reason}`}</TextCell> },
   {
     key: 'birds',
     header: 'Birds in / out',
@@ -235,6 +245,20 @@ const flockColumns: Column<ClosedFlock>[] = [
     ),
   },
   { key: 'mortality', header: 'Mortality', align: 'right', width: 96, render: (f) => <NumberCell>{f.mortalityPct.toFixed(1)}%</NumberCell> },
+  {
+    key: 'rearing',
+    header: 'Rearing cost',
+    align: 'right',
+    width: 130,
+    render: (f) => (f.rearing === null ? <NumberCell tone="muted">—</NumberCell> : <NumberCell>{formatNaira(Math.round(f.rearing))}</NumberCell>),
+  },
+  {
+    key: 'perHen',
+    header: 'Per hen at lay',
+    align: 'right',
+    width: 120,
+    render: (f) => (f.perHen === null ? <NumberCell tone="muted">—</NumberCell> : <NumberCell>{formatNaira(Math.round(f.perHen))}</NumberCell>),
+  },
   {
     key: 'margin',
     header: 'Margin',

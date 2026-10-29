@@ -208,3 +208,22 @@ export function flockFacts(history: History, catalog: Catalog, penId: number) {
     title: `${penName(catalog, penId)} · ${catalog.pens.find((p) => p.id === penId)?.bird_types?.lays_eggs ? 'Layers' : 'Broilers'}`,
   }
 }
+
+/**
+ * Birds a flock has on record now: its latest closing count (or birds placed), less birds sold
+ * since that entry, which only reach the count with the next entry. `exceptSaleId` leaves one sale
+ * out, for editing it.
+ */
+export function birdsOnRecord(history: History, flock: History['flocks'][number], exceptSaleId?: number) {
+  const rows = history.daily.filter((d) => d.flockId === flock.id)
+  const latest = rows.reduce<DailyRow | undefined>((m, d) => (!m || d.date > m.date ? d : m), undefined)
+  const lastEntry = latest?.date ?? ''
+  const soldSince = history.saleAllocations
+    .filter((a) => a.flock_id === flock.id && a.sale_id !== exceptSaleId)
+    .filter((a) => {
+      const s = history.sales.find((x) => x.id === a.sale_id)
+      return s && s.approval !== 'rejected' && s.sold_on >= lastEntry
+    })
+    .reduce((n, a) => n + Number(a.quantity), 0)
+  return Math.max(0, (latest?.closing ?? flock.birds_placed) - soldSince)
+}

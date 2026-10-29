@@ -6,6 +6,7 @@ import { toast } from 'sonner'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { AutoInput, Field, SelectInput, TextInput } from '../../components/ui/Form'
+import { Switch } from '../../components/ui/Switch'
 import { dayMonth, liveBirdsByPen } from '../../data/metrics'
 import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
@@ -42,6 +43,8 @@ export default function FarmProfile() {
     receipt_footer: settings?.receipt_footer ?? '',
     whatsapp_sender: settings?.whatsapp_sender ?? '',
     whatsapp_monthly_limit: settings?.whatsapp_monthly_limit === null || settings?.whatsapp_monthly_limit === undefined ? '' : String(settings.whatsapp_monthly_limit),
+    spread_rearing_cost: settings?.spread_rearing_cost ?? false,
+    layer_laying_weeks: String(settings?.layer_laying_weeks ?? 60),
   }))
   const [saving, setSaving] = useState(false)
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) => setForm((f) => ({ ...f, [k]: e.target.value }))
@@ -55,6 +58,8 @@ export default function FarmProfile() {
     if (!form.farm_name.trim()) return toast.error('Enter the farm’s name')
     const limit = form.whatsapp_monthly_limit.trim()
     if (limit && !(Number(limit) >= 0)) return toast.error('The WhatsApp limit must be a number')
+    const weeks = Math.round(Number(form.layer_laying_weeks))
+    if (!(weeks > 0)) return toast.error('The laying period must be at least 1 week')
     setSaving(true)
     const blank = (v: string) => v.trim() || null
     const { error } = await createClient()
@@ -71,6 +76,8 @@ export default function FarmProfile() {
         receipt_footer: blank(form.receipt_footer),
         whatsapp_sender: blank(form.whatsapp_sender),
         whatsapp_monthly_limit: limit ? Math.round(Number(limit)) : null,
+        spread_rearing_cost: form.spread_rearing_cost,
+        layer_laying_weeks: weeks,
       })
       .eq('id', true)
     setSaving(false)
@@ -120,6 +127,28 @@ export default function FarmProfile() {
             <Field label="Go-live date" auto hint="Opening balances start here">{(id) => <AutoInput id={id} value={goLive} />}</Field>
           </Card>
         </div>
+        <Card className="gap-4 p-5">
+          <SectionTitle title="Accounts" note="How the profit & loss treats the cost of raising layers" />
+          <Switch
+            label="Spread layer rearing cost over the laying period"
+            checked={form.spread_rearing_cost}
+            onChange={(on) => editable && !saving && setForm((f) => ({ ...f, spread_rearing_cost: on }))}
+          />
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            <Field
+              label="Laying period"
+              hint={`Each layer flock’s rearing cost (placement to start of lay) is charged evenly over this many weeks from its start of lay, about ${formatNumber(Math.round((Number(form.layer_laying_weeks) || 0) * 7 / 30.4))} months.`}
+              className="sm:w-[260px]"
+            >
+              {(id) => <Input id={id} inputMode="numeric" value={form.layer_laying_weeks} onChange={set('layer_laying_weeks')} suffix="weeks" />}
+            </Field>
+            <p className="flex-1 type-body-sm text-fg-secondary sm:pt-7">
+              {form.spread_rearing_cost
+                ? 'The profit & loss opens in the spread view. The cash view (costs in the month they were spent) is still one tap away.'
+                : 'The profit & loss opens in the cash view (costs in the month they were spent). The spread view is still there for comparison.'}
+            </p>
+          </div>
+        </Card>
         <Card className="gap-4 p-5">
           <SectionTitle title="Receipts & messages" note="WhatsApp goes only to people who agreed (G25)" />
           <div className="flex flex-col gap-4 sm:flex-row">
