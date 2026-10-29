@@ -8,7 +8,25 @@ import { feedBands } from './settings'
 
 // ── Daily entry (P-M · pen attendant) ──────────────────────────────
 
+const daysBetween = (from: string, to: string) => Math.round((Date.parse(to) - Date.parse(from)) / 86_400_000)
+
+/** Bag weight when a feed type doesn't say (the database uses the same fallback). */
 export const BAG_KG = 25
+
+/** Kg in a bag of this feed (feed_types.bag_kg). */
+export const bagKgOf = (catalog: Catalog, feedName: string) => Number(catalog.feedTypes.find((f) => f.name === feedName)?.bag_kg ?? BAG_KG) || BAG_KG
+
+/**
+ * Expected feed for a flock on a day, chosen the way the production_daily view does: the flock's
+ * bird type, its breed's band before a general one, and the band covering its week of age.
+ */
+export function feedTargetFor(catalog: Catalog, flock: { bird_type_id: number; breed: string | null }, week: number) {
+  return (
+    catalog.feedTargets
+      .filter((t) => t.bird_type_id === flock.bird_type_id && (t.breed === null || t.breed === flock.breed) && week >= t.week_from && (t.week_to === null || week <= t.week_to))
+      .sort((a, b) => Number(a.breed === null) - Number(b.breed === null) || b.week_from - a.week_from)[0] ?? null
+  )
+}
 
 export const MEDICATION_MODES = ['Water', 'Feed', 'Injection', 'Spray', 'Eye/nose drop'] as const
 export const MEDICATION_PURPOSES = ['Treatment', 'Prevention', 'Vaccination', 'Vitamin'] as const
@@ -49,22 +67,27 @@ export const todayISO = () => {
 }
 
 /** What a pen's entry for today starts from: its flock, age, and the birds left after the last entry. */
-export function entryContext(penId: number) {
+export function entryContext(penId: number, catalog?: Catalog, history?: History) {
   const pen = pens.find((p) => p.id === penId)
   const today = pensToday.find((p) => p.id === penId)
   if (!pen || !today) return null
-  // Mock: today is day 4 of the flock's current week.
-  const ageDays = pen.ageDays ?? pen.week * 7 - 3
+  const flock = history?.flocks.find((f) => f.pen_id === penId && f.status === 'active')
+  // Age today from the flock's placement (as the database counts it); week 1 is days 0–6.
+  const ageDays = flock ? daysBetween(flock.placed_on, farmTodayISO()) + flock.age_at_placement_days : (pen.ageDays ?? pen.week * 7 - 3)
+  const week = Math.floor(ageDays / 7) + 1
+  const target = catalog && flock ? feedTargetFor(catalog, flock, week) : null
+  // No targets set up for this bird type: fall back to the built-in bands.
   const bands = feedBands[pen.type === 'Layers' ? 'Layers · Isa Brown' : 'Broilers · Ross 308']
-  const band = bands.find((b) => pen.week >= b.from && (b.to === null || pen.week <= b.to)) ?? bands[bands.length - 1]
+  const band = bands.find((b) => week >= b.from && (b.to === null || week <= b.to)) ?? bands[bands.length - 1]
+  const recommended = target?.recommended_feed_type_id ? catalog?.feedTypes.find((f) => f.id === target.recommended_feed_type_id)?.name : undefined
   return {
     pen,
     type: pen.type as BirdType,
     ageDays,
     /** Birds at the start of today: yesterday's closing count. */
     opening: today.died === null ? today.birds : today.birds + today.died,
-    gramsPerBird: band.grams,
-    feedType: band.feed,
+    gramsPerBird: target ? Number(target.grams_per_bird_day) : band.grams,
+    feedType: recommended ?? band.feed,
     /** Already recorded today in the mock data (before this session). */
     recordedAt: today.died === null ? null : today.entry.label.replace('Recorded ', ''),
   }

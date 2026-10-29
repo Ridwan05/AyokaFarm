@@ -43,7 +43,7 @@ export function AddExpenseModal({ onClose, expense }: { onClose: () => void; exp
   const [paidTouched, setPaidTouched] = useState(editing)
   const [date, setDate] = useState(expense?.date ?? todayISO())
   const [method, setMethod] = useState<(typeof METHODS)[number]>(
-    expense ? LABEL_OF[expense.method] : lastMethod === 'cash' ? 'Cash' : lastMethod === 'pos' ? 'POS' : 'Transfer',
+    expense?.method ? LABEL_OF[expense.method] : lastMethod === 'cash' ? 'Cash' : lastMethod === 'pos' ? 'POS' : 'Transfer',
   )
   const [supplierId, setSupplierId] = useState(expense?.supplierId ?? '')
   const [description, setDescription] = useState(expense?.description ?? '')

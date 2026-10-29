@@ -5,6 +5,8 @@ import { createClient, createSecretClient } from '../../../../lib/supabase/serve
 
 // Staff accounts need Supabase admin rights (the secret key), so these run on the server only.
 // Each one first checks who is calling: the secret key bypasses row-level security.
+// Changes to profiles and pen assignments are made with the caller's own session, so row-level
+// security applies and the audit log records who made them; only login changes use the secret key.
 
 type Result = { ok: true } | { ok: false; error: string }
 
@@ -46,10 +48,11 @@ export async function addStaff(input: { name: string; phone: string; role: strin
 
   const id = data.user.id
   // Set the role here too: Supabase writes app_metadata just after the insert the new-user trigger sees.
-  const { error: profileError } = await admin.from('profiles').update({ role_id: input.role, phone: `+${phone}`, whatsapp_opt_in: input.whatsapp }).eq('id', id)
+  const db = await createClient()
+  const { error: profileError } = await db.from('profiles').update({ role_id: input.role, phone: `+${phone}`, whatsapp_opt_in: input.whatsapp }).eq('id', id)
   if (profileError) return fail(profileError.message)
   if (input.role === 'pen_attendant' && input.pens.length) {
-    const { error: pensError } = await admin.from('staff_pens').insert(input.pens.map((pen_id) => ({ profile_id: id, pen_id })))
+    const { error: pensError } = await db.from('staff_pens').insert(input.pens.map((pen_id) => ({ profile_id: id, pen_id })))
     if (pensError) return fail(pensError.message)
   }
   return { ok: true }
@@ -66,7 +69,8 @@ export async function setStaffActive(profileId: string, active: boolean): Promis
     const { count } = await admin.from('profiles').select('id', { count: 'exact', head: true }).eq('role_id', 'owner').eq('is_active', true)
     if ((count ?? 0) <= 1) return fail('The farm needs at least one active owner.')
   }
-  const { error } = await admin.from('profiles').update({ is_active: active }).eq('id', profileId)
+  const db = await createClient()
+  const { error } = await db.from('profiles').update({ is_active: active }).eq('id', profileId)
   if (error) return fail(error.message)
   // A ban stops their session from refreshing, which signs them out everywhere.
   const { error: banError } = await admin.auth.admin.updateUserById(profileId, { ban_duration: active ? 'none' : '876000h' })
@@ -111,12 +115,13 @@ export async function changeStaffRole(profileId: string, roleId: string): Promis
   // The role lives in both places: app_metadata (read when the account is created) and the profile (used by RLS).
   const { error: authError } = await admin.auth.admin.updateUserById(profileId, { app_metadata: { role: roleId } })
   if (authError) return fail(authError.message)
-  const { error } = await admin.from('profiles').update({ role_id: roleId }).eq('id', profileId)
+  const db = await createClient()
+  const { error } = await db.from('profiles').update({ role_id: roleId }).eq('id', profileId)
   if (error) return fail(error.message)
   // Pen assignments only mean something for roles that work on their own pens.
   const { data: production } = await admin.from('role_permissions').select('can_view').eq('role_id', roleId).eq('module', 'production').maybeSingle()
   if (production?.can_view !== 'own') {
-    const { error: pensError } = await admin.from('staff_pens').delete().eq('profile_id', profileId)
+    const { error: pensError } = await db.from('staff_pens').delete().eq('profile_id', profileId)
     if (pensError) return fail(pensError.message)
   }
   return { ok: true }

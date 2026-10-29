@@ -12,7 +12,7 @@ import { AutoInput, Field, SelectInput, TextInput } from '../components/ui/Form'
 
 import { feedTypes, medications } from '../data/inventory'
 import { staffWithRole, weekdayDayMonth } from '../data/metrics'
-import { BAG_KG, canCorrectEntry, entryContext, formatAge, MEDICATION_MODES, MEDICATION_PURPOSES, savedEntry, todayISO, type MedicationLine } from '../data/production'
+import { bagKgOf, canCorrectEntry, entryContext, formatAge, MEDICATION_MODES, MEDICATION_PURPOSES, savedEntry, todayISO, type MedicationLine } from '../data/production'
 import { farm, farmTodayISO } from '../data/session'
 import { useCurrentUser } from '../data/sessionContext'
 import { useTrade } from '../data/tradeContext'
@@ -99,7 +99,7 @@ function EntryScreen() {
   const router = useRouter()
   const user = useCurrentUser()
   const { productionRecords, addProductionRecord, updateProductionRecord, stockOf, history, catalog } = useTrade()
-  const ctx = entryContext(penId)
+  const ctx = entryContext(penId, catalog, history)
   const found = editId ? savedEntry(history, catalog, editId) : null
   const editing = found && found.row.penId === penId ? found : null
 
@@ -183,7 +183,9 @@ function EntryScreen() {
   const mortalityPct = died !== null && opening ? (died / opening) * 100 : 0
   const overMortality = mortalityPct > farmSettings.mortalityAlertPct
   const bags = num(draft.feedBags)
-  const feedKg = (bags ?? 0) * BAG_KG
+  // Each feed type has its own bag weight (Settings → Feed); the saved figure uses the same.
+  const bagKg = bagKgOf(catalog, draft.feedType)
+  const feedKg = (bags ?? 0) * bagKg
   const expectedKg = (closing * ctx.gramsPerBird) / 1000
   const variance = bags !== null && expectedKg ? ((feedKg - expectedKg) / expectedKg) * 100 : null
   const varianceOff = variance !== null && Math.abs(variance) > farmSettings.feedVariancePct
@@ -322,7 +324,7 @@ function EntryScreen() {
         </Card>
 
         <Card>
-          <CardHeader title="Feed" meta={<span className="type-body-sm text-fg-tertiary">{BAG_KG} kg bags</span>} />
+          <CardHeader title="Feed" meta={<span className="type-body-sm text-fg-tertiary">{bagKg} kg bags</span>} />
           <div className="grid grid-cols-1 gap-4 px-5 pb-5 sm:grid-cols-2">
             <Field label="Feed type" hint={`Recommended at this age: ${ctx.feedType}`}>
               {(id) => (

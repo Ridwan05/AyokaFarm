@@ -32,6 +32,38 @@ export type Database = {
         }
         Relationships: []
       }
+      alert_marks: {
+        Row: {
+          alert_id: string
+          marked_at: string
+          marked_by: string
+          note: string | null
+          status: string
+        }
+        Insert: {
+          alert_id: string
+          marked_at?: string
+          marked_by?: string
+          note?: string | null
+          status: string
+        }
+        Update: {
+          alert_id?: string
+          marked_at?: string
+          marked_by?: string
+          note?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alert_marks_marked_by_fkey"
+            columns: ["marked_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_log: {
         Row: {
           action: string
@@ -1641,6 +1673,107 @@ export type Database = {
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reorder_requests: {
+        Row: {
+          created_at: string
+          decided_at: string | null
+          decided_by: string | null
+          feed_type_id: number | null
+          id: number
+          item: Database["public"]["Enums"]["stock_item"]
+          medication_id: number | null
+          needed_by: string | null
+          note: string | null
+          purchase_id: number | null
+          quantity: number
+          requested_by: string
+          status: string
+          unit: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          feed_type_id?: number | null
+          id?: never
+          item: Database["public"]["Enums"]["stock_item"]
+          medication_id?: number | null
+          needed_by?: string | null
+          note?: string | null
+          purchase_id?: number | null
+          quantity: number
+          requested_by?: string
+          status?: string
+          unit: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
+          feed_type_id?: number | null
+          id?: never
+          item?: Database["public"]["Enums"]["stock_item"]
+          medication_id?: number | null
+          needed_by?: string | null
+          note?: string | null
+          purchase_id?: number | null
+          quantity?: number
+          requested_by?: string
+          status?: string
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reorder_requests_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reorder_requests_feed_type_id_fkey"
+            columns: ["feed_type_id"]
+            isOneToOne: false
+            referencedRelation: "feed_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reorder_requests_medication_id_fkey"
+            columns: ["medication_id"]
+            isOneToOne: false
+            referencedRelation: "medications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reorder_requests_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "bird_stock"
+            referencedColumns: ["purchase_id"]
+          },
+          {
+            foreignKeyName: "reorder_requests_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "medication_batches"
+            referencedColumns: ["purchase_id"]
+          },
+          {
+            foreignKeyName: "reorder_requests_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reorder_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]

@@ -612,7 +612,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
     supplierId: e.supplier_id ? String(e.supplier_id) : null,
     amount: Number(e.amount),
     amountPaid: Number(e.amount_paid),
-    method: method(e.payment_method) ?? 'cash',
+    method: method(e.payment_method),
     receipt: Boolean(e.receipt_path),
     receiptPath: e.receipt_path,
     addedBy: first(profileName.get(e.recorded_by)),

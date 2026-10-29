@@ -15,6 +15,7 @@ import { useCurrentUser } from '../data/sessionContext'
 import { useTrade } from '../data/tradeContext'
 import { formatLongDate, formatNumber, greeting } from '../lib/format'
 import { PendingCounts } from '../features/stock/PendingCounts'
+import { ReorderRequests } from '../features/stock/ReorderRequests'
 import { farmSettings } from '../data/farmSettings'
 
 /** Store Keeper's home: what's in the store, what's arriving, and the weekly count. */
@@ -46,6 +47,7 @@ export default function StockHome() {
         description={`${orders.length} ${orders.length === 1 ? 'delivery' : 'deliveries'} on the way · ${low} ${low === 1 ? 'item' : 'items'} low · ${countNote}`}
       />
       <PendingCounts />
+      <ReorderRequests canDecide={false} />
 
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

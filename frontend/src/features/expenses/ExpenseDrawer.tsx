@@ -59,7 +59,7 @@ export function ExpenseDrawer({ expense: e, onClose, onEdit, onVoid }: { expense
       <DetailSection title="Expense">
         <KeyValueRow label="What for">{e.description}</KeyValueRow>
         <KeyValueRow label="Paid">
-          {naira(e.amountPaid ?? e.amount)} · {e.method}
+          {naira(e.amountPaid ?? e.amount)} · {e.method ?? 'paid per payslip'}
         </KeyValueRow>
         {unpaid > 0 && <KeyValueRow label="Owed to the supplier">{naira(unpaid)}</KeyValueRow>}
         <KeyValueRow label="Supplier">{supplier?.name ?? '—'}</KeyValueRow>

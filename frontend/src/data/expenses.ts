@@ -16,7 +16,8 @@ export type Expense = {
   amount: number
   /** Paid so far; a supplier expense paid in part is owed to that supplier. Defaults to the full amount. */
   amountPaid?: number
-  method: PaymentMethod
+  /** How it was paid; none for the posted payroll expense (each payslip records its own payment). */
+  method?: PaymentMethod
   receipt: boolean
   /** Storage path of the receipt photo or PDF (bucket "receipts"). */
   receiptPath?: string | null

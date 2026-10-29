@@ -13,6 +13,9 @@ import type { PurchaseKind } from '../../data/purchases'
 import { useTrade } from '../../data/tradeContext'
 import { PurchaseOverlays, type PurchaseOverlay } from '../../features/purchases/PurchaseOverlays'
 import { PurchasesTable } from '../../features/purchases/PurchasesTable'
+import { ReorderRequests } from '../../features/stock/ReorderRequests'
+import { accessOf } from '../../lib/access'
+import { useCurrentUser } from '../../data/sessionContext'
 import { PURCHASE_CSV_HEADER, purchaseCsvRows } from '../../features/purchases/purchaseView'
 import { downloadCsv } from '../../lib/export'
 import { formatDayMon } from '../../lib/format'
@@ -34,6 +37,9 @@ export default function Purchases() {
   const trade = useTrade()
   const { purchases } = trade
   const [overlay, setOverlay] = useState<PurchaseOverlay>(null)
+  const user = useCurrentUser()
+  // Whoever can buy for the whole farm decides reorder requests (the database checks the same).
+  const buyer = accessOf(user, 'purchases', 'add') === 'all'
 
   const rows = kind ? purchases.filter((p) => p.kind === kind) : purchases.slice(0, RECENT)
   const oldest = rows[rows.length - 1]
@@ -67,6 +73,8 @@ export default function Purchases() {
           <KpiCard key={kpi.label} kpi={kpi} />
         ))}
       </div>
+
+      {buyer && (!kind || kind !== 'Birds') && <ReorderRequests canDecide onRecordPurchase={() => setOverlay({ kind: 'new' })} />}
 
       <Card>
         <CardHeader

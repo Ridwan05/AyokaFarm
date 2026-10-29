@@ -1,7 +1,7 @@
 import type { AlertKind, AlertTone } from '../features/alerts/AlertRow'
 
 // Alerts are calculated from the records (derivedAlerts.ts). Acknowledging or resolving one is
-// remembered on this device only (localStorage) — there is no alerts table.
+// shared with everyone through alert_marks (data/alertMarks.ts), keyed by the alert's id.
 
 export type AlertStatus = 'new' | 'acknowledged' | 'resolved'
 
@@ -30,36 +30,12 @@ export const alertTypes: Record<AlertKind, string> = {
   'missing-entry': 'Missing entry',
 }
 
-/** What this device remembers about an alert. */
+/** Shared status of an alert (alert_marks): who acknowledged or resolved it, and when. */
 export type AlertMark = {
   status: 'acknowledged' | 'resolved'
+  /** First name of whoever marked it. */
   by: string
   /** ISO timestamp */
   at: string
   note?: string
-  title: string
-  where: string
-  raised: string
-}
-
-const KEY = 'ayokafarm.alerts.v1'
-
-export function readMarks(): Record<string, AlertMark> {
-  try {
-    const raw = localStorage.getItem(KEY)
-    return raw ? (JSON.parse(raw) as Record<string, AlertMark>) : {}
-  } catch {
-    return {}
-  }
-}
-
-export function writeMarks(marks: Record<string, AlertMark>) {
-  try {
-    // Forget marks older than 60 days so the list doesn't grow forever.
-    const cutoff = Date.now() - 60 * 86_400_000
-    const kept = Object.fromEntries(Object.entries(marks).filter(([, m]) => Date.parse(m.at) >= cutoff))
-    localStorage.setItem(KEY, JSON.stringify(kept))
-  } catch {
-    // Private windows or blocked storage: the mark lasts until the page reloads.
-  }
 }

@@ -98,7 +98,7 @@ export default function Expenses() {
                 downloadCsv(
                   'expenses',
                   ['Ref', 'Date', 'Category', 'Description', 'Pen', 'Supplier', 'Amount (₦)', 'Paid (₦)', 'Method', 'Receipt', 'Added by'],
-                  rows.map((e) => [e.id, e.date, e.category, e.description, penName(e.pen), suppliers.find((s) => s.id === e.supplierId)?.name ?? '', e.amount, e.amountPaid ?? e.amount, e.method, e.receipt ? 'Yes' : 'No', e.addedBy]),
+                  rows.map((e) => [e.id, e.date, e.category, e.description, penName(e.pen), suppliers.find((s) => s.id === e.supplierId)?.name ?? '', e.amount, e.amountPaid ?? e.amount, e.method ?? 'Payroll (per payslip)', e.receipt ? 'Yes' : 'No', e.addedBy]),
                 )
               }
             >
