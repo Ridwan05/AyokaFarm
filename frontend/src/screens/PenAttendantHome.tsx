@@ -8,7 +8,7 @@ import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card, CardHeader } from '../components/ui/Card'
 import { Presence } from '../components/ui/Overlay'
-import { FEED_DEVIATION_WARN_PCT, pensToday } from '../data/dashboard'
+import { pensToday } from '../data/dashboard'
 import { pens } from '../data/pens'
 import { withTodaysRecord } from '../data/production'
 import { farm } from '../data/session'
@@ -19,6 +19,7 @@ import { AddExpenseModal } from '../features/expenses/AddExpenseModal'
 import { canSeePen } from '../lib/access'
 import { cn } from '../lib/cn'
 import { formatLongDate, formatNaira, formatNumber, formatSignedPct, greeting } from '../lib/format'
+import { farmSettings } from '../data/farmSettings'
 
 /** P-M1 · A pen attendant's home: their pens, and what still needs recording today. */
 export default function PenAttendantHome() {
@@ -82,7 +83,7 @@ export default function PenAttendantHome() {
                   <Stat
                     label="Feed vs exp."
                     value={p.feedVsExpected === null ? '—' : formatSignedPct(p.feedVsExpected)}
-                    warn={p.feedVsExpected !== null && Math.abs(p.feedVsExpected) > FEED_DEVIATION_WARN_PCT}
+                    warn={p.feedVsExpected !== null && Math.abs(p.feedVsExpected) > farmSettings.feedVariancePct}
                   />
                   <Stat label="Laying" value={p.layingRate === null ? '—' : `${p.layingRate.toFixed(1)}%`} />
                 </dl>

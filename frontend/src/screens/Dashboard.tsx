@@ -13,20 +13,7 @@ import { RowMenu } from '../components/ui/Menu'
 import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Select } from '../components/ui/Select'
 import { NumberCell, PrimaryCell, Table, type Column } from '../components/ui/Table'
-import {
-  alerts,
-  feedSeries,
-  feedStock,
-  FEED_COVER_FULL_DAYS,
-  FEED_COVER_WARN_DAYS,
-  FEED_DEVIATION_WARN_PCT,
-  kpis,
-  MORTALITY_SPIKE_BIRDS,
-  pensToday,
-  receivables,
-  type Alert,
-  type PenToday,
-} from '../data/dashboard'
+import { alerts, feedSeries, feedStock, FEED_COVER_FULL_DAYS, kpis, MORTALITY_SPIKE_BIRDS, pensToday, receivables, type Alert, type PenToday } from '../data/dashboard'
 import { farm } from '../data/session'
 import { useCurrentUser } from '../data/sessionContext'
 import { AlertRow } from '../features/alerts/AlertRow'
@@ -34,6 +21,7 @@ import { entryAlerts, withTodaysRecord } from '../data/production'
 import { useTrade } from '../data/tradeContext'
 import { cn } from '../lib/cn'
 import { formatLongDate, formatNaira, formatNumber, formatSignedPct, greeting } from '../lib/format'
+import { farmSettings } from '../data/farmSettings'
 
 const RANGES = ['Today', '7 days', '30 days', 'Custom'] as const
 const PEN_FILTERS = ['All pens', 'Pen 1', 'Pen 2', 'Pen 3', 'Pen 4', 'Pen 5', 'Pen 6'] as const
@@ -115,7 +103,7 @@ function FeedStock() {
       <CardHeader title="Feed stock" action={{ label: 'Inventory', to: '/inventory' }} />
       <div className="flex flex-col gap-5 px-5 pb-5">
         {feedStock.map((feed) => {
-          const low = feed.days !== null && feed.days <= FEED_COVER_WARN_DAYS
+          const low = feed.days !== null && feed.days <= farmSettings.lowStockDays
           const pct = feed.days === null ? 0 : Math.min(feed.days / FEED_COVER_FULL_DAYS, 1) * 100
           return (
             <div key={feed.name} className="flex flex-col gap-2">
@@ -263,7 +251,7 @@ const penColumns: Column<PenToday>[] = [
     width: 160,
     render: (p) =>
       p.feedVsExpected === null ? dash : (
-        <NumberCell tone={Math.abs(p.feedVsExpected) >= FEED_DEVIATION_WARN_PCT ? 'warning' : 'default'}>
+        <NumberCell tone={Math.abs(p.feedVsExpected) >= farmSettings.feedVariancePct ? 'warning' : 'default'}>
           {formatSignedPct(p.feedVsExpected)}
         </NumberCell>
       ),

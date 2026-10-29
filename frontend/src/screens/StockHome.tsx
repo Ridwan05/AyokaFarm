@@ -6,11 +6,12 @@ import type { ReactNode } from 'react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Badge } from '../components/ui/Badge'
 import { Card, CardHeader } from '../components/ui/Card'
-import { feedTypes, LOW_COVER_DAYS, medications, medicationStatus } from '../data/inventory'
+import { feedTypes, medications, medicationStatus } from '../data/inventory'
 import { farm } from '../data/session'
 import { useCurrentUser } from '../data/sessionContext'
 import { useTrade } from '../data/tradeContext'
 import { formatLongDate, formatNumber, greeting } from '../lib/format'
+import { farmSettings } from '../data/farmSettings'
 
 /** Store Keeper's home: what's in the store, what's arriving, and the weekly count. */
 export default function StockHome() {
@@ -21,7 +22,7 @@ export default function StockHome() {
     return { ...f, bags, daysOfCover: f.bagsPerDay ? Math.floor(bags / f.bagsPerDay) : null }
   })
   const meds = medications.map((m) => ({ ...m, stock: stockOf(m.name, m.stock) })).map((m) => ({ ...m, status: medicationStatus(m) }))
-  const lowFeed = feed.filter((f) => f.daysOfCover !== null && f.daysOfCover <= LOW_COVER_DAYS).length
+  const lowFeed = feed.filter((f) => f.daysOfCover !== null && f.daysOfCover <= farmSettings.lowStockDays).length
   const lowMeds = meds.filter((m) => m.status.tone === 'warning').length
   const low = lowFeed + lowMeds
 
@@ -43,7 +44,7 @@ export default function StockHome() {
         <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
           {feed.map((f) => {
             const inUse = f.daysOfCover !== null
-            const low = inUse && f.daysOfCover! <= LOW_COVER_DAYS
+            const low = inUse && f.daysOfCover! <= farmSettings.lowStockDays
             return (
               <Link key={f.name} href="/inventory/feed" className="flex flex-col items-start gap-2 rounded-xl border border-line bg-surface p-4 transition-colors duration-150 hover:border-line-strong">
                 <span className="type-label-md text-fg-secondary">{f.name}</span>

@@ -9,7 +9,7 @@ import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card, CardHeader } from '../../components/ui/Card'
 import { NumberCell, Table, TextCell, type Column } from '../../components/ui/Table'
-import { feedTypes, LOW_COVER_DAYS, reorderSuggestion, withBalances, type Balanced, type FeedType, type Movement } from '../../data/inventory'
+import { feedTypes, reorderSuggestion, withBalances, type Balanced, type FeedType, type Movement } from '../../data/inventory'
 import { useToast } from '../../components/ui/toastContext'
 import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
@@ -20,6 +20,7 @@ import { cn } from '../../lib/cn'
 import { formatNumber } from '../../lib/format'
 import { InventoryTabs, LedgerNote } from './InventoryTabs'
 import { Presence } from '../../components/ui/Overlay'
+import { farmSettings } from '../../data/farmSettings'
 
 const dash = <NumberCell tone="muted">—</NumberCell>
 
@@ -130,7 +131,7 @@ export default function FeedStock() {
 
 function FeedCard({ feed, selected, onSelect }: { feed: FeedType; selected: boolean; onSelect: () => void }) {
   const inUse = feed.daysOfCover !== null
-  const low = inUse && feed.daysOfCover! <= LOW_COVER_DAYS
+  const low = inUse && feed.daysOfCover! <= farmSettings.lowStockDays
   return (
     <button
       type="button"

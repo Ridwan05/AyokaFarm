@@ -10,9 +10,10 @@ import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { Select } from '../../components/ui/Select'
 import { NumberCell, Table, TextCell, type Column } from '../../components/ui/Table'
 import { ALL_FEED_AVG, FEED_TOLERANCE_PCT, FEED_WATCH_PCT, feedReportKpis, feedTypeLedger, feedVariance, feedVarianceNote, type FeedTypeLedger } from '../../data/reports'
-import { LOW_COVER_DAYS } from '../../data/inventory'
+
 import { formatNumber, formatSignedPct } from '../../lib/format'
 import { ReportHeader } from './ReportHeader'
+import { farmSettings } from '../../data/farmSettings'
 
 const RANGES = ['7 days', '30 days', 'This month', 'Custom'] as const
 const dash = <NumberCell tone="muted">—</NumberCell>
@@ -33,7 +34,7 @@ const columns: Column<FeedTypeLedger>[] = [
     header: 'Cover',
     align: 'right',
     width: 88,
-    render: (f) => (f.cover === null ? <TextCell tone="tertiary">not in use</TextCell> : <NumberCell tone={f.cover <= LOW_COVER_DAYS ? 'warning' : 'default'}>{f.cover} days</NumberCell>),
+    render: (f) => (f.cover === null ? <TextCell tone="tertiary">not in use</TextCell> : <NumberCell tone={f.cover <= farmSettings.lowStockDays ? 'warning' : 'default'}>{f.cover} days</NumberCell>),
   },
 ]
 

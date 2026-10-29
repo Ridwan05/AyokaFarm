@@ -9,25 +9,16 @@ import { Alert } from '../components/ui/Alert'
 import { Button } from '../components/ui/Button'
 import { Card, CardHeader } from '../components/ui/Card'
 import { AutoInput, Field, SelectInput, TextInput } from '../components/ui/Form'
-import { FEED_DEVIATION_WARN_PCT } from '../data/dashboard'
+
 import { feedTypes, medications } from '../data/inventory'
-import {
-  BAG_KG,
-  EGGS_PER_CRATE,
-  entryContext,
-  formatAge,
-  MEDICATION_MODES,
-  MEDICATION_PURPOSES,
-  MORTALITY_ALERT_PCT,
-  todayISO,
-  type MedicationLine,
-} from '../data/production'
+import { BAG_KG, entryContext, formatAge, MEDICATION_MODES, MEDICATION_PURPOSES, todayISO, type MedicationLine } from '../data/production'
 import { farm } from '../data/session'
 import { useCurrentUser } from '../data/sessionContext'
 import { useTrade } from '../data/tradeContext'
 import { isAttendant } from '../lib/access'
 import { cn } from '../lib/cn'
 import { formatNumber, formatShortDate, formatSignedPct } from '../lib/format'
+import { farmSettings } from '../data/farmSettings'
 
 type Draft = {
   died: string
@@ -128,13 +119,13 @@ export default function ProductionEntry() {
   const died = num(draft.died)
   const closing = ctx.opening - (died ?? 0)
   const mortalityPct = died !== null && ctx.opening ? (died / ctx.opening) * 100 : 0
-  const overMortality = mortalityPct > MORTALITY_ALERT_PCT
+  const overMortality = mortalityPct > farmSettings.mortalityAlertPct
   const bags = num(draft.feedBags)
   const feedKg = (bags ?? 0) * BAG_KG
   const expectedKg = (closing * ctx.gramsPerBird) / 1000
   const variance = bags !== null && expectedKg ? ((feedKg - expectedKg) / expectedKg) * 100 : null
-  const varianceOff = variance !== null && Math.abs(variance) > FEED_DEVIATION_WARN_PCT
-  const eggs = layers ? (num(draft.crates) ?? 0) * EGGS_PER_CRATE + (num(draft.pieces) ?? 0) : null
+  const varianceOff = variance !== null && Math.abs(variance) > farmSettings.feedVariancePct
+  const eggs = layers ? (num(draft.crates) ?? 0) * farmSettings.eggsPerCrate + (num(draft.pieces) ?? 0) : null
   const cracked = layers ? num(draft.cracked) ?? 0 : null
   const layingRate = eggs !== null && closing ? (eggs / closing) * 100 : null
 
@@ -245,7 +236,7 @@ export default function ProductionEntry() {
           </div>
           {overMortality && (
             <div className="px-5 pb-5">
-              <Alert tone="danger" compact title={`${mortalityPct.toFixed(1)}% died — above the ${MORTALITY_ALERT_PCT}% alert level`}>
+              <Alert tone="danger" compact title={`${mortalityPct.toFixed(1)}% died — above the ${farmSettings.mortalityAlertPct}% alert level`}>
                 Saving tells Emeka and Adeola straight away. Add a note to the vet if you see signs of illness.
               </Alert>
             </div>
@@ -283,7 +274,7 @@ export default function ProductionEntry() {
             <Field
               label="vs expected"
               auto
-              hint={varianceOff ? `Outside ±${FEED_DEVIATION_WARN_PCT}% — check for spills or a wrong count` : `Within ±${FEED_DEVIATION_WARN_PCT}% is normal`}
+              hint={varianceOff ? `Outside ±${farmSettings.feedVariancePct}% — check for spills or a wrong count` : `Within ±${farmSettings.feedVariancePct}% is normal`}
             >
               {(id) => (
                 <div className={cn('rounded-md', varianceOff && '[&_output]:text-fg-warning')}>
@@ -296,7 +287,7 @@ export default function ProductionEntry() {
 
         {layers && (
           <Card>
-            <CardHeader title="Eggs" meta={<span className="type-body-sm text-fg-tertiary">{EGGS_PER_CRATE} to a crate</span>} />
+            <CardHeader title="Eggs" meta={<span className="type-body-sm text-fg-tertiary">{farmSettings.eggsPerCrate} to a crate</span>} />
             <div className="grid grid-cols-2 gap-4 px-5 pb-5 sm:grid-cols-4">
               <Field label="Crates">
                 {(id) => <TextInput id={id} inputMode="numeric" pattern="[0-9]*" value={draft.crates} onChange={(e) => set('crates', e.target.value.replace(/\D/g, ''))} />}

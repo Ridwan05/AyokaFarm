@@ -13,23 +13,15 @@ import { KpiCard } from '../components/ui/KpiCard'
 import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Select } from '../components/ui/Select'
 import { NumberCell, PrimaryCell, Table, TextCell, type Column } from '../components/ui/Table'
-import {
-  EGGS_PER_CRATE,
-  missingEntry,
-  penEntries as allPenEntries,
-  productionDays,
-  productionKpis,
-  productionTotals,
-  type PenEntry,
-  type ProductionDay,
-} from '../data/production'
-import { FEED_DEVIATION_WARN_PCT, pensToday, type PenToday } from '../data/dashboard'
+import { missingEntry, penEntries as allPenEntries, productionDays, productionKpis, productionTotals, type PenEntry, type ProductionDay } from '../data/production'
+import { pensToday, type PenToday } from '../data/dashboard'
 import { withTodaysRecord } from '../data/production'
 import { useCurrentUser } from '../data/sessionContext'
 import { useTrade } from '../data/tradeContext'
 import { canRecordProduction, canSeePen, isAttendant } from '../lib/access'
 import { farm } from '../data/session'
 import { formatCrates, formatNumber, formatShortDate, formatSignedPct, parseISODate } from '../lib/format'
+import { farmSettings } from '../data/farmSettings'
 
 const PERIODS = ['Day', 'Week', 'Month'] as const
 const PEN_FILTERS = ['All pens', 'Layers', 'Broilers'] as const
@@ -68,7 +60,7 @@ const columns: Column<PenEntry>[] = [
     width: 112,
     render: (p) =>
       p.entry ? (
-        <NumberCell tone={Math.abs(p.entry.feedVsExpected) >= FEED_DEVIATION_WARN_PCT ? 'warning' : 'default'}>
+        <NumberCell tone={Math.abs(p.entry.feedVsExpected) >= farmSettings.feedVariancePct ? 'warning' : 'default'}>
           {formatSignedPct(p.entry.feedVsExpected)}
         </NumberCell>
       ) : (
@@ -80,7 +72,7 @@ const columns: Column<PenEntry>[] = [
     header: 'Eggs',
     align: 'right',
     width: 112,
-    render: (p) => (p.entry?.eggs != null ? <NumberCell>{formatCrates(p.entry.eggs, EGGS_PER_CRATE)}</NumberCell> : dash),
+    render: (p) => (p.entry?.eggs != null ? <NumberCell>{formatCrates(p.entry.eggs, farmSettings.eggsPerCrate)}</NumberCell> : dash),
   },
   {
     key: 'laying',
@@ -123,8 +115,8 @@ export default function Production() {
   const died = entries.reduce((n, e) => n + e.died, 0)
   const feed = entries.reduce((n, e) => n + e.feedBags, 0)
   const eggs = entries.reduce((n, e) => n + (e.eggs ?? 0), 0)
-  const crates = Math.floor(eggs / EGGS_PER_CRATE)
-  const loose = eggs % EGGS_PER_CRATE
+  const crates = Math.floor(eggs / farmSettings.eggsPerCrate)
+  const loose = eggs % farmSettings.eggsPerCrate
 
   return (
     <>
