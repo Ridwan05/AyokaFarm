@@ -1,7 +1,7 @@
 import { Phone } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Button } from '../../components/ui/Button'
-import { Checkbox, Field, SelectInput, TextInput } from '../../components/ui/Form'
+import { Field, SelectInput, TextInput } from '../../components/ui/Form'
 import { Modal } from '../../components/ui/Overlay'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { useToast } from '../../components/ui/toastContext'
@@ -26,7 +26,6 @@ export function AddSupplierModal({ onClose }: { onClose: () => void }) {
   const [phone, setPhone] = useState('')
   const [terms, setTerms] = useState('7')
   const [opening, setOpening] = useState('0')
-  const [whatsapp, setWhatsapp] = useState(true)
   const [submitted, setSubmitted] = useState(false)
   const errors = { name: name.trim() ? undefined : 'Enter the business name' }
 
@@ -43,7 +42,7 @@ export function AddSupplierModal({ onClose }: { onClose: () => void }) {
       initials: trimmed.split(/\s+/).slice(0, 2).map((w) => w[0].toUpperCase()).join(''),
       kind,
       supplies: '—',
-      since: 'Oct 2026',
+      since: new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric' }).format(new Date()),
       phone: digits.length >= 8 ? `${digits.slice(0, 4)} ••• ${digits.slice(-4)}` : '—',
       termsDays: Number(terms),
       lastPurchase: '—',
@@ -101,7 +100,6 @@ export function AddSupplierModal({ onClose }: { onClose: () => void }) {
             />
           )}
         </Field>
-        <Checkbox label="Send purchase notes on WhatsApp" checked={whatsapp} onChange={setWhatsapp} />
       </form>
     </Modal>
   )

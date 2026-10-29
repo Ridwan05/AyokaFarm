@@ -7,6 +7,7 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { Badge } from '../components/ui/Badge'
 import { Card, CardHeader } from '../components/ui/Card'
 import { feedTypes, medications, medicationStatus } from '../data/inventory'
+import { daysFrom, todayISO } from '../data/metrics'
 import { farm } from '../data/session'
 import { useCurrentUser } from '../data/sessionContext'
 import { useTrade } from '../data/tradeContext'
@@ -16,7 +17,11 @@ import { farmSettings } from '../data/farmSettings'
 /** Store Keeper's home: what's in the store, what's arriving, and the weekly count. */
 export default function StockHome() {
   const user = useCurrentUser()
-  const { orders, suppliers, stockOf } = useTrade()
+  const { orders, suppliers, stockOf, history, catalog } = useTrade()
+  // Last count: the latest recount adjustment.
+  const recount = catalog.reasons.find((r) => r.name === 'Recount')?.id
+  const lastCount = history.adjustments.find((a) => !a.is_opening && a.reason_id === recount)?.adjusted_on
+  const countNote = lastCount ? `last count ${daysFrom(lastCount, todayISO())} days ago` : 'no count recorded yet'
   const feed = feedTypes.map((f) => {
     const bags = stockOf(f.name, f.bags)
     return { ...f, bags, daysOfCover: f.bagsPerDay ? Math.floor(bags / f.bagsPerDay) : null }
@@ -31,7 +36,7 @@ export default function StockHome() {
       <PageHeader
         eyebrow={formatLongDate(farm.today)}
         title={`${greeting(farm.today)}, ${user.name.split(' ')[0]}`}
-        description={`${orders.length} ${orders.length === 1 ? 'delivery' : 'deliveries'} on the way · ${low} ${low === 1 ? 'item' : 'items'} low · weekly count due today`}
+        description={`${orders.length} ${orders.length === 1 ? 'delivery' : 'deliveries'} on the way · ${low} ${low === 1 ? 'item' : 'items'} low · ${countNote}`}
       />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

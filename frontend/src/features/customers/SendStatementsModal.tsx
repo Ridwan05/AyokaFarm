@@ -4,6 +4,8 @@ import { Modal } from '../../components/ui/Overlay'
 import { useToast } from '../../components/ui/toastContext'
 import { useTrade } from '../../data/tradeContext'
 import { cn } from '../../lib/cn'
+import { dayMonth, todayISO, weekdayDayMonth } from '../../data/metrics'
+import { farmSettings } from '../../data/farmSettings'
 import { formatNumber } from '../../lib/format'
 import { oldestDays } from './customerView'
 
@@ -32,7 +34,7 @@ export function SendStatementsModal({ onClose }: { onClose: () => void }) {
       open
       onClose={onClose}
       title="Send statements on WhatsApp"
-      subtitle="Each customer gets their running balance as a PDF · Fri 09 Oct"
+      subtitle={`WhatsApp isn’t connected yet — print or share each PDF for now · ${weekdayDayMonth(todayISO())}`}
       footer={
         <>
           <Button size="lg" className="flex-1" onClick={onClose}>
@@ -44,11 +46,10 @@ export function SendStatementsModal({ onClose }: { onClose: () => void }) {
             className="flex-1"
             disabled={selected.size === 0}
             onClick={() => {
-              toast(`${selected.size} statements sent on WhatsApp`)
-              onClose()
+              toast('WhatsApp isn’t connected yet. Use Print next to each customer to open their statement PDF.')
             }}
           >
-            Send {selected.size} statements
+            Send {selected.size} on WhatsApp
           </Button>
         </>
       }
@@ -66,6 +67,9 @@ export function SendStatementsModal({ onClose }: { onClose: () => void }) {
                 </span>
               </span>
               <span className="type-numeric-md text-fg-primary">₦{formatNumber(x.balance)}</span>
+              <button type="button" onClick={() => window.open(`/print/statement/customer/${x.c.id}`, '_blank')} className="cursor-pointer type-label-md text-fg-brand underline underline-offset-2">
+                Print
+              </button>
             </label>
           ))}
         </section>
@@ -80,7 +84,7 @@ export function SendStatementsModal({ onClose }: { onClose: () => void }) {
                   <span className="type-body-sm text-fg-tertiary">Print or hand over a PDF instead</span>
                 </span>
                 <span className="type-numeric-md text-fg-secondary">₦{formatNumber(x.balance)}</span>
-                <button type="button" onClick={() => toast(`${x.c.short} statement ready to print`)} className="cursor-pointer type-label-md text-fg-brand underline underline-offset-2">
+                <button type="button" onClick={() => window.open(`/print/statement/customer/${x.c.id}`, '_blank')} className="cursor-pointer type-label-md text-fg-brand underline underline-offset-2">
                   Print
                 </button>
               </div>
@@ -91,9 +95,9 @@ export function SendStatementsModal({ onClose }: { onClose: () => void }) {
           <div className="rounded-lg bg-subtle px-3 py-3">
             <p className="type-overline text-fg-tertiary">Message preview</p>
             <p className="type-body-md text-fg-primary">
-              Good afternoon, {first.c.short}. Here is your AyokaFarm statement to 09 Oct. Balance owed: ₦{formatNumber(first.balance)}. Thank you — AyokaFarm.
+              Good afternoon, {first.c.short}. Here is your {farmSettings.farmName} statement to {dayMonth(todayISO())}. Balance owed: ₦{formatNumber(first.balance)}. Thank you — {farmSettings.farmName}.
             </p>
-            <p className="type-body-sm text-fg-tertiary">PDF attached · statement 01 Jul – 09 Oct 2026</p>
+            <p className="type-body-sm text-fg-tertiary">PDF attached · statement since go-live to {dayMonth(todayISO())} {todayISO().slice(0, 4)}</p>
           </div>
         )}
       </div>

@@ -6,7 +6,8 @@ import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { Drawer } from '../../components/ui/Overlay'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { useToast } from '../../components/ui/toastContext'
-import { flockDefaults, pens, type FlockKind } from '../../data/pens'
+import { pens, type FlockKind } from '../../data/pens'
+import type { Catalog, History } from '../../data/remote'
 import { farmTodayISO } from '../../data/session'
 import { useTrade } from '../../data/tradeContext'
 import { formatNumber, formatShortDate, parseISODate } from '../../lib/format'
@@ -16,21 +17,38 @@ type Props = { open: boolean; onClose: () => void }
 const KINDS = ['Broilers', 'Layers', 'Point-of-lay'] as const
 /** Point-of-lay pullets arrive at about 18 weeks. */
 const AGE_AT_PLACEMENT: Record<FlockKind, number> = { Broilers: 0, Layers: 0, 'Point-of-lay': 126 }
+const BREED: Record<FlockKind, string> = { Broilers: 'Ross 308', Layers: 'Isa Brown', 'Point-of-lay': 'Isa Brown' }
+
+/** Next code in the farm's series (B-/L- plus the highest number so far + 1), feed from the feed targets at the starting age. */
+function flockDefaults(kind: FlockKind, history: History, catalog: Catalog) {
+  const prefix = kind === 'Broilers' ? 'B-' : 'L-'
+  const top = Math.max(0, ...history.flocks.filter((f) => f.code.startsWith(prefix)).map((f) => Number(f.code.slice(2)) || 0))
+  const bird = catalog.birdTypes.find((b) => b.name === (kind === 'Broilers' ? 'Broiler' : 'Layer'))
+  const week = Math.floor(AGE_AT_PLACEMENT[kind] / 7) + 1
+  const band = catalog.feedTargets.find((t) => t.bird_type_id === bird?.id && week >= t.week_from && (t.week_to === null || week <= t.week_to))
+  const feed = catalog.feedTypes.find((x) => x.id === band?.recommended_feed_type_id)?.name
+  return {
+    nextCode: top ? `${prefix}${top + 1}` : `${prefix}0001`,
+    feedPlan: feed ? `${feed} from day 1` : 'No feed target set for this age',
+    day1Grams: band ? Number(band.grams_per_bird_day) : 0,
+    breed: BREED[kind],
+  }
+}
 
 export function PlaceFlockDrawer({ open, onClose }: Props) {
   const toast = useToast()
-  const { placeFlock } = useTrade()
+  const { placeFlock, history, catalog } = useTrade()
   const empty = pens.filter((p) => p.flock === '—')
   const [kind, setKind] = useState<FlockKind>('Broilers')
   const [penId, setPenId] = useState(String(empty[0]?.id ?? ''))
   const [birds, setBirds] = useState('')
-  const [breed, setBreed] = useState(flockDefaults[kind].breed)
+  const [breed, setBreed] = useState(BREED[kind])
   const [code, setCode] = useState('')
   const [date, setDate] = useState(farmTodayISO())
   const [submitted, setSubmitted] = useState(false)
 
   const pen = empty.find((p) => String(p.id) === penId)
-  const defaults = flockDefaults[kind]
+  const defaults = flockDefaults(kind, history, catalog)
   const birdCount = Number(birds.replace(/,/g, '')) || 0
   const day1Kg = (birdCount * defaults.day1Grams) / 1000
   const placed = date ? parseISODate(date) : null
@@ -43,7 +61,7 @@ export function PlaceFlockDrawer({ open, onClose }: Props) {
 
   const changeKind = (k: FlockKind) => {
     setKind(k)
-    setBreed(flockDefaults[k].breed)
+    setBreed(BREED[k])
   }
 
   const submit = async (e: FormEvent) => {

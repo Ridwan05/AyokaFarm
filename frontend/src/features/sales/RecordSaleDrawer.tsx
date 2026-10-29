@@ -9,6 +9,8 @@ import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { useToast } from '../../components/ui/toastContext'
 import { ONE_OFF } from '../../data/customers'
 import { daysBetween } from '../../data/ledger'
+import { dm, nowHM, todayISO, weekdayDayMonth } from '../../data/metrics'
+import { approvers } from '../../data/moneyKpis'
 import { products, type PaymentMethod, type ProductKind } from '../../data/sales'
 import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
@@ -20,7 +22,9 @@ const num = (v: string) => Number(v.replace(/,/g, '')) || 0
 
 export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
   const currentUser = useCurrentUser()
-  const { customers, sales, addSale, customerBalance, customerOpenBills } = useTrade()
+  const trade = useTrade()
+  const { customers, sales, addSale, customerBalance, customerOpenBills } = trade
+  const who = approvers(trade)
   const toast = useToast()
   const [kind, setKind] = useState<ProductKind>('Eggs')
   const kindProducts = products.filter((p) => p.kind === kind)
@@ -63,7 +67,8 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
     const m: PaymentMethod = method === 'POS' ? 'POS' : method === 'Cash' ? 'cash' : 'transfer'
     if (!(await addSale({
       receipt,
-      date: '09/10 15:40',
+      date: `${dm(todayISO())} ${nowHM()}`,
+      iso: todayISO(),
       customerId: customer?.id ?? ONE_OFF.id,
       productId: product.id,
       qty: num(qty),
@@ -72,7 +77,7 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
       method: paidNow && !belowMin ? m : undefined,
       recordedBy: currentUser.name.split(' ')[0],
       pendingApproval: belowMin,
-      history: [{ title: belowMin ? 'Sent for approval' : 'Sale recorded', detail: `By ${currentUser.name.split(' ')[0]}`, time: '15:40' }],
+      history: [{ title: belowMin ? 'Sent for approval' : 'Sale recorded', detail: `By ${currentUser.name.split(' ')[0]}`, time: nowHM() }],
     }))) return
     toast(belowMin ? 'Sale sent for approval' : 'Sale recorded')
     onClose()
@@ -83,7 +88,7 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
       open
       onClose={onClose}
       title="Record a sale"
-      subtitle={`Fri 09/10/2026, 15:40 · recorded by ${currentUser.name.split(' ')[0]}`}
+      subtitle={`${weekdayDayMonth(todayISO())}, ${nowHM()} · recorded by ${currentUser.name.split(' ')[0]}`}
       footer={
         <>
           <Button size="lg" className="flex-1" onClick={onClose}>
@@ -137,7 +142,7 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
           <Field
             label={`Price per ${unit}`}
             className="flex-1"
-            hint={`Minimum ₦${formatNumber(product.minPrice)} · lower needs Emeka`}
+            hint={`Minimum ₦${formatNumber(product.minPrice)} · lower needs ${who.split(' or ')[0]}`}
             error={submitted ? errors.price : undefined}
           >
             {(id) => (
@@ -155,7 +160,7 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
         </div>
         {belowMin && (
           <Alert tone="warning" title={`Below the ₦${formatNumber(product.minPrice)} minimum`}>
-            This sale will wait for Emeka or Adeola to approve it. The receipt is held until then.
+            This sale will wait for {who} to approve it. The receipt is held until then.
           </Alert>
         )}
         <Field label="Total" auto hint={`${formatNumber(num(qty))} ${product.unit} × ₦${formatNumber(num(price))}`}>

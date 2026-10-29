@@ -1,3 +1,5 @@
+import type { Database } from '../lib/supabase/database.types'
+
 export type Role = 'owner' | 'farm-manager' | 'sales-accounts' | 'store-keeper' | 'pen-attendant' | 'pen-attendant-all'
 
 export type User = {
@@ -9,7 +11,14 @@ export type User = {
   roleLabel: string
   /** Pens this person works in. Pen attendants only see these. */
   pens: number[] | 'all'
+  /** What the role allows per module, from role_permissions (Settings → Roles & permissions). */
+  permissions: Permissions
 }
+
+export type AppModule = Database['public']['Enums']['app_module']
+export type AccessLevel = Database['public']['Enums']['access_level']
+export type ModuleAccess = { view: AccessLevel; add: AccessLevel; edit: AccessLevel; delete: AccessLevel }
+export type Permissions = Partial<Record<AppModule, ModuleAccess>>
 
 /** Database role ids use underscores (farm_manager); the app uses dashes (farm-manager). */
 export const roleFromDb = (id: string) => id.replace(/_/g, '-') as Role

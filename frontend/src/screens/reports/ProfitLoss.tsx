@@ -11,149 +11,210 @@ import { KpiCard } from '../../components/ui/KpiCard'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { Select } from '../../components/ui/Select'
 import { NumberCell, PrimaryCell, Table, type Column } from '../../components/ui/Table'
-import { broilerNote, penPL, plKpis, plNote, unitCosts, type PenPL } from '../../data/reports'
-import { formatNumber } from '../../lib/format'
+import { farmSettings } from '../../data/farmSettings'
+import { daysFrom, kpi, naira, nairaKpi, nairaShort, num, penCost, penMoney, period, previous, rowsIn, todayISO, type PenMoney, type PeriodKey } from '../../data/metrics'
+import { salesOfItem } from '../../data/stockMetrics'
+import { useTrade } from '../../data/tradeContext'
+import { downloadCsv } from '../../lib/export'
 import { ReportHeader } from './ReportHeader'
 
-const PERIODS = ['September', 'Q3 2026', 'Year to date'] as const
+/** A flat line for KPIs with no daily trend to show. */
+const FLAT = [0, 0]
+
+const PERIODS = ['This month', 'Last month', 'Quarter', 'Year to date'] as const
+const PERIOD_KEY: Record<(typeof PERIODS)[number], PeriodKey> = { 'This month': 'month', 'Last month': 'last-month', Quarter: 'quarter', 'Year to date': 'ytd' }
 const TYPES = ['Layers', 'Broilers'] as const
 
-const marginOf = (p: PenPL) => p.revenue - p.feed - p.medication - p.birdCost - p.overhead
-const m = (n: number) => `₦ ${n.toFixed(2)}M`
-const signedM = (n: number) => `${n < 0 ? '−' : '+'}₦${Math.abs(n).toFixed(2)}M`
+type Row = PenMoney & { name: string; flock: string; weeks: string; margin: number }
 
-const columns: Column<PenPL>[] = [
-  { key: 'pen', header: 'Pen', render: (p) => <PrimaryCell initials={`P${p.pen}`} title={`Pen ${p.pen} · Layers`} subtitle={`${p.flock} · ${p.weeks}`} /> },
-  { key: 'revenue', header: 'Revenue', align: 'right', width: 120, render: (p) => <NumberCell>{m(p.revenue)}</NumberCell> },
-  { key: 'feed', header: 'Feed used', align: 'right', width: 120, render: (p) => <NumberCell>{m(p.feed)}</NumberCell> },
-  { key: 'med', header: 'Medication', align: 'right', width: 110, render: (p) => <NumberCell>{m(p.medication)}</NumberCell> },
-  { key: 'bird', header: 'Bird cost', align: 'right', width: 110, render: (p) => <NumberCell>{m(p.birdCost)}</NumberCell> },
-  { key: 'overhead', header: 'Overhead', align: 'right', width: 110, render: (p) => <NumberCell>{m(p.overhead)}</NumberCell> },
-  {
-    key: 'margin',
-    header: 'Margin',
-    align: 'right',
-    width: 120,
-    render: (p) => {
-      const v = marginOf(p)
-      return <NumberCell tone={v < 0 ? 'danger' : 'success'}>{v < 0 ? `−₦ ${Math.abs(v).toFixed(2)}M` : m(v)}</NumberCell>
-    },
-  },
+const pct = (a: number, b: number) => (b ? (a / b) * 100 : null)
+const signed = (n: number) => `${n < 0 ? '−' : '+'}${nairaShort(Math.abs(n))}`
+
+const columns: Column<Row>[] = [
+  { key: 'pen', header: 'Pen', render: (p) => <PrimaryCell initials={`P${p.penId}`} title={p.name} subtitle={[p.flock, p.weeks].filter(Boolean).join(' · ')} /> },
+  { key: 'revenue', header: 'Revenue', align: 'right', width: 120, render: (p) => <NumberCell>{nairaShort(p.revenue)}</NumberCell> },
+  { key: 'feed', header: 'Feed used', align: 'right', width: 120, render: (p) => <NumberCell>{nairaShort(p.feed)}</NumberCell> },
+  { key: 'med', header: 'Medication', align: 'right', width: 110, render: (p) => <NumberCell>{nairaShort(p.medication)}</NumberCell> },
+  { key: 'bird', header: 'Bird cost', align: 'right', width: 110, render: (p) => <NumberCell>{nairaShort(p.birds)}</NumberCell> },
+  { key: 'overhead', header: 'Overhead', align: 'right', width: 110, render: (p) => <NumberCell>{nairaShort(p.overhead + p.direct)}</NumberCell> },
+  { key: 'margin', header: 'Margin', align: 'right', width: 120, render: (p) => <NumberCell tone={p.margin < 0 ? 'danger' : 'success'}>{p.margin < 0 ? `−${nairaShort(-p.margin)}` : nairaShort(p.margin)}</NumberCell> },
   {
     key: 'pct',
     header: 'Margin %',
     align: 'right',
     width: 92,
     render: (p) => {
-      const pct = (marginOf(p) / p.revenue) * 100
-      return <NumberCell tone={pct < 0 ? 'danger' : 'default'}>{pct < 0 ? `−${Math.abs(pct).toFixed(1)}` : pct.toFixed(1)}%</NumberCell>
+      const v = pct(p.margin, p.revenue)
+      return v === null ? <NumberCell tone="muted">—</NumberCell> : <NumberCell tone={v < 0 ? 'danger' : 'default'}>{v < 0 ? `−${Math.abs(v).toFixed(1)}` : v.toFixed(1)}%</NumberCell>
     },
   },
 ]
 
 export default function ProfitLoss() {
   const router = useRouter()
-  const [period, setPeriod] = useState<(typeof PERIODS)[number]>('September')
+  const { history, catalog } = useTrade()
+  const [periodName, setPeriodName] = useState<(typeof PERIODS)[number]>('This month')
   const [type, setType] = useState<(typeof TYPES)[number]>('Layers')
-  const rows = [...penPL].sort((a, b) => marginOf(b) - marginOf(a))
-  const revenue = rows.reduce((n, p) => n + p.revenue, 0)
-  const margin = rows.reduce((n, p) => n + marginOf(p), 0)
-  const hasData = period === 'September' && type === 'Layers'
+  const today = todayISO()
+  const range = period(PERIOD_KEY[periodName], today)
+  const before = previous(range)
+  const lays = (penId: number) => catalog.pens.find((p) => p.id === penId)?.bird_types?.lays_eggs ?? false
+  const ofType = (m: PenMoney) => (type === 'Layers' ? lays(m.penId) : !lays(m.penId))
+
+  const build = (r: { from: string; to: string }): Row[] =>
+    penMoney(history, catalog, r)
+      .filter(ofType)
+      .map((m) => {
+        const days = rowsIn(history.daily, r, (id) => id === m.penId)
+        const flockIds = [...new Set(days.map((d) => d.flockId))]
+        const ages = days.map((d) => Math.floor(d.ageDays / 7))
+        return {
+          ...m,
+          name: catalog.pens.find((p) => p.id === m.penId)?.name ?? `Pen ${m.penId}`,
+          flock: flockIds.map((id) => history.flocks.find((f) => f.id === id)?.code).filter(Boolean).join(', '),
+          weeks: ages.length ? (Math.min(...ages) === Math.max(...ages) ? `week ${Math.min(...ages)}` : `week ${Math.min(...ages)}–${Math.max(...ages)}`) : '',
+          margin: m.revenue - penCost(m),
+        }
+      })
+      .sort((a, b) => b.margin - a.margin)
+  const rows = build(range)
+  const prevRows = build(before)
+  const total = (list: Row[], f: (r: Row) => number) => list.reduce((n, r) => n + f(r), 0)
+  const revenue = total(rows, (r) => r.revenue)
+  const costs = total(rows, penCost)
+  const margin = revenue - costs
+  const feed = total(rows, (r) => r.feed)
+  const prevRevenue = total(prevRows, (r) => r.revenue)
+  const prevCosts = total(prevRows, penCost)
+
+  // Broiler flocks still growing: what they've cost since placement.
+  const growing = history.flocks
+    .filter((f) => f.status === 'active' && !lays(f.pen_id))
+    .map((f) => {
+      const m = penMoney(history, catalog, { from: f.placed_on, to: today }).find((x) => x.penId === f.pen_id)
+      return { pen: f.pen_id, code: f.code, spent: m ? penCost(m) : 0, sold: m?.revenue ?? 0 }
+    })
+  const growingSpent = growing.reduce((n, g) => n + g.spent, 0)
+  const label = type.toLowerCase().replace(/s$/, '')
+
+  const kpis = [
+    kpi({ label: `${type.replace(/s$/, '')} revenue`, ...nairaKpi(revenue), current: revenue, previous: prevRevenue, context: 'vs previous period', info: `Sales from ${label} pens, with egg-store sales shared by eggs collected`, spark: FLAT }),
+    kpi({ label: `${type.replace(/s$/, '')} costs`, ...nairaKpi(costs), current: costs, previous: prevCosts, goodWhen: 'down', context: costs ? `feed is ${num((feed / costs) * 100)}%` : 'no costs yet', info: 'Feed and medication used, bird purchases and shared overhead', spark: FLAT }),
+    kpi({ label: `${type.replace(/s$/, '')} margin`, ...nairaKpi(margin), current: pct(margin, revenue), previous: pct(prevRevenue - prevCosts, prevRevenue), points: true, digits: 1, context: revenue ? `${num((margin / revenue) * 100, 1)}% of revenue` : 'no revenue yet', info: 'Revenue minus costs', spark: FLAT }),
+    kpi({ label: 'Broilers in progress', value: String(growing.length), unit: growing.length === 1 ? 'flock' : 'flocks', current: null, previous: null, goodWhen: 'neither', context: growing.length ? `${nairaShort(growingSpent)} spent so far` : 'none growing', info: 'Broiler flocks not yet sold', spark: FLAT }),
+  ]
+
+  // Unit costs, layers only.
+  const eggs = total(rows, (r) => r.eggs)
+  const crates = eggs / farmSettings.eggsPerCrate
+  const sold = salesOfItem(history, catalog, 'eggs', range)
+  const birdsAvg = total(rows, (r) => r.birdDays) / Math.max(1, daysFrom(range.from, range.to) + 1)
+  const costPerCrate = crates ? costs / crates : null
+  const price = sold.qty ? sold.amount / sold.qty : null
+
+  const worst = rows[rows.length - 1]
+  const best = rows[0]
+  const note = !rows.length
+    ? ''
+    : worst && worst.margin < 0
+      ? `${worst.name} lost ${nairaShort(-worst.margin)} — feed was ${worst.revenue ? num((worst.feed / worst.revenue) * 100) + '% of its revenue' : nairaShort(worst.feed) + ' with no sales yet'}.`
+      : `Every ${label} pen made money; ${best.name} did best at ${num(pct(best.margin, best.revenue) ?? 0, 1)}% margin.`
+  const rangeText = `${range.label}${range.label.includes(range.from.slice(0, 4)) ? '' : ` ${range.to.slice(0, 4)}`}`
+
+  const exportRows = () =>
+    downloadCsv(
+      `profit-and-loss-${label}s-${range.from}-to-${range.to}`,
+      ['Pen', 'Flock', 'Weeks', 'Revenue', 'Feed used', 'Medication', 'Bird cost', 'Overhead', 'Margin', 'Margin %'],
+      rows.map((r) => [r.name, r.flock, r.weeks, Math.round(r.revenue), Math.round(r.feed), Math.round(r.medication), Math.round(r.birds), Math.round(r.overhead + r.direct), Math.round(r.margin), pct(r.margin, r.revenue)?.toFixed(1)]),
+    )
 
   return (
     <>
       <ReportHeader
         title="Profit & loss"
-        description="September 2026, by pen. Margin counts feed and medication used, not bought, so a big delivery never looks like a loss."
+        description={`${rangeText}, by pen. Margin counts feed and medication used, not bought, so a big delivery never looks like a loss.`}
+        onExport={exportRows}
       />
       <div className="flex flex-wrap items-center gap-3">
-        <SegmentedControl label="Period" options={PERIODS} value={period} onChange={setPeriod} />
+        <SegmentedControl label="Period" options={PERIODS} value={periodName} onChange={setPeriodName} />
         <Select label="Bird type" leadingIcon={Egg} width={160} options={TYPES} value={type} onChange={setType} />
         <span className="flex-1" />
-        <span className="type-body-sm text-fg-tertiary">Overhead shared by bird-days · bird cost spread over the flock’s life</span>
+        <span className="type-body-sm text-fg-tertiary">Overhead shared by bird-days · bird cost counted when the birds were bought</span>
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
-        {plKpis.map((kpi) => (
-          <KpiCard key={kpi.label} kpi={kpi} />
+        {kpis.map((k) => (
+          <KpiCard key={k.label} kpi={k} />
         ))}
       </div>
 
-      {!hasData ? (
-        type === 'Broilers' ? (
-          <Alert title={broilerNote.title} action={<AlertAction onClick={() => router.push('/pens')}>See closed flocks</AlertAction>}>
-            {broilerNote.body}
-          </Alert>
-        ) : (
-          <Card className="items-center p-12">
-            <p className="type-body-md text-fg-tertiary">The sample data only has September figures.</p>
-          </Card>
-        )
+      {!rows.length ? (
+        <Card className="items-center p-12">
+          <p className="type-body-md text-fg-tertiary">No {label} pen records for {rangeText.toLowerCase()}.</p>
+        </Card>
       ) : (
         <>
           <div className="flex flex-col gap-4 lg:flex-row">
             <Card className="min-w-0 flex-1 px-5 pt-4 pb-5">
               <div className="flex items-baseline gap-2 pb-2">
                 <h2 className="type-h3 text-fg-primary">Margin by pen</h2>
-                <span className="type-body-sm text-fg-tertiary">September · ₦ millions</span>
+                <span className="type-body-sm text-fg-tertiary">{rangeText}</span>
               </div>
               <DivergingBars
-                rows={rows.map((p) => {
-                  const v = marginOf(p)
-                  return {
-                    label: `Pen ${p.pen}`,
-                    value: v,
-                    color: v < 0 ? 'var(--ayk-color-chart-4)' : 'var(--ayk-color-chart-1)',
-                    display: <span className={`type-numeric-md ${v < 0 ? 'text-fg-danger' : 'text-fg-success'}`}>{signedM(v)}</span>,
-                  }
-                })}
+                rows={rows.map((p) => ({
+                  label: p.name.replace(/ ·.*$/, ''),
+                  value: p.margin,
+                  color: p.margin < 0 ? 'var(--ayk-color-chart-4)' : 'var(--ayk-color-chart-1)',
+                  display: <span className={`type-numeric-md ${p.margin < 0 ? 'text-fg-danger' : 'text-fg-success'}`}>{signed(p.margin)}</span>,
+                }))}
               />
-              <p className="pt-2 type-body-sm text-fg-secondary">{plNote}</p>
+              <p className="pt-2 type-body-sm text-fg-secondary">{note}</p>
             </Card>
-            <Card className="w-full shrink-0 lg:w-[400px] gap-0 px-5 pt-4 pb-5">
-              <div className="flex items-baseline gap-2 pb-2">
-                <h2 className="type-h3 text-fg-primary">Cost per output</h2>
-                <span className="type-body-sm text-fg-tertiary">Layers · September</span>
-              </div>
-              <KeyValueRow label="Cost to produce a crate" calculated>
-                ₦ {formatNumber(unitCosts.costPerCrate)}
-              </KeyValueRow>
-              <KeyValueRow label="Average selling price" calculated>
-                ₦ {formatNumber(unitCosts.sellingPrice)}
-              </KeyValueRow>
-              <KeyValueRow label="Feed per crate" calculated>
-                {unitCosts.feedPerCrateKg} kg
-              </KeyValueRow>
-              <KeyValueRow label="Feed cost per bird" calculated>
-                ₦ {formatNumber(unitCosts.feedCostPerBird)}
-              </KeyValueRow>
-              <KeyValueRow label="Margin per crate" strong>
-                ₦ {formatNumber(unitCosts.sellingPrice - unitCosts.costPerCrate)}
-              </KeyValueRow>
-            </Card>
+            {type === 'Layers' && (
+              <Card className="w-full shrink-0 lg:w-[400px] gap-0 px-5 pt-4 pb-5">
+                <div className="flex items-baseline gap-2 pb-2">
+                  <h2 className="type-h3 text-fg-primary">Cost per output</h2>
+                  <span className="type-body-sm text-fg-tertiary">Layers · {rangeText}</span>
+                </div>
+                <KeyValueRow label="Cost to produce a crate" calculated>
+                  {costPerCrate !== null ? naira(costPerCrate) : '—'}
+                </KeyValueRow>
+                <KeyValueRow label="Average selling price" calculated>
+                  {price !== null ? naira(price) : '—'}
+                </KeyValueRow>
+                <KeyValueRow label="Feed per crate" calculated>
+                  {crates ? `${num(total(rows, (r) => r.feedKg) / crates, 1)} kg` : '—'}
+                </KeyValueRow>
+                <KeyValueRow label="Feed cost per bird" calculated>
+                  {birdsAvg ? naira(feed / birdsAvg) : '—'}
+                </KeyValueRow>
+                <KeyValueRow label="Margin per crate" strong>
+                  {costPerCrate !== null && price !== null ? naira(price - costPerCrate) : '—'}
+                </KeyValueRow>
+              </Card>
+            )}
           </div>
 
           <Card>
-            <CardHeader
-              title="By pen · September 2026"
-              meta={<span className="type-body-sm text-fg-tertiary">Layers</span>}
-              action={{ label: 'How this is calculated', to: '/settings' }}
-            />
-            <Table columns={columns} rows={rows} rowKey={(p) => String(p.pen)} />
-            <div className="flex items-center gap-6 rounded-b-xl bg-canvas px-5 py-3 type-label-md">
-              <span className="flex-1 text-fg-primary">All layer pens</span>
-              <span className="text-fg-secondary">Revenue ₦{revenue.toFixed(2)}M</span>
-              <span className="text-fg-secondary">Costs ₦{(revenue - margin).toFixed(2)}M</span>
+            <CardHeader title={`By pen · ${rangeText}`} meta={<span className="type-body-sm text-fg-tertiary">{type}</span>} action={{ label: 'Export', onClick: exportRows }} />
+            <Table columns={columns} rows={rows} rowKey={(p) => String(p.penId)} />
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-b-xl bg-canvas px-5 py-3 type-label-md">
+              <span className="flex-1 text-fg-primary">All {label} pens</span>
+              <span className="text-fg-secondary">Revenue {nairaShort(revenue)}</span>
+              <span className="text-fg-secondary">Costs {nairaShort(costs)}</span>
               <span className="text-fg-secondary">
-                Margin ₦{margin.toFixed(2)}M ({((margin / revenue) * 100).toFixed(1)}%)
+                Margin {margin < 0 ? `−${nairaShort(-margin)}` : nairaShort(margin)}
+                {revenue ? ` (${num((margin / revenue) * 100, 1)}%)` : ''}
               </span>
             </div>
           </Card>
-
-          <Alert title={broilerNote.title} action={<AlertAction onClick={() => router.push('/pens')}>See closed flocks</AlertAction>}>
-            {broilerNote.body}
-          </Alert>
         </>
+      )}
+
+      {growing.length > 0 && (
+        <Alert title="Broiler flocks are judged per flock, not per month" action={<AlertAction onClick={() => router.push('/pens')}>See pens</AlertAction>}>
+          {growing.map((g) => `Pen ${g.pen} (${g.code}) has cost ${nairaShort(g.spent)} so far${g.sold ? ` and sold ${nairaShort(g.sold)}` : ''}`).join('; ')}. Their margin is clearest once each flock is sold.
+        </Alert>
       )}
     </>
   )

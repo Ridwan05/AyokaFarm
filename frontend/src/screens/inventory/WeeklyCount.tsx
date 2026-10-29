@@ -11,10 +11,15 @@ import { KpiCard, type Kpi } from '../../components/ui/KpiCard'
 import { NumberCell, Table, TextCell, type Column } from '../../components/ui/Table'
 import { useToast } from '../../components/ui/toastContext'
 import { feedTypes, medications } from '../../data/inventory'
-import { feedTypeLedger } from '../../data/reports'
+import { nowHM, todayISO, unitCost, weekdayDayMonth } from '../../data/metrics'
+import { people } from '../../data/stockMetrics'
+import { downloadCsv } from '../../lib/export'
 import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
 import { formatNumber } from '../../lib/format'
+
+/** A flat line for KPIs with no daily trend to show. */
+const FLAT = [0, 0]
 
 type Item = {
   name: string
@@ -23,42 +28,33 @@ type Item = {
   expected: number
   /** ₦ per stock unit, for the value of any adjustment */
   unitCost: number
-  /** Differences bigger than this wait for Emeka before stock changes. */
+  /** Differences bigger than this wait for the farm manager before stock changes. */
   limit: number
   counted: string
   reason: string
   at: string
 }
 
-const MED_COST_PER_UNIT: Record<string, number> = { g: 30, vials: 7000, kg: 6000 }
-const flat = [1, 1, 1, 1, 1, 1, 1]
 
-/** ST-D51 · Friday blind count. Values are pre-filled with today's count; edit any before sending. */
+/** ST-D51 · Weekly blind count. Each item starts empty; the expected figure shows once it is counted. */
 export default function WeeklyCount() {
   const toast = useToast()
   const user = useCurrentUser()
-  const { stockOf, addStockMoves } = useTrade()
+  const { stockOf, addStockMoves, history, catalog } = useTrade()
   const first = user.name.split(' ')[0]
+  const { manager } = people(catalog)
 
   const [items, setItems] = useState<Item[]>(() => {
-    const feeds: Item[] = feedTypes.map((f, i) => {
-      const expected = stockOf(f.name, f.bags)
-      const short = f.name === 'Broiler starter' ? 1 : 0
-      return {
-        name: f.name, batch: null, unit: 'bags', expected,
-        unitCost: feedTypeLedger.find((x) => x.name === f.name)?.avgCost ?? 18500, limit: 2,
-        counted: String(expected - short), reason: short ? 'Rats tore a bag' : '', at: `17:${String(24 + i * 5).padStart(2, '0')}`,
-      }
-    })
-    const meds: Item[] = medications.map((m, i) => {
-      const expected = stockOf(m.name, m.stock)
-      const short = m.name === 'Piperazine' ? 50 : 0
-      return {
-        name: m.name, batch: m.batch, unit: m.unit, expected,
-        unitCost: MED_COST_PER_UNIT[m.unit] ?? 0, limit: m.unit === 'g' ? 100 : 1,
-        counted: String(expected - short), reason: short ? 'Spilled' : '', at: `17:${String(42 + i * 2).padStart(2, '0')}`,
-      }
-    })
+    const feeds: Item[] = feedTypes.map((f) => ({
+      name: f.name, batch: null, unit: 'bags', expected: stockOf(f.name),
+      unitCost: unitCost(history, { feedTypeId: catalog.feedTypes.find((x) => x.name === f.name)?.id }), limit: 2,
+      counted: '', reason: '', at: '',
+    }))
+    const meds: Item[] = medications.map((m) => ({
+      name: m.name, batch: m.batch === '—' ? null : m.batch, unit: m.unit, expected: stockOf(m.name),
+      unitCost: unitCost(history, { medicationId: catalog.medications.find((x) => x.name === m.name)?.id }), limit: m.unit === 'g' ? 100 : 1,
+      counted: '', reason: '', at: '',
+    }))
     return [...feeds, ...meds]
   })
   const [sentAt, setSentAt] = useState<string | null>(null)
@@ -70,20 +66,23 @@ export default function WeeklyCount() {
   const missingReason = differences.filter((i) => !i.reason.trim())
   const bigger = differences.filter((i) => Math.abs(diffOf(i)!) > i.limit)
   const value = differences.reduce((n, i) => n + Math.abs(diffOf(i)!) * i.unitCost, 0)
-  const update = (name: string, patch: Partial<Item>) => setItems((list) => list.map((i) => (i.name === name ? { ...i, ...patch } : i)))
+  // The time is stamped when an item is first counted.
+  const update = (name: string, patch: Partial<Item>) => setItems((list) => list.map((i) => (i.name === name ? { ...i, ...patch, at: i.at || ('counted' in patch ? nowHM() : '') } : i)))
+  const times = items.map((i) => i.at).filter(Boolean).sort()
+  const span = times.length ? (times[0] === times[times.length - 1] ? times[0] : `${times[0]}–${times[times.length - 1]}`) : 'not started'
 
   const send = async () => {
-    // Small differences change stock now; bigger ones wait for Emeka.
+    // Small differences change stock now; bigger ones wait for the farm manager.
     if (!(await addStockMoves(differences.filter((i) => !bigger.includes(i)).map((i) => ({ item: i.name, qty: diffOf(i)!, type: 'adjust', source: `Count by ${first}: ${i.reason}` }))))) return
-    setSentAt('17:58')
-    toast('Count sent to Emeka')
+    setSentAt(nowHM())
+    toast(`Count sent to ${manager}`)
   }
 
   const kpis: Kpi[] = [
-    { label: 'Counted', value: String(counted.length), unit: `of ${items.length} items`, delta: counted.length === items.length ? 'Done' : 'In progress', trend: 'flat', sentiment: 'neutral', context: '17:22–17:56', info: 'Items counted this week', spark: flat },
-    { label: 'Matched', value: String(counted.length - differences.length), unit: 'items', delta: 'No change', trend: 'up', sentiment: 'good', context: 'as the app expected', info: 'Counts equal to what the app expected', spark: [84.9, 85.2, 85.0, 85.4, 85.8, 86.0, 86.2, 86.4] },
-    { label: 'Differences', value: String(differences.length), unit: bigger.length ? 'need Emeka' : 'small', delta: missingReason.length ? `${missingReason.length} need a reason` : 'Saved', trend: 'flat', sentiment: 'neutral', context: 'with reasons', info: 'Counts that differ from the app', spark: flat },
-    { label: 'Value adjusted', value: (value / 1000).toFixed(1), unit: 'thousand ₦', delta: differences.map((i) => `${diffOf(i)! > 0 ? '+' : '−'}${formatNumber(Math.abs(diffOf(i)!))} ${i.unit === 'bags' && Math.abs(diffOf(i)!) === 1 ? 'bag' : i.unit}`).join(' · ') || 'None', trend: 'flat', sentiment: 'neutral', context: 'at average cost', info: 'Value of the stock differences', spark: flat },
+    { label: 'Counted', value: String(counted.length), unit: `of ${items.length} items`, delta: counted.length === items.length ? 'Done' : 'In progress', trend: 'flat', sentiment: 'neutral', context: span, info: 'Items counted this week', spark: FLAT },
+    { label: 'Matched', value: String(counted.length - differences.length), unit: 'items', delta: '—', trend: 'flat', sentiment: 'neutral', context: 'as the app expected', info: 'Counts equal to what the app expected', spark: FLAT },
+    { label: 'Differences', value: String(differences.length), unit: bigger.length ? `need ${manager}` : 'small', delta: missingReason.length ? `${missingReason.length} need a reason` : 'Saved', trend: 'flat', sentiment: 'neutral', context: 'with reasons', info: 'Counts that differ from the app', spark: FLAT },
+    { label: 'Value adjusted', value: (value / 1000).toFixed(1), unit: 'thousand ₦', delta: differences.map((i) => `${diffOf(i)! > 0 ? '+' : '−'}${formatNumber(Math.abs(diffOf(i)!))} ${i.unit === 'bags' && Math.abs(diffOf(i)!) === 1 ? 'bag' : i.unit}`).join(' · ') || 'None', trend: 'flat', sentiment: 'neutral', context: 'at average cost', info: 'Value of the stock differences', spark: FLAT },
   ]
 
   const columns: Column<Item>[] = [
@@ -150,7 +149,7 @@ export default function WeeklyCount() {
         const d = diffOf(i)
         if (d === null) return <Badge tone="neutral">Not counted</Badge>
         if (d === 0) return <Badge dot tone="success">Matched</Badge>
-        if (Math.abs(d) > i.limit) return <Badge dot tone="warning">Waits for Emeka</Badge>
+        if (Math.abs(d) > i.limit) return <Badge dot tone="warning">Waits for {manager}</Badge>
         return <Badge dot tone={i.reason.trim() ? 'info' : 'danger'}>{i.reason.trim() ? 'Saved' : 'Needs a reason'}</Badge>
       },
     },
@@ -162,14 +161,23 @@ export default function WeeklyCount() {
         backTo="/inventory/feed"
         eyebrow={['Operate', 'Inventory', 'Weekly count']}
         title="Weekly count"
-        description={`Fri 09 Oct · counted on ${first}’s phone, 17:22–17:56. The app shows what it expected only after each item is counted.`}
+        description={`${weekdayDayMonth(todayISO())} · counted by ${first}, ${span}. The app shows what it expected only after each item is counted.`}
         actions={
           <>
-            <Button leadingIcon={Download} onClick={() => toast('Count exported')}>
+            <Button
+              leadingIcon={Download}
+              onClick={() =>
+                downloadCsv(
+                  'stock-count',
+                  ['Item', 'Batch', 'Unit', 'Counted', 'App expected', 'Difference', 'Reason', 'Counted at'],
+                  items.map((i) => [i.name, i.batch, i.unit, i.counted, diffOf(i) === null ? '' : i.expected, diffOf(i), i.reason, i.at]),
+                )
+              }
+            >
               Export
             </Button>
             <Button variant="primary" leadingIcon={Send} disabled={!!sentAt || missingReason.length > 0 || counted.length < items.length} onClick={send}>
-              {sentAt ? `Sent to Emeka · ${sentAt}` : 'Send to Emeka'}
+              {sentAt ? `Sent to ${manager} · ${sentAt}` : `Send to ${manager}`}
             </Button>
           </>
         }
@@ -180,9 +188,9 @@ export default function WeeklyCount() {
         ))}
       </div>
       {sentAt && showSent && (
-        <Alert tone="success" icon={CircleCheck} title={`Results sent to Emeka at ${sentAt}`} onDismiss={() => setShowSent(false)}>
+        <Alert tone="success" icon={CircleCheck} title={`Results sent to ${manager} at ${sentAt}`} onDismiss={() => setShowSent(false)}>
           {differences.map((i) => `${i.name} ${diffOf(i)! > 0 ? '+' : '−'}${formatNumber(Math.abs(diffOf(i)!))} ${i.unit === 'bags' && Math.abs(diffOf(i)!) === 1 ? 'bag' : i.unit} (${i.reason.toLowerCase()})`).join(' and ') || 'Everything matched'}
-          {differences.length ? ` ${bigger.length ? 'are sent with your reasons; the bigger ones wait for Emeka before stock changes.' : `are saved with ${first}’s reasons. Bigger differences would wait for Emeka before stock changes.`}` : '.'}
+          {differences.length ? ` ${bigger.length ? `are sent with your reasons; the bigger ones wait for ${manager} before stock changes.` : `are saved with ${first}’s reasons. Bigger differences would wait for ${manager} before stock changes.`}` : '.'}
         </Alert>
       )}
       <Card>

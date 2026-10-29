@@ -83,3 +83,33 @@ export async function resetStaffPassword(profileId: string, password: string): P
   const { error } = await admin.auth.admin.updateUserById(profileId, { password })
   return error ? fail(error.message) : { ok: true }
 }
+
+export async function changeStaffRole(profileId: string, roleId: string): Promise<Result> {
+  const me = await caller()
+  if (me?.role !== 'owner') return fail('Only an owner can change someone’s role.')
+  if (me.id === profileId) return fail('You can’t change your own role — ask another owner.')
+  const admin = createSecretClient()
+  const [{ data: role }, { data: target }] = await Promise.all([
+    admin.from('roles').select('id').eq('id', roleId).maybeSingle(),
+    admin.from('profiles').select('role_id, is_active').eq('id', profileId).single(),
+  ])
+  if (!role) return fail('That role doesn’t exist any more.')
+  if (!target) return fail('That staff member wasn’t found.')
+  if (target.role_id === roleId) return { ok: true }
+  if (target.role_id === 'owner' && target.is_active) {
+    const { count } = await admin.from('profiles').select('id', { count: 'exact', head: true }).eq('role_id', 'owner').eq('is_active', true)
+    if ((count ?? 0) <= 1) return fail('The farm needs at least one active owner.')
+  }
+  // The role lives in both places: app_metadata (read when the account is created) and the profile (used by RLS).
+  const { error: authError } = await admin.auth.admin.updateUserById(profileId, { app_metadata: { role: roleId } })
+  if (authError) return fail(authError.message)
+  const { error } = await admin.from('profiles').update({ role_id: roleId }).eq('id', profileId)
+  if (error) return fail(error.message)
+  // Pen assignments only mean something for roles that work on their own pens.
+  const { data: production } = await admin.from('role_permissions').select('can_view').eq('role_id', roleId).eq('module', 'production').maybeSingle()
+  if (production?.can_view !== 'own') {
+    const { error: pensError } = await admin.from('staff_pens').delete().eq('profile_id', profileId)
+    if (pensError) return fail(pensError.message)
+  }
+  return { ok: true }
+}

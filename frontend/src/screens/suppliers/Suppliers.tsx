@@ -10,11 +10,12 @@ import { Card, CardHeader } from '../../components/ui/Card'
 import { KpiCard } from '../../components/ui/KpiCard'
 import { RowMenu } from '../../components/ui/Menu'
 import { NumberCell, PrimaryCell, Table, TextCell, type Column } from '../../components/ui/Table'
-import { supplierKpis } from '../../data/supplierKpis'
+import { supplierKpis } from '../../data/moneyKpis'
 import type { Supplier } from '../../data/suppliers'
 import { useTrade } from '../../data/tradeContext'
 import { PaymentModal } from '../../features/payments/PaymentModal'
 import { AddSupplierModal } from '../../features/suppliers/AddSupplierModal'
+import { downloadCsv } from '../../lib/export'
 import { formatNaira } from '../../lib/format'
 import { Presence } from '../../components/ui/Overlay'
 
@@ -28,7 +29,8 @@ const status = (balance: number) =>
 
 export default function Suppliers() {
   const router = useRouter()
-  const { suppliers, supplierBalance } = useTrade()
+  const trade = useTrade()
+  const { suppliers, supplierBalance } = trade
   const [overlay, setOverlay] = useState<{ kind: 'add' } | { kind: 'pay'; id: string } | null>(null)
   const rows: Row[] = suppliers.map((s) => ({ s, balance: supplierBalance(s.id) })).sort((a, b) => rank(a.balance) - rank(b.balance) || b.balance - a.balance)
 
@@ -67,7 +69,18 @@ export default function Suppliers() {
         description={`${suppliers.length} suppliers. What we owe is calculated from purchases, supplier expenses and payments.`}
         actions={
           <>
-            <Button leadingIcon={Download}>Export</Button>
+            <Button
+              leadingIcon={Download}
+              onClick={() =>
+                downloadCsv(
+                  'suppliers',
+                  ['Supplier', 'Kind', 'Supplies', 'Phone', 'Terms (days)', 'Balance (₦, negative = credit)', 'Last purchase', 'Last payment', 'Status'],
+                  rows.map((r) => [r.s.name, r.s.kind, r.s.supplies, r.s.phone, r.s.termsDays, r.balance, r.s.lastPurchase, r.s.lastPayment, status(r.balance).label]),
+                )
+              }
+            >
+              Export
+            </Button>
             <Button variant="primary" leadingIcon={Plus} onClick={() => setOverlay({ kind: 'add' })}>
               Add supplier
             </Button>
@@ -75,7 +88,7 @@ export default function Suppliers() {
         }
       />
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
-        {supplierKpis.map((kpi) => (
+        {supplierKpis(trade).map((kpi) => (
           <KpiCard key={kpi.label} kpi={kpi} />
         ))}
       </div>

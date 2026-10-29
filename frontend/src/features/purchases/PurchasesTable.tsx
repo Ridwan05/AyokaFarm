@@ -1,7 +1,6 @@
 import { Badge } from '../../components/ui/Badge'
 import { RowMenu } from '../../components/ui/Menu'
 import { NumberCell, PrimaryCell, Table, TextCell, type Column } from '../../components/ui/Table'
-import { useToast } from '../../components/ui/toastContext'
 import { totalOf, type Purchase } from '../../data/purchases'
 import { useTrade } from '../../data/tradeContext'
 import { formatNaira } from '../../lib/format'
@@ -15,7 +14,6 @@ type Props = {
 
 export function PurchasesTable({ purchases, onOpen, onPay }: Props) {
   const { suppliers, purchasePaid } = useTrade()
-  const toast = useToast()
 
   const columns: Column<Purchase>[] = [
     { key: 'ref', header: 'Ref', width: 88, render: (p) => <TextCell tone="primary" mono>{p.ref}</TextCell> },
@@ -60,7 +58,7 @@ export function PurchasesTable({ purchases, onOpen, onPay }: Props) {
           items={[
             { label: 'View details', onSelect: () => onOpen(p) },
             { label: 'Record a payment', onSelect: () => onPay(p), disabled: totalOf(p) <= purchasePaid(p.ref) },
-            { label: 'Download PDF', onSelect: () => toast(`${p.ref} downloaded`) },
+            { label: 'Supplier statement (PDF)', onSelect: () => window.open(`/print/statement/supplier/${p.supplierId}`, '_blank') },
           ]}
         />
       )}

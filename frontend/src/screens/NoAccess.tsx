@@ -6,11 +6,13 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { Button } from '../components/ui/Button'
 import { Card } from '../components/ui/Card'
 import { useToast } from '../components/ui/toastContext'
-import { roles } from '../data/settings'
 import { useCurrentUser } from '../data/sessionContext'
-import { describeArea } from '../lib/access'
+import { staffWithRole } from '../data/metrics'
+import { useTrade } from '../data/tradeContext'
+import { canAccess, describeArea } from '../lib/access'
+import { navGroups } from '../components/layout/nav'
 
-const sees: Record<string, string> = {
+const sees: Partial<Record<string, string>> = {
   owner: 'everything',
   'farm-manager': 'pens, production, stock, sales and purchases',
   'sales-accounts': 'sales, payments, customers, suppliers and reports',
@@ -26,7 +28,12 @@ export default function NoAccess() {
   const toast = useToast()
   const user = useCurrentUser()
   const area = describeArea(pathname)
-  const roleName = roles.find((r) => r.id === user.role)?.name ?? user.roleLabel
+  const { catalog } = useTrade()
+  const roleName = user.roleLabel
+  // Who to ask: the owner(s) by first name.
+  const owner = staffWithRole(catalog, 'owner')[0] ?? 'the owner'
+  const visible = navGroups.flatMap((g) => g.items).filter((i) => i.to !== '/' && canAccess(i.to, user)).map((i) => i.label.toLowerCase())
+  const seen = sees[user.role] ?? (visible.length ? visible.join(', ') : 'your home page')
 
   return (
     <>
@@ -37,14 +44,14 @@ export default function NoAccess() {
         </span>
         <h2 className="type-display-md text-fg-primary">{area.label} isn’t part of your role</h2>
         <p className="max-w-[540px] type-body-md text-fg-secondary">
-          As {roleName} you see {sees[user.role]}. If you need {area.label.toLowerCase()}, ask Adeola — the owner can change what your role sees in Settings.
+          As {roleName} you see {seen}. If you need {area.label.toLowerCase()}, ask {owner} — the owner can change what your role sees in Settings.
         </p>
         <div className="flex flex-wrap justify-center gap-3">
           <Button variant="primary" onClick={() => router.push('/')}>
             Back to home
           </Button>
-          <Button leadingIcon={MessageCircle} onClick={() => toast('Request sent to Adeola on WhatsApp')}>
-            Ask Adeola for access
+          <Button leadingIcon={MessageCircle} onClick={() => toast(`Ask ${owner} in person or by phone — WhatsApp requests aren’t connected yet`)}>
+            Ask {owner} for access
           </Button>
         </div>
       </Card>

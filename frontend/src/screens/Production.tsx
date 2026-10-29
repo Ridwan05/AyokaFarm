@@ -5,7 +5,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { PageHeader } from '../components/layout/PageHeader'
-import { Alert, AlertAction } from '../components/ui/Alert'
+import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card, CardHeader } from '../components/ui/Card'
@@ -13,18 +13,65 @@ import { KpiCard } from '../components/ui/KpiCard'
 import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Select } from '../components/ui/Select'
 import { NumberCell, PrimaryCell, Table, TextCell, type Column } from '../components/ui/Table'
-import { missingEntry, penEntries as allPenEntries, productionDays, productionKpis, productionTotals, type PenEntry, type ProductionDay } from '../data/production'
 import { pensToday, type PenToday } from '../data/dashboard'
+import { farmSettings } from '../data/farmSettings'
+import { penKind, penName } from '../data/farmViews'
+import {
+  addDays,
+  daysFrom,
+  feedVariance,
+  kpi,
+  lastDays,
+  layingRate,
+  missingEntries,
+  mortalityPct,
+  penStaff,
+  rowsIn,
+  rowsOn,
+  sum,
+  timeOf,
+  todayISO,
+  weekStart,
+  weekdayDayMonth,
+  withdrawals,
+  type Range,
+} from '../data/metrics'
 import { withTodaysRecord } from '../data/production'
+import type { DailyRow } from '../data/remote'
+import { farm } from '../data/session'
 import { useCurrentUser } from '../data/sessionContext'
 import { useTrade } from '../data/tradeContext'
 import { canRecordProduction, canSeePen, isAttendant } from '../lib/access'
-import { farm } from '../data/session'
-import { formatCrates, formatNumber, formatShortDate, formatSignedPct, parseISODate } from '../lib/format'
-import { farmSettings } from '../data/farmSettings'
+import { downloadCsv } from '../lib/export'
+import { formatCrates, formatDayMon, formatNumber, formatShortDate, formatSignedPct, parseISODate } from '../lib/format'
 
 const PERIODS = ['Day', 'Week', 'Month'] as const
+type Period = (typeof PERIODS)[number]
 const PEN_FILTERS = ['All pens', 'Layers', 'Broilers'] as const
+
+/** One pen over the chosen day, week or month. */
+type PenEntry = {
+  penId: number
+  initials: string
+  name: string
+  /** Flock code, plus any status such as a medication withdrawal. */
+  flock: string
+  ageWeeks: number
+  opening: number
+  /** null when nothing was recorded */
+  entry: {
+    died: number
+    /** Mortality above the alert threshold. */
+    diedFlag: boolean
+    closing: number
+    feedBags: number
+    feedVsExpected: number | null
+    /** Total eggs; null for broiler pens. */
+    eggs: number | null
+    layingRate: number | null
+    recordedBy: string
+  } | null
+}
 
 const dash = <NumberCell tone="muted">—</NumberCell>
 
@@ -37,20 +84,20 @@ const columns: Column<PenEntry>[] = [
     header: 'Died',
     align: 'right',
     width: 64,
-    render: (p) => (p.entry ? <NumberCell tone={p.entry.diedFlag ? 'warning' : 'default'}>{p.entry.died}</NumberCell> : dash),
+    render: (p) => (p.entry ? <NumberCell tone={p.entry.diedFlag ? 'warning' : 'default'}>{formatNumber(p.entry.died)}</NumberCell> : dash),
   },
   {
     key: 'closing',
     header: 'Closing',
     align: 'right',
     width: 92,
-    render: (p) => (p.entry ? <NumberCell>{formatNumber(p.opening - p.entry.died)}</NumberCell> : dash),
+    render: (p) => (p.entry ? <NumberCell>{formatNumber(p.entry.closing)}</NumberCell> : dash),
   },
   {
     key: 'feed',
     header: 'Feed',
     align: 'right',
-    width: 84,
+    width: 96,
     render: (p) => (p.entry ? <NumberCell>{p.entry.feedBags.toFixed(1)} bags</NumberCell> : dash),
   },
   {
@@ -59,10 +106,8 @@ const columns: Column<PenEntry>[] = [
     align: 'right',
     width: 112,
     render: (p) =>
-      p.entry ? (
-        <NumberCell tone={Math.abs(p.entry.feedVsExpected) >= farmSettings.feedVariancePct ? 'warning' : 'default'}>
-          {formatSignedPct(p.entry.feedVsExpected)}
-        </NumberCell>
+      p.entry?.feedVsExpected != null ? (
+        <NumberCell tone={Math.abs(p.entry.feedVsExpected) >= farmSettings.feedVariancePct ? 'warning' : 'default'}>{formatSignedPct(p.entry.feedVsExpected)}</NumberCell>
       ) : (
         dash
       ),
@@ -85,46 +130,81 @@ const columns: Column<PenEntry>[] = [
     key: 'by',
     header: 'Recorded by',
     width: 138,
-    render: (p) =>
-      p.entry ? <TextCell>{`${p.entry.recordedBy} · ${p.entry.time}`}</TextCell> : <TextCell tone="danger">Missing</TextCell>,
+    render: (p) => (p.entry ? <TextCell>{p.entry.recordedBy}</TextCell> : <TextCell tone="danger">Missing</TextCell>),
   },
 ]
 
+/** The day, or the week / month up to and including it. */
+function rangeFor(period: Period, day: string): Range {
+  if (period === 'Day') return { from: day, to: day, label: weekdayDayMonth(day) }
+  if (period === 'Week') {
+    const from = weekStart(day)
+    return { from, to: day, label: `Week of ${formatDayMon(from)}` }
+  }
+  return { from: day.slice(0, 8) + '01', to: day, label: new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${day}T00:00:00Z`)) }
+}
+
 export default function Production() {
   const router = useRouter()
-  const [period, setPeriod] = useState<(typeof PERIODS)[number]>('Day')
-  const [day, setDay] = useState<ProductionDay>(productionDays[0])
+  const user = useCurrentUser()
+  const trade = useTrade()
+  const { history, catalog, productionRecords } = trade
+  const today = todayISO()
+  const attendant = isAttendant(user.role)
+  const mine = (id: number) => canSeePen(user, id)
+
+  // Days that have entries, newest first, always starting with today.
+  const days = [...new Set([today, ...history.daily.filter((d) => mine(d.penId)).map((d) => d.date)])].sort().reverse().slice(0, 90)
+  const [period, setPeriod] = useState<Period>('Day')
+  const [day, setDay] = useState(days[1] ?? today)
   const [pens, setPens] = useState<(typeof PEN_FILTERS)[number]>('All pens')
   const [showMissing, setShowMissing] = useState(true)
-  const [reminded, setReminded] = useState(false)
-  const user = useCurrentUser()
-  const { productionRecords } = useTrade()
-  const attendant = isAttendant(user.role)
-  const penEntries = allPenEntries.filter((p) => canSeePen(user, p.penId))
-  const today = pensToday.filter((p) => canSeePen(user, p.id)).map((p) => withTodaysRecord(p, productionRecords))
 
-  const date = parseISODate(day)
-  const dateLabel = formatShortDate(date)
-  const rows = penEntries.filter(
-    (p) => pens === 'All pens' || p.name.endsWith(pens),
-  )
-  const recorded = penEntries.filter((p) => p.entry).length
-  const missingPen = penEntries.find((p) => p.penId === missingEntry.penId)
+  const range = rangeFor(period, day)
+  const span = daysFrom(range.from, range.to) + 1
+  const prev: Range = { from: addDays(range.from, -span), to: addDays(range.from, -1), label: 'previous' }
+  const penOk = (id: number) => mine(id) && (pens === 'All pens' || penKind(catalog, id) === pens)
+  const rows = penRows(trade, range, penOk)
+  const periodRows = rowsIn(history.daily, range, penOk)
+  const prevRows = rowsIn(history.daily, prev, penOk)
 
-  const entries = penEntries.flatMap((p) => (p.entry ? [p.entry] : []))
-  const died = entries.reduce((n, e) => n + e.died, 0)
-  const feed = entries.reduce((n, e) => n + e.feedBags, 0)
-  const eggs = entries.reduce((n, e) => n + (e.eggs ?? 0), 0)
+  const todayRows = pensToday.filter((p) => mine(p.id)).map((p) => withTodaysRecord(p, productionRecords))
+  const missing = missingEntries(history, today).filter((m) => mine(m.penId) && m.late)
+  const recorded = rows.filter((p) => p.entry).length
+
+  const died = sum(periodRows, (d) => d.mortality)
+  const feed = sum(periodRows, (d) => d.feedBags)
+  const eggs = sum(periodRows, (d) => d.eggs ?? 0)
   const crates = Math.floor(eggs / farmSettings.eggsPerCrate)
   const loose = eggs % farmSettings.eggsPerCrate
+  const variance = feedVariance(periodRows)
+  const laying = layingRate(periodRows)
+
+  function exportRows() {
+    downloadCsv(
+      `production-${range.from}${range.to !== range.from ? `-to-${range.to}` : ''}`,
+      ['Pen', 'Flock', 'Age (weeks)', 'Opening', 'Died', 'Closing', 'Feed (bags)', 'Feed vs expected %', 'Eggs', 'Laying rate %', 'Recorded by'],
+      rows.map((p) => [p.name, p.flock, p.ageWeeks, p.opening, p.entry?.died, p.entry?.closing, p.entry?.feedBags.toFixed(2), p.entry?.feedVsExpected?.toFixed(1), p.entry?.eggs, p.entry?.layingRate?.toFixed(1), p.entry?.recordedBy ?? 'Missing']),
+    )
+  }
+
+  const yesterdayMissing = missing.map((m) => penName(catalog, m.penId))
 
   return (
     <>
-      <PageHeader sample
+      <PageHeader
         eyebrow={['Operate', 'Production']}
         title="Daily production"
-        description={`Every pen-day entry in one place. Yesterday is complete except Pen ${missingEntry.penId}.`}
-        actions={<Button leadingIcon={Download}>Export</Button>}
+        description={
+          yesterdayMissing.length
+            ? `Every pen-day entry in one place. Yesterday is missing ${yesterdayMissing.join(', ')}.`
+            : 'Every pen-day entry in one place. Yesterday is complete.'
+        }
+        actions={
+          <Button leadingIcon={Download} onClick={exportRows}>
+            Export
+          </Button>
+        }
       />
 
       <div className="flex flex-wrap items-center gap-3">
@@ -132,66 +212,159 @@ export default function Production() {
         <Select
           label="Date"
           leadingIcon={CalendarDays}
-          options={productionDays}
+          options={days}
           value={day}
           onChange={setDay}
-          format={(d) => `${formatShortDate(parseISODate(d))} ${parseISODate(d).getFullYear()}`}
+          format={(d) => `${formatShortDate(parseISODate(d))} ${d.slice(0, 4)}`}
         />
         <Select label="Pens" leadingIcon={Warehouse} width={180} options={PEN_FILTERS} value={pens} onChange={setPens} />
         <span className="flex-1" />
         <p className="type-body-sm whitespace-nowrap text-fg-tertiary">
-          {recorded} of {penEntries.length} pens recorded
+          {period === 'Day' ? `${recorded} of ${rows.length} pens recorded` : `${periodRows.length} entries · ${span} days`}
         </p>
       </div>
 
-      <TodayCard rows={today} canRecord={(id) => canRecordProduction(user, id)} />
+      <TodayCard rows={todayRows} canRecord={(id) => canRecordProduction(user, id)} />
 
       {!attendant && (
         <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
-          {productionKpis.map((kpi) => (
-            <KpiCard key={kpi.label} kpi={kpi} />
+          {productionKpis(history.daily, range, prev, periodRows, prevRows, penOk).map((k) => (
+            <KpiCard key={k.label} kpi={k} />
           ))}
         </div>
       )}
 
-      {showMissing && missingPen && (
-        <Alert
-          title={`Pen ${missingEntry.penId} has no entry for ${dateLabel}`}
-          action={
-            attendant ? undefined : (
-              <AlertAction onClick={() => setReminded(true)}>
-                {reminded ? `Reminder sent to ${missingEntry.staff}` : `Remind ${missingEntry.staff} on WhatsApp`}
-              </AlertAction>
-            )
-          }
-          onDismiss={() => setShowMissing(false)}
-        >
-          {missingEntry.staff} can still add it as a late entry until {missingEntry.lateUntil}. After that, the farm
-          manager adds it with a reason.
+      {showMissing && missing.length > 0 && (
+        <Alert title={`${yesterdayMissing.join(', ')} ${missing.length === 1 ? 'has' : 'have'} no entry for ${weekdayDayMonth(missing[0].date)}`} onDismiss={() => setShowMissing(false)}>
+          {missing
+            .map((m) => {
+              const who = penStaff(catalog, m.penId)
+              return `${penName(catalog, m.penId)}: ${who.length ? `assigned to ${who.join(', ')}` : 'nobody assigned'}`
+            })
+            .join(' · ')}
+          . Entries are made on the day; a missed day stays blank in the records.
         </Alert>
       )}
 
       <Card>
         <CardHeader
-          title={`Pen entries · ${dateLabel}`}
-          meta={<span className="type-body-sm text-fg-tertiary">Opening and closing birds are calculated</span>}
-          action={{ label: 'Open entry history', to: '/production/history' }}
+          title={`Pen entries · ${range.label}`}
+          meta={<span className="type-body-sm text-fg-tertiary">{period === 'Day' ? 'Opening and closing birds are calculated' : 'Opening is the first day, closing the last'}</span>}
         />
         <Table columns={columns} rows={rows} rowKey={(p) => String(p.penId)} onRowClick={(p) => router.push(`/pens/${p.penId}`)} />
-        <div className="flex items-center gap-6 rounded-b-xl bg-canvas px-5 py-3 type-label-md">
-          <span className="flex-1 text-fg-primary">Farm total · {dateLabel}</span>
-          <span className="text-fg-secondary">{died} died</span>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-b-xl bg-canvas px-5 py-3 type-label-md">
+          <span className="flex-1 text-fg-primary">Farm total · {range.label}</span>
+          <span className="text-fg-secondary">{formatNumber(died)} died</span>
           <span className="text-fg-secondary">
-            {feed.toFixed(1)} bags feed ({formatSignedPct(productionTotals.feedVsExpected)})
+            {feed.toFixed(1)} bags feed{variance !== null && ` (${formatSignedPct(variance)})`}
           </span>
           <span className="text-fg-secondary">
-            {crates} crates{loose ? ` + ${loose} egg${loose > 1 ? 's' : ''}` : ''}
+            {formatNumber(crates)} crates{loose ? ` + ${loose} egg${loose > 1 ? 's' : ''}` : ''}
           </span>
-          <span className="text-fg-secondary">{productionTotals.layingRate}% laying</span>
+          {laying !== null && <span className="text-fg-secondary">{laying.toFixed(1)}% laying</span>}
         </div>
       </Card>
     </>
   )
+}
+
+/** One row per pen with a flock in the range: a single day's entry, or the period added up. */
+function penRows(trade: ReturnType<typeof useTrade>, range: Range, penOk: (id: number) => boolean): PenEntry[] {
+  const { history, catalog } = trade
+  const inWithdrawal = new Set(withdrawals(history, catalog, range.to).map((w) => w.penId))
+  const flocks = history.flocks.filter((f) => penOk(f.pen_id) && f.placed_on <= range.to && (f.closed_on === null || f.closed_on >= range.from))
+  return flocks
+    .map((f) => {
+      const rows = history.daily.filter((d) => d.flockId === f.id && d.date >= range.from && d.date <= range.to).sort((a, b) => a.date.localeCompare(b.date))
+      const before = history.daily.filter((d) => d.flockId === f.id && d.date < range.from).sort((a, b) => b.date.localeCompare(a.date))[0]
+      const first: DailyRow | undefined = rows[0]
+      const last: DailyRow | undefined = rows.at(-1)
+      const ageDays = last?.ageDays ?? daysFrom(f.placed_on, range.to) + f.age_at_placement_days
+      const kind = penKind(catalog, f.pen_id)
+      const firstName = (n: string) => n.split(' ')[0]
+      const recorders = [...new Set(rows.map((r) => firstName(r.recordedBy)))]
+      const mort = mortalityPct(rows)
+      return {
+        penId: f.pen_id,
+        initials: `P${f.pen_id}`,
+        name: `${penName(catalog, f.pen_id)} · ${kind}`,
+        flock: inWithdrawal.has(f.pen_id) ? `${f.code} · withdrawal` : f.code,
+        ageWeeks: Math.floor(ageDays / 7) + 1,
+        opening: first?.opening ?? before?.closing ?? f.birds_placed,
+        entry: last
+          ? {
+              died: sum(rows, (r) => r.mortality),
+              diedFlag: (mort ?? 0) > farmSettings.mortalityAlertPct,
+              closing: last.closing,
+              feedBags: sum(rows, (r) => r.feedBags),
+              feedVsExpected: feedVariance(rows),
+              eggs: rows.some((r) => r.eggs !== null) ? sum(rows, (r) => r.eggs ?? 0) : null,
+              layingRate: layingRate(rows),
+              recordedBy: rows.length === 1 ? `${firstName(last.recordedBy)} · ${timeOf(last.createdAt)}` : `${rows.length} entries · ${recorders.join(', ')}`,
+            }
+          : null,
+      }
+    })
+    .sort((a, b) => a.penId - b.penId)
+}
+
+function productionKpis(daily: DailyRow[], range: Range, prev: Range, cur: DailyRow[], old: DailyRow[], penOk: (id: number) => boolean) {
+  const spark = lastDays(Math.max(8, Math.min(30, daysFrom(range.from, range.to) + 1)), range.to)
+  const day = (d: string) => rowsOn(daily, d, penOk)
+  const per = farmSettings.eggsPerCrate
+  const vs = range.from === range.to ? `vs ${formatShortDate(parseISODate(prev.from))}` : 'vs previous period'
+  const eggs = sum(cur, (d) => d.eggs ?? 0)
+  const lay = layingRate(cur)
+  const died = sum(cur, (d) => d.mortality)
+  const bags = sum(cur, (d) => d.feedBags)
+  const expectedBags = sum(cur, (d) => (d.expectedKg && d.feedKg && d.feedBags ? (d.expectedKg * d.feedBags) / d.feedKg : 0))
+  const layerPens = new Set(cur.filter((d) => d.eggs !== null).map((d) => d.penId)).size
+  return [
+    kpi({
+      label: 'Eggs collected',
+      value: formatNumber(Math.floor(eggs / per)),
+      unit: 'crates',
+      current: eggs,
+      previous: sum(old, (d) => d.eggs ?? 0) || null,
+      context: vs,
+      info: `Crates of ${per} collected across layer pens`,
+      spark: spark.map((d) => sum(day(d), (r) => r.eggs ?? 0) / per),
+    }),
+    kpi({
+      label: 'Laying rate',
+      value: lay === null ? '—' : lay.toFixed(1),
+      unit: '%',
+      current: lay,
+      previous: layingRate(old),
+      points: true,
+      digits: 1,
+      context: `${layerPens} layer pens`,
+      info: 'Eggs collected ÷ laying hens',
+      spark: spark.map((d) => layingRate(day(d)) ?? 0),
+    }),
+    kpi({
+      label: 'Mortality',
+      value: formatNumber(died),
+      unit: 'birds',
+      current: died,
+      previous: old.length ? sum(old, (d) => d.mortality) : null,
+      goodWhen: 'down',
+      context: `${(mortalityPct(cur) ?? 0).toFixed(2)}% · ${vs}`,
+      info: 'Birds that died, all pens',
+      spark: spark.map((d) => sum(day(d), (r) => r.mortality)),
+    }),
+    kpi({
+      label: 'Feed used',
+      value: bags.toFixed(1),
+      unit: 'bags',
+      current: bags,
+      previous: old.length ? sum(old, (d) => d.feedBags) : null,
+      goodWhen: 'neither',
+      context: expectedBags ? `vs ${expectedBags.toFixed(1)} expected` : vs,
+      info: 'Bags of feed used, all pens',
+      spark: spark.map((d) => sum(day(d), (r) => r.feedBags)),
+    }),
+  ]
 }
 
 /** Today's pens: who has recorded, and a shortcut to the entry form for those still due. */
@@ -199,7 +372,14 @@ function TodayCard({ rows, canRecord }: { rows: PenToday[]; canRecord: (penId: n
   const done = rows.filter((p) => p.died !== null).length
   return (
     <Card>
-      <CardHeader title={`Today · ${formatShortDate(farm.today)}`} meta={<span className="type-body-sm text-fg-tertiary">{done} of {rows.length} recorded · due by 18:00</span>} />
+      <CardHeader
+        title={`Today · ${formatShortDate(farm.today)}`}
+        meta={
+          <span className="type-body-sm text-fg-tertiary">
+            {done} of {rows.length} recorded · due by {farmSettings.missingEntryCutoff}
+          </span>
+        }
+      />
       <ul className="grid grid-cols-1 gap-2 px-5 pb-5 sm:grid-cols-2 lg:grid-cols-3">
         {rows.map((p) => {
           const due = p.died === null

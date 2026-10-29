@@ -41,8 +41,8 @@ export function formatCrates(eggs: number, perCrate = 30) {
   return loose ? `${crates} cr + ${loose}` : `${crates} cr`
 }
 
-/** "Fri 09/10/2026" from a "09/10" day in the current (mock) year. */
-export function formatDayMonth(dm: string, year = 2026) {
+/** "Fri 09/10/2026" from a "09/10" day, in the current year unless given. */
+export function formatDayMonth(dm: string, year = new Date().getFullYear()) {
   const [d, m] = dm.split('/').map(Number)
   const weekday = new Date(year, m - 1, d).toLocaleDateString('en-GB', { weekday: 'short' })
   return `${weekday} ${dm}/${year}`

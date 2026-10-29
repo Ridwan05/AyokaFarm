@@ -10,6 +10,7 @@ import type { StockKind } from '../../data/deliveries'
 import { feedTypes, medications } from '../../data/inventory'
 import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
+import { nowHM, todayISO, weekdayDm } from '../../data/metrics'
 import { formatNumber } from '../../lib/format'
 
 const KINDS = ['Feed', 'Medication'] as const
@@ -61,7 +62,7 @@ export function ReceiveDeliveryDrawer({ onClose }: { onClose: () => void }) {
       open
       onClose={onClose}
       title="Receive a delivery"
-      subtitle={`Fri 09/10/2026, 13:58 · ${user.name}`}
+      subtitle={`${weekdayDm(todayISO())}/${todayISO().slice(0, 4)}, ${nowHM()} · ${user.name}`}
       footer={
         <>
           <Button size="lg" className="flex-1" onClick={onClose}>

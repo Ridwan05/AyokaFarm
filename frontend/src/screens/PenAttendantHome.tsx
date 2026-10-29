@@ -20,14 +20,17 @@ import { canSeePen } from '../lib/access'
 import { cn } from '../lib/cn'
 import { formatLongDate, formatNaira, formatNumber, formatSignedPct, greeting } from '../lib/format'
 import { farmSettings } from '../data/farmSettings'
+import { penName } from '../data/farmViews'
 
 /** P-M1 · A pen attendant's home: their pens, and what still needs recording today. */
 export default function PenAttendantHome() {
   const user = useCurrentUser()
-  const { productionRecords, expenses } = useTrade()
+  const { productionRecords, expenses, catalog } = useTrade()
   const [addingExpense, setAddingExpense] = useState(false)
   const mine = pensToday.filter((p) => canSeePen(user, p.id)).map((p) => withTodaysRecord(p, productionRecords))
   const due = mine.filter((p) => p.died === null)
+  // Read the clock once, not on every render.
+  const [hello] = useState(() => greeting(new Date()))
   const firstName = user.name.split(' ')[0]
   const myExpenses = expenses.filter((e) => e.addedBy === firstName && e.date === TODAY_ISO)
 
@@ -35,10 +38,10 @@ export default function PenAttendantHome() {
     <>
       <PageHeader
         eyebrow={formatLongDate(farm.today)}
-        title={`${greeting(farm.today)}, ${firstName}`}
+        title={`${hello}, ${firstName}`}
         description={
           due.length
-            ? `${due.length} of your ${mine.length === 1 ? 'pen needs' : `${mine.length} pens need`} today’s entry — due by 18:00.`
+            ? `${due.length} of your ${mine.length === 1 ? 'pen needs' : `${mine.length} pens need`} today’s entry — due by ${farmSettings.missingEntryCutoff}.`
             : 'All your pens are recorded for today. Thank you.'
         }
         actions={
@@ -112,7 +115,7 @@ export default function PenAttendantHome() {
                 <span className="flex min-w-0 flex-1 flex-col">
                   <span className="truncate type-label-md text-fg-primary">{e.description}</span>
                   <span className="type-body-sm text-fg-tertiary">
-                    {e.category} · Pen {e.pen}
+                    {e.category} · {e.pen === null ? 'Whole farm' : penName(catalog, e.pen)}
                   </span>
                 </span>
                 <span className="type-numeric-md text-fg-primary">{formatNaira(e.amount)}</span>

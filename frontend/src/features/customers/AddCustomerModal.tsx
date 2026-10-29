@@ -1,7 +1,7 @@
 import { Phone } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Button } from '../../components/ui/Button'
-import { Checkbox, Field, SelectInput, TextInput } from '../../components/ui/Form'
+import { Field, SelectInput, TextInput } from '../../components/ui/Form'
 import { Modal } from '../../components/ui/Overlay'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { useToast } from '../../components/ui/toastContext'
@@ -30,7 +30,6 @@ export function AddCustomerModal({ onClose }: { onClose: () => void }) {
   const [buys, setBuys] = useState('Eggs')
   const [consent, setConsent] = useState<(typeof CONSENT)[number]>('Yes, they agreed')
   const [opening, setOpening] = useState('0')
-  const [welcome, setWelcome] = useState(true)
   const [submitted, setSubmitted] = useState(false)
   const regular = type === 'Regular customer'
   const openingValue = Number(opening.replace(/,/g, '')) || 0
@@ -51,7 +50,7 @@ export function AddCustomerModal({ onClose }: { onClose: () => void }) {
         short: trimmed.split(' ').slice(0, 2).join(' '),
         initials: initialsOf(trimmed),
         buys,
-        since: 'Oct 2026',
+        since: new Intl.DateTimeFormat('en-GB', { month: 'short', year: 'numeric' }).format(new Date()),
         area: area.trim() || '—',
         lastSale: '—',
         whatsapp: consent === CONSENT[0],
@@ -107,7 +106,7 @@ export function AddCustomerModal({ onClose }: { onClose: () => void }) {
                 <TextInput id={id} prefix="₦" inputMode="numeric" value={opening} onChange={(e) => setOpening(e.target.value)} onBlur={() => setOpening(formatNumber(openingValue))} />
               )}
             </Field>
-            {consent === CONSENT[0] && <Checkbox label="Send them a welcome message on WhatsApp" checked={welcome} onChange={setWelcome} />}
+            {consent === CONSENT[0] && <p className="type-body-sm text-fg-tertiary">Their consent is saved; messages start once WhatsApp is connected.</p>}
           </>
         )}
       </form>

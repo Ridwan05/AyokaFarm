@@ -1,6 +1,6 @@
 'use client'
 
-import { ListFilter, MessageCircle, Plus } from 'lucide-react'
+import { Download, ListFilter, MessageCircle, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PageHeader } from '../../components/layout/PageHeader'
@@ -13,26 +13,29 @@ import { RowMenu } from '../../components/ui/Menu'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { Select } from '../../components/ui/Select'
 import { NumberCell, PrimaryCell, Table, TextCell, type Column } from '../../components/ui/Table'
-import { customerKpis } from '../../data/customerKpis'
 import type { Customer } from '../../data/customers'
-import { aging, type Aging, type Bill } from '../../data/ledger'
+import { farmSettings } from '../../data/farmSettings'
+import type { Aging, Bill } from '../../data/ledger'
+import { agingOf, customerKpis } from '../../data/moneyKpis'
 import { useTrade } from '../../data/tradeContext'
 import { AddCustomerModal } from '../../features/customers/AddCustomerModal'
 import { AgingBar } from '../../features/customers/AgingBar'
 import { agingLegend, customerStatus, oldestDays } from '../../features/customers/customerView'
 import { SendStatementsModal } from '../../features/customers/SendStatementsModal'
 import { PaymentModal } from '../../features/payments/PaymentModal'
+import { downloadCsv } from '../../lib/export'
 import { formatNaira } from '../../lib/format'
 import { Presence } from '../../components/ui/Overlay'
 
 const SORTS = ['Biggest balance first', 'Oldest bill first', 'Name A–Z'] as const
-const OVERDUE_DAYS = 60
 
 type Row = { c: Customer; balance: number; bills: Bill[] }
 
 export default function Customers() {
   const router = useRouter()
-  const { customers, customerBalance, customerOpenBills } = useTrade()
+  const trade = useTrade()
+  const { customers, customerBalance, customerOpenBills } = trade
+  const OVERDUE_DAYS = farmSettings.overdueDebtDays
   const [sort, setSort] = useState<(typeof SORTS)[number]>(SORTS[0])
   const [query, setQuery] = useState('')
   const [overlay, setOverlay] = useState<{ kind: 'add' | 'send' } | { kind: 'pay'; id: string } | null>(null)
@@ -46,7 +49,7 @@ export default function Customers() {
 
   const totals = owing.reduce<Aging>(
     (t, r) => {
-      const a = aging(r.bills)
+      const a = agingOf(r.bills)
       return { current: t.current + a.current, days31to60: t.days31to60 + a.days31to60, over60: t.over60 + a.over60 }
     },
     { current: 0, days31to60: 0, over60: 0 },
@@ -98,6 +101,18 @@ export default function Customers() {
         description={`${customers.length} customers. Balances are calculated from every sale and payment, never typed.`}
         actions={
           <>
+            <Button
+              leadingIcon={Download}
+              onClick={() =>
+                downloadCsv(
+                  'customers',
+                  ['Customer', 'Buys', 'Area', 'Regular since', 'Balance (₦)', 'Oldest unpaid (days)', 'Last sale', 'WhatsApp', 'Status'],
+                  rows.map((r) => [r.c.name, r.c.buys, r.c.area, r.c.since, r.balance, oldestDays(r.bills), r.c.lastSale, r.c.whatsapp ? 'Opted in' : 'No', customerStatus(r.bills).label]),
+                )
+              }
+            >
+              Export
+            </Button>
             <Button leadingIcon={MessageCircle} onClick={() => setOverlay({ kind: 'send' })}>
               Send statements
             </Button>
@@ -109,7 +124,7 @@ export default function Customers() {
       />
 
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
-        {customerKpis.map((kpi) => (
+        {customerKpis(trade).map((kpi) => (
           <KpiCard key={kpi.label} kpi={kpi} />
         ))}
       </div>
@@ -118,7 +133,7 @@ export default function Customers() {
         <span className="type-label-md text-fg-primary">Aging</span>
         <AgingBar aging={totals} className="w-full shrink-0 lg:w-[424px]" />
         <span className="hidden flex-1 lg:block" />
-        {agingLegend.map((l) => (
+        {agingLegend().map((l) => (
           <span key={l.key} className="flex items-center gap-1.5 type-body-sm text-fg-secondary">
             <span className={`size-2 rounded-full ${l.dot}`} />
             {l.label}

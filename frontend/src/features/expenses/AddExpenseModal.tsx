@@ -4,7 +4,8 @@ import { Checkbox, DateInput, Field, SelectInput, TextInput } from '../../compon
 import { Modal } from '../../components/ui/Overlay'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { useToast } from '../../components/ui/toastContext'
-import { expenseCategories, type Expense, type ExpenseCategory } from '../../data/expenses'
+import type { Expense, ExpenseCategory } from '../../data/expenses'
+import { weekdayDayMonth } from '../../data/metrics'
 import { TODAY_ISO } from '../../data/ledger'
 import { pens } from '../../data/pens'
 import type { PaymentMethod } from '../../data/sales'
@@ -18,7 +19,8 @@ const METHODS = ['Cash', 'Transfer', 'POS'] as const
 
 export function AddExpenseModal({ onClose }: { onClose: () => void }) {
   const currentUser = useCurrentUser()
-  const { addExpense } = useTrade()
+  const { addExpense, catalog } = useTrade()
+  const categories = catalog.categories.filter((c) => c.is_active).map((c) => c.name)
   // Attendants add pen expenses only, for the pens they work on (BRD §4); everyone else can pick any pen or the whole farm.
   const ownPensOnly = isAttendant(currentUser.role)
   const penOptions = [...pens].filter((p) => canSeePen(currentUser, p.id)).sort((a, b) => a.id - b.id)
@@ -26,7 +28,7 @@ export function AddExpenseModal({ onClose }: { onClose: () => void }) {
   const me = currentUser.name.split(' ')[0]
   const [scope, setScope] = useState<(typeof SCOPES)[number]>('One pen')
   const [pen, setPen] = useState(String(penOptions[0]?.id ?? ''))
-  const [category, setCategory] = useState<ExpenseCategory>('Vet services')
+  const [category, setCategory] = useState<ExpenseCategory>(categories[0] ?? 'Other')
   const [amount, setAmount] = useState('25,000')
   const [date, setDate] = useState(TODAY_ISO)
   const [method, setMethod] = useState<(typeof METHODS)[number]>('Transfer')
@@ -66,7 +68,7 @@ export function AddExpenseModal({ onClose }: { onClose: () => void }) {
       open
       onClose={onClose}
       title="Add expense"
-      subtitle={`Fri 09/10/2026 · recorded by ${me}`}
+      subtitle={`${weekdayDayMonth(TODAY_ISO)} · recorded by ${me}`}
       footer={
         <>
           <Button size="lg" className="flex-1" onClick={onClose}>
@@ -100,7 +102,7 @@ export function AddExpenseModal({ onClose }: { onClose: () => void }) {
               id={id}
               value={category}
               onChange={(e) => setCategory(e.target.value as ExpenseCategory)}
-              options={expenseCategories.map((c) => ({ value: c, label: c }))}
+              options={categories.map((c) => ({ value: c, label: c }))}
             />
           )}
         </Field>

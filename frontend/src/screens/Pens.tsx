@@ -12,7 +12,10 @@ import { Select } from '../components/ui/Select'
 import { NumberCell, PrimaryCell, Table, TextCell, type Column } from '../components/ui/Table'
 import { AddPenModal } from '../features/pens/AddPenModal'
 import { PlaceFlockDrawer } from '../features/pens/PlaceFlockDrawer'
-import { closedFlocks, pens, type ClosedFlock, type Pen, type Stat } from '../data/pens'
+import { pens, type Pen, type Stat } from '../data/pens'
+import { penName } from '../data/farmViews'
+import { dayMonth, penCost, penMoney } from '../data/metrics'
+import { useTrade, type Trade } from '../data/tradeContext'
 import { cn } from '../lib/cn'
 import { formatNaira, formatNumber } from '../lib/format'
 import { Presence } from '../components/ui/Overlay'
@@ -26,6 +29,8 @@ const sorters: Record<(typeof SORTS)[number], (a: Pen, b: Pen) => number> = {
 }
 
 export default function Pens() {
+  const trade = useTrade()
+  const closedFlocks = closedFlockRows(trade)
   const layers = pens.filter((p) => p.type === 'Layers').length
   const broilers = pens.length - layers
   const liveBirds = pens.reduce((n, p) => n + p.liveBirds, 0)
@@ -75,9 +80,12 @@ export default function Pens() {
         <CardHeader
           title="Closed flocks"
           meta={<span className="type-body-sm text-fg-tertiary">Profit is judged per flock, over its whole life</span>}
-          action={{ label: 'All flocks', to: '/pens/flocks' }}
-        />
-        <Table columns={flockColumns} rows={closedFlocks} rowKey={(f) => f.code} />
+          />
+        {closedFlocks.length ? (
+          <Table columns={flockColumns} rows={closedFlocks} rowKey={(f) => f.code} />
+        ) : (
+          <p className="px-5 pb-6 type-body-md text-fg-tertiary">No flocks have been closed yet.</p>
+        )}
       </Card>
 
       {/* Mounted only while open so each opening starts with a fresh form. */}
@@ -90,6 +98,7 @@ export default function Pens() {
 const statTone = { default: 'text-fg-primary', warning: 'text-fg-warning', danger: 'text-fg-danger' }
 
 function PenTile({ pen }: { pen: Pen }) {
+  const { catalog } = useTrade()
   const Icon = pen.type === 'Layers' ? Egg : Bird
   const fill = Math.min(pen.liveBirds / pen.capacity, 1) * 100
   return (
@@ -103,7 +112,7 @@ function PenTile({ pen }: { pen: Pen }) {
         </span>
         <div className="flex min-w-0 flex-1 flex-col">
           <span className="truncate type-label-lg text-fg-primary">
-            Pen {pen.id} · {pen.type}
+            {penName(catalog, pen.id)} · {pen.type}
           </span>
           <span className="truncate type-body-sm text-fg-tertiary">
             {pen.flock} · week {pen.week}
@@ -156,17 +165,53 @@ function StatBlock({ stat }: { stat: Stat }) {
   )
 }
 
+type ClosedFlock = {
+  code: string
+  initials: string
+  type: string
+  pen: string
+  breed: string
+  placed: string
+  closed: string
+  birdsIn: number
+  birdsOut: number
+  mortalityPct: number
+  /** null when the flock's life is older than the loaded records. */
+  margin: number | null
+}
+
+/** Closed flocks, newest first: birds in and out from the daily entries, margin over the flock's life. */
+function closedFlockRows({ history, catalog }: Trade): ClosedFlock[] {
+  return history.flocks
+    .filter((f) => f.status === 'closed')
+    .sort((a, b) => (b.closed_on ?? '').localeCompare(a.closed_on ?? ''))
+    .map((f) => {
+      const rows = history.daily.filter((d) => d.flockId === f.id).sort((a, b) => a.date.localeCompare(b.date))
+      const out = rows.at(-1)?.closing ?? f.birds_placed
+      const lays = catalog.birdTypes.find((b) => b.id === f.bird_type_id)?.lays_eggs
+      const closed = f.closed_on ?? rows.at(-1)?.date ?? f.placed_on
+      const m = f.placed_on >= history.since ? penMoney(history, catalog, { from: f.placed_on, to: closed }).find((x) => x.penId === f.pen_id) : undefined
+      return {
+        code: f.code,
+        initials: f.code.slice(0, 1) + f.code.slice(-1),
+        type: lays ? 'Layers' : 'Broilers',
+        pen: penName(catalog, f.pen_id),
+        breed: f.breed ?? '—',
+        placed: `${dayMonth(f.placed_on)} ${f.placed_on.slice(0, 4)}`,
+        closed: `${dayMonth(closed)} ${closed.slice(0, 4)}`,
+        birdsIn: f.birds_placed,
+        birdsOut: out,
+        mortalityPct: (rows.reduce((n, d) => n + d.mortality, 0) * 100) / f.birds_placed,
+        margin: m ? m.revenue - penCost(m) : null,
+      }
+    })
+}
+
 const flockColumns: Column<ClosedFlock>[] = [
   {
     key: 'flock',
     header: 'Flock',
-    render: (f) => (
-      <PrimaryCell
-        initials={f.initials}
-        title={`${f.code} · ${f.type}`}
-        subtitle={`Pen ${f.pen} · ${f.breed}`}
-      />
-    ),
+    render: (f) => <PrimaryCell initials={f.initials} title={`${f.code} · ${f.type}`} subtitle={`${f.pen} · ${f.breed}`} />,
   },
   { key: 'placed', header: 'Placed', width: 120, render: (f) => <TextCell>{f.placed}</TextCell> },
   { key: 'closed', header: 'Closed', width: 120, render: (f) => <TextCell>{f.closed}</TextCell> },
@@ -183,17 +228,11 @@ const flockColumns: Column<ClosedFlock>[] = [
   },
   { key: 'mortality', header: 'Mortality', align: 'right', width: 96, render: (f) => <NumberCell>{f.mortalityPct.toFixed(1)}%</NumberCell> },
   {
-    key: 'fcr',
-    header: 'FCR',
-    align: 'right',
-    width: 80,
-    render: (f) => (f.fcr === null ? <NumberCell tone="muted">—</NumberCell> : <NumberCell>{f.fcr.toFixed(2)}</NumberCell>),
-  },
-  {
     key: 'margin',
     header: 'Margin',
     align: 'right',
     width: 130,
-    render: (f) => <NumberCell tone={f.margin >= 0 ? 'success' : 'danger'}>{formatNaira(f.margin)}</NumberCell>,
+    render: (f) =>
+      f.margin === null ? <NumberCell tone="muted">—</NumberCell> : <NumberCell tone={f.margin >= 0 ? 'success' : 'danger'}>{formatNaira(Math.round(f.margin))}</NumberCell>,
   },
 ]

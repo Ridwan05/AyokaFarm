@@ -38,7 +38,7 @@ export function PaymentModal({ direction: initialDirection = 'in', partyId, onCl
   const [date, setDate] = useState(TODAY_ISO)
   const [method, setMethod] = useState<(typeof METHODS)[number]>('Transfer')
   const [reference, setReference] = useState(isIn ? 'TRF-89120' : 'TRF-89201')
-  const [notify, setNotify] = useState(true)
+  const [notify, setNotify] = useState(false)
   const [error, setError] = useState<string>()
   const online = useOnline()
   // P-E16: a payment saved while offline waits here and saves itself when the connection is back.
@@ -87,6 +87,8 @@ export function PaymentModal({ direction: initialDirection = 'in', partyId, onCl
       window.addEventListener('online', onReconnect.current, { once: true })
       return
     }
+    // Open the statement now, while the click still counts as the person's action (pop-up blockers).
+    if (notify) window.open(`/print/statement/${isIn ? 'customer' : 'supplier'}/${party}`, '_blank')
     save(payment)
   }
 
@@ -194,7 +196,7 @@ export function PaymentModal({ direction: initialDirection = 'in', partyId, onCl
         </div>
 
         <Checkbox
-          label={isIn ? `Send ${current.short} the updated statement on WhatsApp` : 'Print a payment voucher for the file'}
+          label={isIn ? `Open ${current.short}’s statement to print or share (WhatsApp isn’t connected yet)` : `Open ${current.short}’s statement to print for the file`}
           checked={notify}
           onChange={setNotify}
         />

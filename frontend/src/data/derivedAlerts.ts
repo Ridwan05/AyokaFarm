@@ -164,7 +164,7 @@ export function deriveAlerts(trade: Trade, today = todayISO()): FarmAlert[] {
       status: 'new',
       pen: e.penId,
       title: `${pen} — ${e.late ? 'yesterday’s' : 'today’s'} entry missing`,
-      summary: e.late ? 'Can be added as a late entry' : `Due by ${farmSettings.missingEntryCutoff}`,
+      summary: e.late ? 'Not recorded — check with the pen attendant' : `Due by ${farmSettings.missingEntryCutoff}`,
       time: e.late ? 'Yesterday' : farmSettings.missingEntryCutoff,
       facts: [
         ['Missing day', weekdayDayMonth(e.date)],

@@ -1,9 +1,9 @@
 'use client'
 
 import { Plus, ShieldCheck } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { toast as sonner } from 'sonner'
-import { addStaff, resetStaffPassword, setStaffActive } from '../../app/(app)/settings/staff/actions'
+import { addStaff, changeStaffRole, resetStaffPassword, setStaffActive } from '../../app/(app)/settings/staff/actions'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card, CardHeader } from '../../components/ui/Card'
@@ -23,6 +23,8 @@ import { SettingsHeader } from './SettingsHeader'
 
 /** "Pens 3, 4, 5" → [3, 4, 5] */
 const penIds = (text: string) => (text.match(/\d+/g) ?? []).map(Number)
+/** Built-in roles by their label; custom roles by their id until the roles list loads. */
+const roleName = (role: string) => roleLabels[role as StaffMember['role']] ?? role.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase())
 const penText = (ids: number[]) => (ids.length === 0 ? 'no pens' : ids.length === 1 ? `Pen ${ids[0]}` : `Pens ${ids.join(', ')}`)
 
 export default function Staff() {
@@ -35,6 +37,7 @@ export default function Staff() {
   const [adding, setAdding] = useState(false)
   const [assigning, setAssigning] = useState<StaffMember | null>(null)
   const [resetting, setResetting] = useState<StaffMember | null>(null)
+  const [changingRole, setChangingRole] = useState<StaffMember | null>(null)
   // `staff` is loaded from Supabase and refreshed after every change.
   const active = staff.filter((p) => p.active)
   const inactive = staff.filter((p) => !p.active)
@@ -53,7 +56,7 @@ export default function Staff() {
 
   const columns: Column<StaffMember>[] = [
     { key: 'name', header: 'Name', render: (p) => <PrimaryCell initials={p.initials} title={p.name} subtitle={p.phone} /> },
-    { key: 'role', header: 'Role', width: 170, render: (p) => <TextCell tone="primary">{roleLabels[p.role]}</TextCell> },
+    { key: 'role', header: 'Role', width: 170, render: (p) => <TextCell tone="primary">{roleName(p.role)}</TextCell> },
     { key: 'pens', header: 'Pens', width: 130, render: (p) => <TextCell tone="primary">{p.pens}</TextCell> },
     { key: 'last', header: 'Last active', width: 130, render: (p) => <TextCell tone="primary">{p.lastActive}</TextCell> },
     { key: 'wa', header: 'WhatsApp alerts', width: 130, render: (p) => <TextCell tone="primary">{p.whatsapp ? 'On' : 'Off'}</TextCell> },
@@ -103,6 +106,7 @@ export default function Staff() {
                     ? [{ label: 'Works on all pens', disabled: true, onSelect: () => {} }]
                     : []),
                 { label: 'Reset password…', onSelect: () => setResetting(p), disabled: !p.active || (p.role === 'owner' && !isOwner) },
+                ...(isOwner && p.id !== myId ? [{ label: 'Change role…', disabled: !p.active, onSelect: () => setChangingRole(p) }] : []),
                 ...(isOwner
                   ? [
                       p.active
@@ -122,6 +126,7 @@ export default function Staff() {
       <Presence>{adding && <AddStaffModal onClose={() => setAdding(false)} />}</Presence>
       <Presence>{assigning && <AssignPensModal person={assigning} onClose={() => setAssigning(null)} />}</Presence>
       <Presence>{resetting && <ResetPasswordModal person={resetting} onClose={() => setResetting(null)} />}</Presence>
+      <Presence>{changingRole && <ChangeRoleModal person={changingRole} onClose={() => setChangingRole(null)} />}</Presence>
     </>
   )
 }
@@ -306,6 +311,78 @@ function ResetPasswordModal({ person, onClose }: { person: StaffMember; onClose:
       <form id="reset-password" onSubmit={submit}>
         <Field label="New password" hint="At least 8 characters">
           {(id) => <TextInput id={id} type="text" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />}
+        </Field>
+      </form>
+    </Modal>
+  )
+}
+
+function ChangeRoleModal({ person, onClose }: { person: StaffMember; onClose: () => void }) {
+  const { reload } = useTrade()
+  const [roles, setRoles] = useState<{ id: string; name: string; description: string }[] | null>(null)
+  const [role, setRole] = useState(roleToDb(person.role))
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void createClient()
+      .from('roles')
+      .select('id, name, description')
+      .order('created_at')
+      .then(({ data, error }) => {
+        if (cancelled) return
+        if (error) sonner.error(error.message)
+        setRoles(data ?? [])
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
+  const chosen = roles?.find((r) => r.id === role)
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (role === roleToDb(person.role)) return onClose()
+    setBusy(true)
+    const result = await changeStaffRole(person.id, role)
+    setBusy(false)
+    if (!result.ok) return void sonner.error(result.error)
+    await reload()
+    sonner.success(`${person.name.split(' ')[0]} is now ${chosen?.name ?? role}`, { description: 'It applies the next time they open the app.' })
+    onClose()
+  }
+
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Change role · ${person.name}`}
+      subtitle="What they can see and do, from Roles & permissions"
+      footer={
+        <>
+          <Button size="lg" className="flex-1" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="lg" variant="primary" className="flex-1" type="submit" form="change-role" disabled={busy || !roles}>
+            {busy ? 'Saving…' : 'Change role'}
+          </Button>
+        </>
+      }
+    >
+      <form id="change-role" onSubmit={submit} className="flex flex-col gap-4">
+        <Field
+          label="Role"
+          hint={role === 'owner' ? 'Another owner can do everything you can, including adding and removing staff' : (chosen?.description ?? 'Pen assignments are cleared if the new role doesn’t work on its own pens')}
+        >
+          {(id) => (
+            <SelectInput
+              id={id}
+              value={role}
+              disabled={!roles}
+              onChange={(e) => setRole(e.target.value)}
+              options={roles ? roles.map((r) => ({ value: r.id, label: r.name })) : [{ value: role, label: 'Loading roles…' }]}
+            />
+          )}
         </Field>
       </form>
     </Modal>

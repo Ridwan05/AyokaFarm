@@ -14,7 +14,10 @@ import { RowMenu } from '../components/ui/Menu'
 import { NumberCell, PrimaryCell, Table, TextCell, type Column } from '../components/ui/Table'
 import type { Customer } from '../data/customers'
 import { daysBetween, type Bill } from '../data/ledger'
-import { amountOf, products, saleStatus, TODAY } from '../data/sales'
+import { farmSettings } from '../data/farmSettings'
+import { addDays, kpi, lastDays, nowHM, todayISO } from '../data/metrics'
+import { FLAT, approvers, overdueToSuppliers, salesIn } from '../data/moneyKpis'
+import { amountOf, products, saleStatus } from '../data/sales'
 import { farm } from '../data/session'
 import { useCurrentUser } from '../data/sessionContext'
 import { useTrade } from '../data/tradeContext'
@@ -27,9 +30,6 @@ import { formatLongDate, formatNaira, formatNumber, greeting } from '../lib/form
 import { Presence } from '../components/ui/Overlay'
 
 const CHASE_ROWS = 5
-const good = [84.9, 85.2, 85.0, 85.4, 85.8, 86.0, 86.2, 86.4]
-const bad = [0.08, 0.07, 0.08, 0.08, 0.07, 0.08, 0.12, 0.17]
-const flat = [1, 1, 1, 1, 1, 1, 1]
 const thousands = (n: number) => String(Math.round(n / 1000))
 
 type ChaseRow = { c: Customer; balance: number; bills: Bill[] }
@@ -42,7 +42,15 @@ export default function AccountsHome() {
   const [overlay, setOverlay] = useState<SaleOverlay>(null)
   const [paying, setPaying] = useState<string | null | 'new'>(null)
 
-  const today = trade.sales.filter((s) => s.date.startsWith(TODAY))
+  const todayIso = todayISO()
+  const today = trade.sales.filter((s) => (s.iso ?? '') === todayIso)
+  const day = (iso: string) => salesIn(trade.sales, { from: iso, to: iso })
+  const soldOn = (iso: string) => day(iso).reduce((n, s) => n + amountOf(s), 0)
+  const collectedOn = (iso: string) => day(iso).reduce((n, s) => n + Math.min(s.paid, amountOf(s)), 0)
+  const days = lastDays(8)
+  const yesterday = addDays(todayIso, -1)
+  const overdue = overdueToSuppliers(trade)
+  const who = approvers(trade)
   const approved = today.filter((s) => !s.pendingApproval)
   const waiting = today.filter((s) => s.pendingApproval)
   const sold = approved.reduce((n, s) => n + amountOf(s), 0)
@@ -57,10 +65,10 @@ export default function AccountsHome() {
   const firstCustomer = first && trade.customers.find((c) => c.id === first.customerId)
 
   const kpis: Kpi[] = [
-    { label: 'Sold today', value: thousands(sold), unit: 'thousand ₦', delta: `${approved.length} sales`, trend: 'flat', sentiment: 'neutral', context: waiting.length ? `+ ₦${formatNumber(waiting.reduce((n, s) => n + amountOf(s), 0))} waiting` : 'nothing waiting', info: 'Approved sales today', spark: flat },
-    { label: 'Collected today', value: thousands(collected), unit: 'thousand ₦', delta: `${sold ? Math.round((collected / sold) * 100) : 0}%`, trend: 'up', sentiment: 'good', context: 'of today’s sales', info: 'Paid at the time of sale today', spark: good },
-    { label: 'Owed to the farm', value: (owed / 1e6).toFixed(2), unit: 'million ₦', delta: '+5.5%', trend: 'up', sentiment: 'bad', context: `${owing.length} customers`, info: 'All customer balances', spark: bad },
-    { label: 'We owe suppliers', value: thousands(weOwe.reduce((n, x) => n + x.balance, 0)), unit: 'thousand ₦', delta: `${weOwe.length} suppliers`, trend: 'flat', sentiment: 'neutral', context: 'nothing overdue', info: 'Unpaid purchases', spark: flat },
+    kpi({ label: 'Sold today', value: thousands(sold), unit: 'thousand ₦', current: sold, previous: soldOn(yesterday), context: waiting.length ? `${approved.length} sales · + ₦${formatNumber(waiting.reduce((n, s) => n + amountOf(s), 0))} waiting` : `${approved.length} sales · vs yesterday`, info: 'Approved sales today', spark: days.map(soldOn) }),
+    kpi({ label: 'Collected today', value: thousands(collected), unit: 'thousand ₦', current: collected, previous: collectedOn(yesterday), context: sold ? `${Math.round((collected / sold) * 100)}% of today’s sales` : 'of today’s sales', info: 'Paid at the time of sale today', spark: days.map(collectedOn) }),
+    kpi({ label: 'Owed to the farm', value: (owed / 1e6).toFixed(2), unit: 'million ₦', current: null, previous: null, goodWhen: 'neither', context: `${owing.length} customer${owing.length === 1 ? '' : 's'}`, info: 'All customer balances', spark: FLAT }),
+    kpi({ label: 'We owe suppliers', value: thousands(weOwe.reduce((n, x) => n + x.balance, 0)), unit: 'thousand ₦', current: null, previous: null, goodWhen: 'neither', context: `${weOwe.length} supplier${weOwe.length === 1 ? '' : 's'} · ${overdue ? `₦${formatNumber(overdue)} past terms` : 'nothing overdue'}`, info: 'Unpaid purchases and supplier expenses', spark: FLAT }),
   ]
 
   const chase: ChaseRow[] = owing
@@ -78,7 +86,7 @@ export default function AccountsHome() {
       width: 124,
       render: (r) => {
         const d = daysBetween(r.bills[0].date)
-        return <NumberCell tone={d > 60 ? 'danger' : 'default'}>{d} days</NumberCell>
+        return <NumberCell tone={d > farmSettings.overdueDebtDays ? 'danger' : 'default'}>{d} days</NumberCell>
       },
     },
     { key: 'wa', header: 'WhatsApp', width: 96, render: (r) => <TextCell>{r.c.whatsapp ? 'Opted in' : '—'}</TextCell> },
@@ -100,8 +108,8 @@ export default function AccountsHome() {
   return (
     <>
       <PageHeader
-        eyebrow={`${formatLongDate(farm.today)} · 16:45`}
-        title={`${greeting(new Date(2026, 9, 9, 16, 45))}, ${user.name.split(' ')[0]}`}
+        eyebrow={`${formatLongDate(farm.today)} · ${nowHM()}`}
+        title={`${greeting(new Date(`${todayIso}T${nowHM()}:00`))}, ${user.name.split(' ')[0]}`}
         description="Money in, money out and who to chase. Every figure here is calculated from sales, purchases and payments."
         actions={
           <>
@@ -116,7 +124,7 @@ export default function AccountsHome() {
       />
 
       {first && (
-        <Alert tone="warning" icon={Clock} title="Waiting for Emeka’s approval" actions={<Button onClick={() => setOverlay({ kind: 'detail', receipt: first.receipt })}>View sale</Button>}>
+        <Alert tone="warning" icon={Clock} title={`Waiting for approval from ${who}`} actions={<Button onClick={() => setOverlay({ kind: 'detail', receipt: first.receipt })}>View sale</Button>}>
           {firstCustomer?.name ?? 'One-off buyer'} · {first.qty} {firstProduct.unit} at ₦{formatNumber(first.price)} (minimum ₦{formatNumber(firstProduct.minPrice)}) · ₦{formatNumber(amountOf(first))} · sent by you at {first.date.split(' ')[1]}. The receipt is held until it’s approved.
         </Alert>
       )}
@@ -193,7 +201,7 @@ export default function AccountsHome() {
                   key={s.receipt}
                   icon={Receipt}
                   title={c?.name ?? 'One-off buyer'}
-                  detail={`${s.receipt} · ${s.date.split(' ')[1]} · ${s.qty} ${p.unitShort} · ${status === 'needs-approval' ? 'waiting for Emeka' : statusBadge[status].label.toLowerCase()}`}
+                  detail={`${s.receipt} · ${s.date.split(' ')[1]} · ${s.qty} ${p.unitShort} · ${status === 'needs-approval' ? `waiting for ${who}` : statusBadge[status].label.toLowerCase()}`}
                   amount={`₦${formatNumber(amountOf(s))}`}
                   amountTone={s.pendingApproval ? 'text-fg-warning' : 'text-fg-primary'}
                   onClick={() => setOverlay({ kind: 'detail', receipt: s.receipt })}

@@ -57,37 +57,6 @@ export function saleStatus(s: Sale): SaleStatus {
   return s.paid > 0 ? 'part-paid' : 'on-credit'
 }
 
-const recorded = (by: string, time: string): SaleEvent => ({ title: 'Sale recorded', detail: `By ${by} at the gate`, time })
-
-export const initialSales: Sale[] = [
-  {
-    receipt: 'S-1043', date: '09/10 15:10', customerId: 'bodija', productId: 'eggs', qty: 50, price: 3800, paid: 0, recordedBy: 'Funmi A.', pendingApproval: true,
-    history: [
-      { title: 'Waiting for Emeka or Adeola', detail: 'Below the ₦4,000 minimum · receipt held', time: '15:10' },
-      { title: 'Sent for approval', detail: 'By Funmi at the gate', time: '15:10' },
-    ],
-  },
-  {
-    receipt: 'S-1042', date: '09/10 11:21', customerId: 'mama-titi', productId: 'eggs', qty: 40, price: 4200, paid: 100000, method: 'transfer', recordedBy: 'Funmi A.',
-    history: [{ title: 'Receipt delivered on WhatsApp', detail: 'To Mama Titi · she opted in', time: '11:22' }, recorded('Funmi', '11:21')],
-  },
-  { receipt: 'S-1041', date: '09/10 10:05', customerId: 'one-off', productId: 'spent-layers', qty: 12, price: 5500, paid: 66000, method: 'cash', recordedBy: 'Funmi A.', history: [recorded('Funmi', '10:05')] },
-  { receipt: 'S-1040', date: '09/10 09:40', customerId: 'green-acres', productId: 'droppings', qty: 30, price: 1500, paid: 45000, method: 'transfer', recordedBy: 'Funmi A.', history: [recorded('Funmi', '09:40')] },
-  { receipt: 'S-1039', date: '08/10 16:20', customerId: 'grace', productId: 'eggs', qty: 30, price: 4200, paid: 30000, method: 'POS', recordedBy: 'Funmi A.', history: [recorded('Funmi', '16:20')] },
-  { receipt: 'S-1038', date: '08/10 12:05', customerId: 'kola', productId: 'eggs', qty: 20, price: 4200, paid: 84000, method: 'transfer', recordedBy: 'Funmi A.', history: [recorded('Funmi', '12:05')] },
-  { receipt: 'S-1037', date: '08/10 10:30', customerId: 'one-off', productId: 'cracked', qty: 15, price: 2500, paid: 37500, method: 'cash', recordedBy: 'Funmi A.', history: [recorded('Funmi', '10:30')] },
-  { receipt: 'S-1036', date: '07/10 14:45', customerId: 'st-marys', productId: 'eggs', qty: 25, price: 4200, paid: 0, recordedBy: 'Funmi A.', history: [recorded('Funmi', '14:45')] },
-  { receipt: 'S-1035', date: '07/10 11:10', customerId: 'mrs-okafor', productId: 'eggs', qty: 35, price: 4200, paid: 100000, method: 'transfer', recordedBy: 'Funmi A.', history: [recorded('Funmi', '11:10')] },
-  { receipt: 'S-1034', date: '06/10 15:20', customerId: 'grace', productId: 'eggs', qty: 25, price: 4200, paid: 105000, method: 'POS', recordedBy: 'Funmi A.', history: [recorded('Funmi', '15:20')] },
-  { receipt: 'S-1033', date: '06/10 11:45', customerId: 'one-off', productId: 'eggs', qty: 4, price: 4300, paid: 17200, method: 'cash', recordedBy: 'Funmi A.', history: [recorded('Funmi', '11:45')] },
-  { receipt: 'S-1032', date: '05/10 10:20', customerId: 'mrs-okafor', productId: 'eggs', qty: 30, price: 4200, paid: 126000, method: 'transfer', recordedBy: 'Funmi A.', history: [recorded('Funmi', '10:20')] },
-  { receipt: 'S-1031', date: '02/10 16:10', customerId: 'mama-titi', productId: 'eggs', qty: 40, price: 4200, paid: 168000, method: 'transfer', recordedBy: 'Funmi A.', history: [recorded('Funmi', '16:10')] },
-  { receipt: 'S-1030', date: '02/10 10:40', customerId: 'green-acres', productId: 'droppings', qty: 25, price: 1500, paid: 37500, method: 'transfer', recordedBy: 'Funmi A.', history: [recorded('Funmi', '10:40')] },
-  { receipt: 'S-1029', date: '01/10 12:00', customerId: 'one-off', productId: 'cracked', qty: 10, price: 2500, paid: 25000, method: 'cash', recordedBy: 'Funmi A.', history: [recorded('Funmi', '12:00')] },
-  { receipt: 'S-1028', date: '01/10 09:35', customerId: 'st-marys', productId: 'eggs', qty: 25, price: 4200, paid: 105000, method: 'transfer', recordedBy: 'Funmi A.', history: [recorded('Funmi', '09:35')] },
-]
-
-/** Days covered by "This week" in the mock (03–09 Oct). */
 const todayIso = farmTodayISO()
 /** Today as dd/mm, matching Sale.date. */
 export const TODAY = `${todayIso.slice(8, 10)}/${todayIso.slice(5, 7)}`

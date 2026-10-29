@@ -1,7 +1,7 @@
 'use client'
 
-import { Check, CircleCheck, ListFilter, MessageCircle, Settings, Warehouse } from 'lucide-react'
-import { useState } from 'react'
+import { Bell, Check, CircleCheck, ListFilter, Settings, Warehouse } from 'lucide-react'
+import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Badge } from '../components/ui/Badge'
@@ -13,76 +13,102 @@ import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Select } from '../components/ui/Select'
 import { Table, TextCell, type Column } from '../components/ui/Table'
 import { useToast } from '../components/ui/toastContext'
-import { alertTypes, farmAlerts, resolvedThisWeek, whatsappRecipients, type FarmAlert, type ResolvedAlert } from '../data/alerts'
+import { alertTypes, readMarks, writeMarks, type AlertMark, type FarmAlert } from '../data/alerts'
+import { deriveAlerts } from '../data/derivedAlerts'
+import { dm, timeOf, todayISO, weekStart } from '../data/metrics'
+import { useTrade } from '../data/tradeContext'
 import { useCurrentUser } from '../data/sessionContext'
 import { AlertRow, type AlertKind } from '../features/alerts/AlertRow'
 
 const TYPE_FILTERS = ['All types', ...Object.values(alertTypes)]
-const PEN_FILTERS = ['All pens', 'Pen 1', 'Pen 2', 'Pen 3', 'Pen 4', 'Pen 5', 'Pen 6']
 
 const statusLabel = (a: FarmAlert) => (a.status === 'acknowledged' ? `Acknowledged by ${a.acknowledgedBy}` : 'New')
 
-const resolvedColumns: Column<ResolvedAlert>[] = [
+type ResolvedRow = AlertMark & { id: string }
+
+const resolvedColumns: Column<ResolvedRow>[] = [
   { key: 'alert', header: 'Alert', render: (r) => <TextCell tone="primary">{r.title}</TextCell> },
   { key: 'where', header: 'Where', width: 160, render: (r) => <TextCell>{r.where}</TextCell> },
   { key: 'raised', header: 'Raised', width: 140, render: (r) => <TextCell>{r.raised}</TextCell> },
-  { key: 'by', header: 'Resolved by', width: 170, render: (r) => <TextCell>{r.resolvedBy}</TextCell> },
-  { key: 'note', header: 'Note', width: 300, render: (r) => <TextCell>{r.note}</TextCell> },
+  { key: 'by', header: 'Resolved by', width: 170, render: (r) => <TextCell>{`${r.by} · ${dm(r.at.slice(0, 10))} ${timeOf(r.at)}`}</TextCell> },
+  { key: 'note', header: 'Note', width: 300, render: (r) => <TextCell>{r.note ?? '—'}</TextCell> },
 ]
 
 export default function Alerts() {
   const currentUser = useCurrentUser()
   const toast = useToast()
-  const [alerts, setAlerts] = useState(farmAlerts)
-  const [resolved, setResolved] = useState(resolvedThisWeek)
+  const router = useRouter()
+  const trade = useTrade()
+  const derived = useMemo(() => deriveAlerts(trade), [trade])
+  // Acknowledged / resolved marks live on this device only.
+  const [marks, setMarks] = useState(readMarks)
   const [type, setType] = useState(TYPE_FILTERS[0])
-  const [pen, setPen] = useState(PEN_FILTERS[0])
-  const [selectedId, setSelectedId] = useState(farmAlerts[0].id)
+  const penFilters = ['All pens', ...trade.catalog.pens.map((p) => p.name)]
+  const [pen, setPen] = useState(penFilters[0])
+  const [selectedId, setSelectedId] = useState<string>()
 
+  const alerts: FarmAlert[] = derived.map((a) => {
+    const m = marks[a.id]
+    return m ? { ...a, status: m.status, acknowledgedBy: m.by } : a
+  })
   const open = alerts.filter((a) => a.status !== 'resolved')
   const acknowledged = alerts.filter((a) => a.status === 'acknowledged')
   const tabs = [`Open · ${open.length}`, `Acknowledged · ${acknowledged.length}`, 'Resolved', 'All']
   const [tab, setTab] = useState(tabs[0])
   const tabKey = tab.split(' · ')[0]
 
+  const penId = trade.catalog.pens.find((p) => p.name === pen)?.id
   const visible = alerts
     .filter((a) =>
       tabKey === 'Open' ? a.status !== 'resolved' : tabKey === 'Acknowledged' ? a.status === 'acknowledged' : tabKey === 'Resolved' ? a.status === 'resolved' : true,
     )
     .filter((a) => type === 'All types' || alertTypes[a.kind as AlertKind] === type)
-    .filter((a) => pen === 'All pens' || a.pen === Number(pen.split(' ')[1]))
+    .filter((a) => pen === 'All pens' || a.pen === penId)
   const selected = visible.find((a) => a.id === selectedId) ?? visible[0]
   const critical = visible.filter((a) => a.severity === 'Critical').length
 
-  const update = (id: string, patch: Partial<FarmAlert>) => setAlerts((list) => list.map((a) => (a.id === id ? { ...a, ...patch } : a)))
+  const weekFrom = weekStart(todayISO())
+  const resolved: ResolvedRow[] = Object.entries(marks)
+    .filter(([, m]) => m.status === 'resolved' && m.at.slice(0, 10) >= weekFrom)
+    .map(([id, m]) => ({ id, ...m }))
+    .sort((a, b) => b.at.localeCompare(a.at))
+
   const me = currentUser.name.split(' ')[0]
+  const mark = (a: FarmAlert, status: AlertMark['status'], note?: string) => {
+    const next = { ...marks, [a.id]: { status, by: me, at: new Date().toISOString(), note, title: a.title, where: a.pen ? (trade.catalog.pens.find((p) => p.id === a.pen)?.name ?? `Pen ${a.pen}`) : alertTypes[a.kind], raised: a.time } }
+    setMarks(next)
+    writeMarks(next)
+  }
 
   const acknowledge = (a: FarmAlert) => {
-    update(a.id, { status: 'acknowledged', acknowledgedBy: me })
-    toast('Alert acknowledged')
+    mark(a, 'acknowledged')
+    toast('Alert acknowledged on this device')
   }
   const resolve = (a: FarmAlert, note: string) => {
-    update(a.id, { status: 'resolved' })
-    setResolved((r) => [{ title: a.title, where: a.pen ? `Pen ${a.pen}` : alertTypes[a.kind], raised: 'Fri 09/10', resolvedBy: `${me} · now`, note }, ...r])
+    mark(a, 'resolved', note)
     toast('Alert resolved')
   }
 
   return (
     <>
-      <PageHeader sample
+      <PageHeader
         backTo="/"
         eyebrow={['Dashboard', 'Alerts']}
         title="Alerts"
-        description="Every alert comes from a threshold set in Settings. Everyone notified sees the same status."
-        actions={<Button leadingIcon={Settings}>Alert settings</Button>}
+        description="Alerts are worked out from the farm’s records against the thresholds in Settings, and clear when the problem does. Acknowledging or resolving is remembered on this device."
+        actions={
+          <Button leadingIcon={Settings} onClick={() => router.push('/settings/feed')}>
+            Alert settings
+          </Button>
+        }
       />
 
       <div className="flex flex-wrap items-center gap-3">
         <SegmentedControl label="Alert status" options={tabs} value={tabs.find((t) => t.startsWith(tabKey))!} onChange={setTab} />
         <Select label="Alert type" leadingIcon={ListFilter} width={180} options={TYPE_FILTERS} value={type} onChange={setType} />
-        <Select label="Pen" leadingIcon={Warehouse} width={180} options={PEN_FILTERS} value={pen} onChange={setPen} />
+        <Select label="Pen" leadingIcon={Warehouse} width={180} options={penFilters} value={pen} onChange={setPen} />
         <span className="flex-1" />
-        <p className="type-body-sm whitespace-nowrap text-fg-tertiary">WhatsApp alerts on for {whatsappRecipients} people</p>
+        <p className="type-body-sm whitespace-nowrap text-fg-tertiary">WhatsApp alerts aren’t connected yet</p>
       </div>
 
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
@@ -115,10 +141,9 @@ export default function Alerts() {
       <Card>
         <CardHeader
           title="Resolved this week"
-          meta={<span className="type-body-sm text-fg-tertiary">{resolved.length} alerts</span>}
-          action={{ label: 'View all', to: '/alerts' }}
+          meta={<span className="type-body-sm text-fg-tertiary">{resolved.length} on this device</span>}
         />
-        <Table columns={resolvedColumns} rows={resolved} rowKey={(r) => r.title + r.raised} />
+        {resolved.length ? <Table columns={resolvedColumns} rows={resolved} rowKey={(r) => r.id} /> : <p className="px-5 pb-6 type-body-md text-fg-tertiary">Nothing resolved on this device this week.</p>}
       </Card>
     </>
   )
@@ -159,7 +184,7 @@ function AlertDetail({ alert, onAcknowledge, onResolve }: DetailProps) {
         <ul className="-mt-2 flex flex-col gap-3">
           {alert.notified.map((n) => (
             <li key={n.name} className="flex items-center gap-3">
-              <MessageCircle size={16} strokeWidth={1.5} className="text-icon-secondary" />
+              <Bell size={16} strokeWidth={1.5} className="text-icon-secondary" />
               <span className="flex-1 type-body-md text-fg-secondary">
                 {n.name} · {n.channel}
               </span>

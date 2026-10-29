@@ -10,11 +10,16 @@ import { totalOf } from '../../data/purchases'
 import { useTrade } from '../../data/tradeContext'
 import { PurchaseOverlays, type PurchaseOverlay } from '../../features/purchases/PurchaseOverlays'
 import { PurchasesTable } from '../../features/purchases/PurchasesTable'
+import { PURCHASE_CSV_HEADER, purchaseCsvRows } from '../../features/purchases/purchaseView'
+import { dayMonth } from '../../data/metrics'
+import { farmSettings } from '../../data/farmSettings'
+import { downloadCsv } from '../../lib/export'
 
 const TABS = ['All', 'Feed', 'Birds', 'Medication'] as const
 
 export default function AllPurchases() {
-  const { purchases } = useTrade()
+  const trade = useTrade()
+  const { purchases } = trade
   const [tab, setTab] = useState<(typeof TABS)[number]>('All')
   const [overlay, setOverlay] = useState<PurchaseOverlay>(null)
   const rows = tab === 'All' ? purchases : purchases.filter((p) => p.kind === tab)
@@ -29,7 +34,9 @@ export default function AllPurchases() {
         description="Feed, birds and medication bought since go-live. Click a purchase for its details, or ··· for more."
         actions={
           <>
-            <Button leadingIcon={Download}>Export</Button>
+            <Button leadingIcon={Download} onClick={() => downloadCsv('purchases', PURCHASE_CSV_HEADER, purchaseCsvRows(rows, (id) => trade.suppliers.find((s) => s.id === id)?.name ?? '', trade.purchasePaid))}>
+              Export
+            </Button>
             <Button variant="primary" leadingIcon={Plus} onClick={() => setOverlay({ kind: 'new' })}>
               New purchase
             </Button>
@@ -39,7 +46,7 @@ export default function AllPurchases() {
       <Tabs label="Purchase type" tabs={TABS} value={tab} onChange={setTab} />
       <Card>
         <CardHeader
-          title="Since go-live · 01 Jul 2026"
+          title={farmSettings.goLiveDate ? `Since go-live · ${dayMonth(farmSettings.goLiveDate)} ${farmSettings.goLiveDate.slice(0, 4)}` : 'All purchases'}
           meta={
             <span className="type-body-sm text-fg-tertiary">
               {rows.length} purchases · ₦{(total / 1e6).toFixed(1)}M

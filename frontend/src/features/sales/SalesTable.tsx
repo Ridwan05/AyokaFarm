@@ -66,7 +66,8 @@ export function SalesTable({ sales, onOpen, onRecordPayment }: Props) {
         <RowMenu
           items={[
             { label: 'View details', onSelect: () => onOpen(s) },
-            { label: 'Send receipt again', onSelect: () => toast(`Receipt ${s.receipt} sent on WhatsApp`), disabled: s.pendingApproval },
+            { label: 'Receipt PDF', onSelect: () => window.open(`/print/receipt/${encodeURIComponent(s.receipt)}`, '_blank'), disabled: s.pendingApproval },
+            { label: 'Send on WhatsApp', onSelect: () => toast('WhatsApp isn’t connected yet — open the receipt PDF and share it instead'), disabled: s.pendingApproval },
             { label: 'Record a payment', onSelect: () => onRecordPayment(s), disabled: s.paid >= amountOf(s) || s.pendingApproval },
             { label: 'Edit sale', onSelect: () => onOpen(s) },
             { label: 'Void sale…', danger: true, onSelect: () => toast(`Voiding needs a reason — open ${s.receipt} to void it`) },

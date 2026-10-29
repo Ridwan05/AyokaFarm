@@ -2,7 +2,6 @@ import { Button } from '../../components/ui/Button'
 import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { Drawer } from '../../components/ui/Overlay'
 import { DetailSection, History } from '../../components/ui/Detail'
-import { useToast } from '../../components/ui/toastContext'
 import { totalOf, type Purchase } from '../../data/purchases'
 import { useTrade } from '../../data/tradeContext'
 import { formatNumber } from '../../lib/format'
@@ -12,7 +11,6 @@ const naira = (n: number) => `₦${formatNumber(n)}`
 
 export function PurchaseDrawer({ purchase: p, onClose, onPay }: { purchase: Purchase; onClose: () => void; onPay: () => void }) {
   const { suppliers, supplierBalance, purchasePaid, payments } = useTrade()
-  const toast = useToast()
   const supplier = suppliers.find((s) => s.id === p.supplierId)!
   const total = totalOf(p)
   const paid = purchasePaid(p.ref)
@@ -31,8 +29,8 @@ export function PurchaseDrawer({ purchase: p, onClose, onPay }: { purchase: Purc
       subtitle={`${dayMonth(p.date)}/${p.date.slice(0, 4)} · recorded by ${p.recordedBy}`}
       footer={
         <>
-          <Button size="lg" className="flex-1" onClick={() => toast(`${p.ref} downloaded`)}>
-            Download PDF
+          <Button size="lg" className="flex-1" onClick={() => window.open(`/print/statement/supplier/${supplier.id}`, '_blank')}>
+            Supplier statement
           </Button>
           <Button size="lg" variant="primary" className="flex-1" disabled={left <= 0} onClick={onPay}>
             Record a payment

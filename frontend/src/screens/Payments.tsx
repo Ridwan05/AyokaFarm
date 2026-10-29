@@ -10,23 +10,24 @@ import { KpiCard } from '../components/ui/KpiCard'
 import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Select } from '../components/ui/Select'
 import { NumberCell, PrimaryCell, Table, TextCell, type Column } from '../components/ui/Table'
-import { paymentKpis } from '../data/paymentKpis'
+import { inRange, period as periodRange } from '../data/metrics'
+import { paymentKpis } from '../data/moneyKpis'
 import type { Payment } from '../data/payments'
 import { useTrade } from '../data/tradeContext'
 import { PaymentModal } from '../features/payments/PaymentModal'
 import { dayMonth } from '../features/purchases/purchaseView'
+import { downloadCsv } from '../lib/export'
 import { formatNaira } from '../lib/format'
 import { Presence } from '../components/ui/Overlay'
 
 const DIRECTIONS = ['Received', 'Paid out'] as const
 const PERIODS = ['This week', 'This month', 'All time'] as const
 const METHODS = ['All methods', 'Cash', 'Transfer', 'POS'] as const
-const WEEK_FROM = '2026-10-03'
-const MONTH_FROM = '2026-10-01'
 const methodLabel = { cash: 'Cash', transfer: 'Transfer', POS: 'POS' }
 
 export default function Payments() {
-  const { payments, customers, suppliers } = useTrade()
+  const trade = useTrade()
+  const { payments, customers, suppliers } = trade
   const [direction, setDirection] = useState<(typeof DIRECTIONS)[number]>('Received')
   const [period, setPeriod] = useState<(typeof PERIODS)[number]>('This week')
   const [method, setMethod] = useState<(typeof METHODS)[number]>('All methods')
@@ -39,7 +40,7 @@ export default function Payments() {
   const q = query.trim().toLowerCase()
   const rows = payments
     .filter((p) => p.direction === (isIn ? 'in' : 'out'))
-    .filter((p) => (period === 'This week' ? p.date >= WEEK_FROM : period === 'This month' ? p.date >= MONTH_FROM : true))
+    .filter((p) => (period === 'This week' ? inRange(p.date, periodRange('week')) : period === 'This month' ? inRange(p.date, periodRange('month')) : true))
     .filter((p) => method === 'All methods' || methodLabel[p.method] === method)
     .filter((p) => !q || (party(p)?.name.toLowerCase().includes(q) ?? false) || (p.reference?.toLowerCase().includes(q) ?? false))
 
@@ -71,7 +72,18 @@ export default function Payments() {
         description="Money received or paid outside a sale or purchase, like settling an old debt. Each payment clears the oldest bills first."
         actions={
           <>
-            <Button leadingIcon={Download}>Export</Button>
+            <Button
+              leadingIcon={Download}
+              onClick={() =>
+                downloadCsv(
+                  isIn ? 'payments-received' : 'payments-made',
+                  ['Ref', 'Date', isIn ? 'Customer' : 'Supplier', 'Method', 'Reference', 'Amount (₦)', 'Cleared', 'By'],
+                  rows.map((p) => [p.ref, p.date, party(p)?.name ?? '', methodLabel[p.method], p.reference, p.amount, p.cleared, p.by]),
+                )
+              }
+            >
+              Export
+            </Button>
             <Button variant="primary" leadingIcon={Plus} onClick={() => setRecording(true)}>
               Record payment
             </Button>
@@ -88,7 +100,7 @@ export default function Payments() {
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
-        {paymentKpis.map((kpi) => (
+        {paymentKpis(trade).map((kpi) => (
           <KpiCard key={kpi.label} kpi={kpi} />
         ))}
       </div>

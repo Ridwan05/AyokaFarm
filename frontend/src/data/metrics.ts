@@ -81,7 +81,7 @@ export function period(key: PeriodKey, today = todayISO()): Range {
 /** The same length of time just before r. Month periods compare with the same days of the previous month. */
 export function previous(r: Range): Range {
   const len = daysFrom(r.from, r.to)
-  if (r.from.endsWith('-01') && len < 31) {
+  if (r.from.endsWith('-01') && len >= 1 && len < 31) {
     const prevMonthEnd = addDays(r.from, -1)
     const from = prevMonthEnd.slice(0, 8) + '01'
     const to = addDays(from, len) > prevMonthEnd ? prevMonthEnd : addDays(from, len)
@@ -96,7 +96,8 @@ export const inRange = (iso: string, r: { from: string; to: string }) => iso >= 
 const utc = (iso: string) => new Date(`${iso}T00:00:00Z`)
 export const monthName = (iso: string) => new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'UTC' }).format(utc(iso))
 /** "09 Oct" */
-export const dayMonth = (iso: string) => new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', timeZone: 'UTC' }).format(utc(iso))
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+export const dayMonth = (iso: string) => `${iso.slice(8, 10)} ${MONTHS[Number(iso.slice(5, 7)) - 1]}`
 /** "Fri 09/10" */
 export const weekdayDm = (iso: string) => `${new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: 'UTC' }).format(utc(iso))} ${iso.slice(8, 10)}/${iso.slice(5, 7)}`
 /** "Fri 09 Oct" */
@@ -171,7 +172,7 @@ export function kpi(opts: {
     }
   }
   const sentiment: Kpi['sentiment'] = trend === 'flat' || goodWhen === 'neither' ? 'neutral' : (trend === goodWhen) ? 'good' : 'bad'
-  return { label: opts.label, value: opts.value, unit: opts.unit, delta, trend, sentiment, context: opts.context, info: opts.info, spark: opts.spark.length ? opts.spark : [0] }
+  return { label: opts.label, value: opts.value, unit: opts.unit, delta, trend, sentiment, context: opts.context, info: opts.info, spark: opts.spark.length > 1 ? opts.spark : [opts.spark[0] ?? 0, opts.spark[0] ?? 0] }
 }
 
 /** Round, readable axis ticks covering min..max. */
@@ -322,10 +323,10 @@ export function withdrawals(history: History, catalog: Catalog, today = todayISO
   return [...byPen.values()].sort((a, b) => a.penId - b.penId)
 }
 
-/** Medication on hand: per medication, summed over batches. */
+/** Medication on hand per medication, from the stock ledger (includes opening stock with no batch). */
 export function medicationOnHand(catalog: Catalog) {
   const out = new Map<number, number>()
-  for (const b of catalog.batches) out.set(b.medicationId, (out.get(b.medicationId) ?? 0) + b.onHand)
+  for (const l of catalog.levels.filter((x) => x.item === 'medication' && x.medicationId)) out.set(l.medicationId!, (out.get(l.medicationId!) ?? 0) + l.onHand)
   return out
 }
 

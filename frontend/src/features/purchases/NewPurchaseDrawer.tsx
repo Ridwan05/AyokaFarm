@@ -8,6 +8,7 @@ import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { useToast } from '../../components/ui/toastContext'
 import { feedTypes, medications } from '../../data/inventory'
 import { TODAY_ISO } from '../../data/ledger'
+import { weekdayDayMonth } from '../../data/metrics'
 import { refPrefix, totalOf, type PurchaseKind } from '../../data/purchases'
 import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
@@ -102,7 +103,7 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
       open
       onClose={onClose}
       title="New purchase"
-      subtitle={`Fri 09/10/2026 · recorded by ${currentUser.name.split(' ')[0]}`}
+      subtitle={`${weekdayDayMonth(TODAY_ISO)} · recorded by ${currentUser.name.split(' ')[0]}`}
       footer={
         <>
           <Button size="lg" className="flex-1" onClick={onClose}>

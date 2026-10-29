@@ -5,13 +5,10 @@ import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Button } from '../components/ui/Button'
 import { createClient } from '../lib/supabase/client'
-import { initialsOf, roleFromDb, type User } from './session'
+import { initialsOf, roleFromDb, type Permissions, type User } from './session'
 import { SessionContext } from './sessionContext'
 
 type State = { status: 'loading' } | { status: 'no-role'; name: string } | { status: 'error'; message: string } | { status: 'ready'; user: User }
-
-/** Roles that work on every pen; pen attendants get their assigned pens from staff_pens. */
-const ALL_PENS = new Set(['owner', 'farm_manager', 'pen_attendant_all'])
 
 export function SessionProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
@@ -39,6 +36,11 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       if (cancelled) return
       if (error || !profile) return setState({ status: 'error', message: 'Your staff profile couldn’t be loaded.' })
       if (!profile.role_id || !profile.is_active) return setState({ status: 'no-role', name: profile.full_name })
+      // What the role can do, from Settings → Roles & permissions. Menus follow it; RLS enforces it.
+      const { data: perms, error: permsError } = await supabase.from('role_permissions').select('*').eq('role_id', profile.role_id)
+      if (cancelled) return
+      if (permsError) return setState({ status: 'error', message: 'Your role’s permissions couldn’t be loaded.' })
+      const permissions: Permissions = Object.fromEntries((perms ?? []).map((p) => [p.module, { view: p.can_view, add: p.can_add, edit: p.can_edit, delete: p.can_delete }]))
       setState({
         status: 'ready',
         user: {
@@ -47,7 +49,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           initials: initialsOf(profile.full_name),
           role: roleFromDb(profile.role_id),
           roleLabel: profile.roles?.name ?? profile.role_id,
-          pens: ALL_PENS.has(profile.role_id) ? 'all' : (pens ?? []).map((p) => p.pen_id),
+          // "All" production access works on every pen; "own" means the pens in staff_pens.
+          pens: permissions.production?.view === 'all' ? 'all' : (pens ?? []).map((p) => p.pen_id),
+          permissions,
         },
       })
     })()

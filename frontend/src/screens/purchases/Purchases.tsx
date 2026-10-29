@@ -8,11 +8,13 @@ import { Button } from '../../components/ui/Button'
 import { Card, CardHeader } from '../../components/ui/Card'
 import { KpiCard } from '../../components/ui/KpiCard'
 import { LinkTabs } from '../../components/ui/Tabs'
-import { purchaseKpis } from '../../data/purchaseKpis'
+import { purchaseKpis } from '../../data/moneyKpis'
 import type { PurchaseKind } from '../../data/purchases'
 import { useTrade } from '../../data/tradeContext'
 import { PurchaseOverlays, type PurchaseOverlay } from '../../features/purchases/PurchaseOverlays'
 import { PurchasesTable } from '../../features/purchases/PurchasesTable'
+import { PURCHASE_CSV_HEADER, purchaseCsvRows } from '../../features/purchases/purchaseView'
+import { downloadCsv } from '../../lib/export'
 import { formatDayMon } from '../../lib/format'
 
 const KINDS: Record<string, PurchaseKind> = { feed: 'Feed', birds: 'Birds', medication: 'Medication' }
@@ -29,7 +31,8 @@ const purchaseTabs = (base: string) => [
 export default function Purchases() {
   const { kind: kindParam } = useParams<{ kind?: string }>()
   const kind = kindParam ? KINDS[kindParam] : undefined
-  const { purchases } = useTrade()
+  const trade = useTrade()
+  const { purchases } = trade
   const [overlay, setOverlay] = useState<PurchaseOverlay>(null)
 
   const rows = kind ? purchases.filter((p) => p.kind === kind) : purchases.slice(0, RECENT)
@@ -43,7 +46,14 @@ export default function Purchases() {
         description="Feed, birds and medication bought. Saving a purchase updates stock and the supplier’s balance, so nothing is typed twice."
         actions={
           <>
-            <Button leadingIcon={Download}>Export</Button>
+            <Button
+              leadingIcon={Download}
+              onClick={() =>
+                downloadCsv('purchases', PURCHASE_CSV_HEADER, purchaseCsvRows(kind ? rows : purchases, (id) => trade.suppliers.find((s) => s.id === id)?.name ?? '', trade.purchasePaid))
+              }
+            >
+              Export
+            </Button>
             <Button variant="primary" leadingIcon={Plus} onClick={() => setOverlay({ kind: 'new' })}>
               New purchase
             </Button>
@@ -53,7 +63,7 @@ export default function Purchases() {
       <LinkTabs label="Purchase type" tabs={purchaseTabs('/purchases')} />
 
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
-        {purchaseKpis[kind ?? 'All'].map((kpi) => (
+        {purchaseKpis(trade, kind).map((kpi) => (
           <KpiCard key={kpi.label} kpi={kpi} />
         ))}
       </div>

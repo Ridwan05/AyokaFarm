@@ -7,7 +7,9 @@ import { Button } from '../../components/ui/Button'
 import { Card, CardHeader } from '../../components/ui/Card'
 import { amountOf } from '../../data/sales'
 import { useTrade } from '../../data/tradeContext'
-import { useSalesFilter } from '../../features/sales/filters'
+import { SALES_CSV_HEADER, saleCsvRows, useSalesFilter } from '../../features/sales/filters'
+import { spanLabel } from '../../data/moneyKpis'
+import { downloadCsv } from '../../lib/export'
 import { SalesFilterBar } from '../../features/sales/SalesFilterBar'
 import { SaleOverlays, type SaleOverlay } from '../../features/sales/SaleOverlays'
 import { SalesTable } from '../../features/sales/SalesTable'
@@ -27,7 +29,9 @@ export default function AllSales() {
         description="Every sale with its receipt, newest first. Click a sale for its details, or ··· for more."
         actions={
           <>
-            <Button leadingIcon={Download}>Export</Button>
+            <Button leadingIcon={Download} onClick={() => downloadCsv('sales', SALES_CSV_HEADER, saleCsvRows(f.visible, customers))}>
+              Export
+            </Button>
             <Button variant="primary" leadingIcon={Plus} onClick={() => setOverlay({ kind: 'record' })}>
               Record sale
             </Button>
@@ -38,7 +42,7 @@ export default function AllSales() {
 
       <Card>
         <CardHeader
-          title="October · 01–09 Oct"
+          title={`${f.period} · ${spanLabel(f.range)}`}
           meta={
             <span className="type-body-sm text-fg-tertiary">
               {f.visible.length} sales · ₦{(total / 1e6).toFixed(2)}M
@@ -51,7 +55,7 @@ export default function AllSales() {
           onRecordPayment={(s) => setOverlay({ kind: 'payment', receipt: s.receipt })}
         />
         <div className="flex items-center gap-3 px-4 py-3">
-          <span className="flex-1 type-body-sm text-fg-tertiary">Showing all {f.visible.length} sales in October</span>
+          <span className="flex-1 type-body-sm text-fg-tertiary">Showing all {f.visible.length} sales · {f.period.toLowerCase()}</span>
           <Button disabled>
             Previous
           </Button>

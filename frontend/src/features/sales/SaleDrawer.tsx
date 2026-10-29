@@ -7,7 +7,9 @@ import { amountOf, saleStatus, type Sale } from '../../data/sales'
 import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
 import { canApprove } from '../../lib/access'
-import { formatDayMonth, formatNumber } from '../../lib/format'
+import { weekdayDayMonth } from '../../data/metrics'
+import { saleDate } from '../../data/moneyKpis'
+import { formatNumber } from '../../lib/format'
 import { customerView, productOf, statusBadge } from './saleView'
 
 const naira = (n: number) => `₦${formatNumber(n)}`
@@ -29,7 +31,7 @@ export function SaleDrawer({ sale, onClose, onRecordPayment }: Props) {
   const left = total - sale.paid
   const status = saleStatus(sale)
   const pending = status === 'needs-approval'
-  const [day, time] = sale.date.split(' ')
+  const time = sale.date.split(' ')[1]
   const approver = currentUser.name.split(' ')[0]
   const balance = customer ? customerBalance(customer.id) : 0
 
@@ -65,8 +67,8 @@ export function SaleDrawer({ sale, onClose, onRecordPayment }: Props) {
     </>
   ) : (
     <>
-      <Button size="lg" className="flex-1" onClick={() => toast(`Receipt ${sale.receipt} downloaded`)}>
-        Download receipt
+      <Button size="lg" className="flex-1" onClick={() => window.open(`/print/receipt/${encodeURIComponent(sale.receipt)}`, '_blank')}>
+        Receipt PDF
       </Button>
       <Button size="lg" variant="primary" className="flex-1" disabled={left <= 0} onClick={() => onRecordPayment(sale)}>
         Record a payment
@@ -75,7 +77,7 @@ export function SaleDrawer({ sale, onClose, onRecordPayment }: Props) {
   )
 
   return (
-    <Drawer open onClose={onClose} title={`${sale.receipt} · ${name}`} subtitle={`${formatDayMonth(day)}, ${time} · recorded by ${sale.recordedBy}`} footer={footer}>
+    <Drawer open onClose={onClose} title={`${sale.receipt} · ${name}`} subtitle={`${weekdayDayMonth(saleDate(sale))}, ${time} · recorded by ${sale.recordedBy}`} footer={footer}>
       <DetailSection title="Sale">
         <KeyValueRow label="Product">{product.name}</KeyValueRow>
         <KeyValueRow label="From">{product.from}</KeyValueRow>

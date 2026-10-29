@@ -1,19 +1,21 @@
 'use client'
 
-import { Banknote, MessageCircle } from 'lucide-react'
+import { Banknote, Printer } from 'lucide-react'
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { KeyValueRow } from '../../components/ui/KeyValueRow'
-import { useToast } from '../../components/ui/toastContext'
-import { aging, daysBetween } from '../../data/ledger'
+import { daysBetween } from '../../data/ledger'
+import { agingOf } from '../../data/moneyKpis'
 import { useTrade } from '../../data/tradeContext'
 import { AgingBar } from '../../features/customers/AgingBar'
 import { agingLegend } from '../../features/customers/customerView'
 import { PaymentModal } from '../../features/payments/PaymentModal'
 import { StatementCard } from '../../features/statements/StatementCard'
+import { farmSettings } from '../../data/farmSettings'
+import { todayISO } from '../../data/metrics'
 import { formatNaira, formatNumber } from '../../lib/format'
 import Placeholder from '../Placeholder'
 import { Presence } from '../../components/ui/Overlay'
@@ -23,14 +25,13 @@ const dmy = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice
 export default function Statement() {
   const { customerId = '' } = useParams<{ customerId: string }>()
   const { customers, customerBalance, customerOpenBills, customerStatement, payments } = useTrade()
-  const toast = useToast()
   const [paying, setPaying] = useState(false)
   const c = customers.find((x) => x.id === customerId)
   if (!c) return <Placeholder title="Customer not found" />
 
   const balance = customerBalance(c.id)
   const bills = customerOpenBills(c.id)
-  const a = aging(bills)
+  const a = agingOf(bills)
   const lines = customerStatement(c.id)
   const sales = lines.reduce((n, l) => n + (l.charged ?? 0), 0)
   const paid = lines.reduce((n, l) => n + (l.paid ?? 0), 0)
@@ -44,11 +45,11 @@ export default function Statement() {
         backTo="/customers"
         eyebrow={['Customers', c.name]}
         title={c.name}
-        description={`Regular customer since ${c.since} · ${c.buys} · ${c.area} · ${c.whatsapp ? 'receives statements on WhatsApp' : 'no WhatsApp — print statements'}`}
+        description={`Regular customer since ${c.since} · ${c.buys} · ${c.area} · ${c.whatsapp ? 'agreed to WhatsApp statements (not connected yet)' : 'no WhatsApp — print statements'}`}
         actions={
           <>
-            <Button leadingIcon={MessageCircle} onClick={() => toast(c.whatsapp ? `Statement sent to ${c.short}` : `${c.short} statement ready to print`)}>
-              {c.whatsapp ? 'Send statement' : 'Print statement'}
+            <Button leadingIcon={Printer} onClick={() => window.open(`/print/statement/customer/${c.id}`, '_blank')}>
+              Statement PDF
             </Button>
             <Button variant="primary" leadingIcon={Banknote} disabled={balance <= 0} onClick={() => setPaying(true)}>
               Record payment
@@ -61,17 +62,17 @@ export default function Statement() {
         <Card className="flex-1 gap-2 p-5">
           <span className="type-body-md text-fg-secondary">Balance owed</span>
           <span className="type-display-lg text-fg-primary">₦{formatNumber(balance)}</span>
-          {a.over60 > 0 && <span className="type-body-sm text-fg-danger">₦{formatNumber(a.over60)} is over 60 days</span>}
+          {a.over60 > 0 && <span className="type-body-sm text-fg-danger">₦{formatNumber(a.over60)} is over {farmSettings.overdueDebtDays} days</span>}
           {latest && (
             <span className="type-body-sm text-fg-tertiary">
-              Last payment ₦{formatNumber(latest.amount)} · {latest.date === '2026-10-09' ? 'today' : dmy(latest.date)}
+              Last payment ₦{formatNumber(latest.amount)} · {latest.date === todayISO() ? 'today' : dmy(latest.date)}
             </span>
           )}
         </Card>
         <Card className="flex-1 gap-2 p-5">
           <span className="type-body-md text-fg-secondary">Aging</span>
           <AgingBar aging={a} className="w-full" />
-          {agingLegend.map((l) => (
+          {agingLegend().map((l) => (
             <div key={l.key} className="flex items-center gap-2">
               <span className={`size-2 rounded-full ${l.dot}`} />
               <span className="flex-1 type-body-md text-fg-secondary">{l.label}</span>
@@ -92,7 +93,7 @@ export default function Statement() {
         </Card>
       </div>
 
-      <StatementCard lines={lines} side="customer" balance={balance} onDownload={() => toast(`${c.short} statement downloaded`)} />
+      <StatementCard lines={lines} side="customer" balance={balance} exportName={`statement-${c.short.toLowerCase().replace(/\W+/g, '-')}`} onDownload={(r) => window.open(`/print/statement/customer/${c.id}${r.from ? `?from=${r.from}&to=${r.to}` : ''}`, '_blank')} />
 
       <Presence>{paying && <PaymentModal direction="in" partyId={c.id} onClose={() => setPaying(false)} />}</Presence>
     </>

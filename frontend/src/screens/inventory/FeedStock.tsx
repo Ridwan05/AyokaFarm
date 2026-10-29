@@ -9,7 +9,7 @@ import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card, CardHeader } from '../../components/ui/Card'
 import { NumberCell, Table, TextCell, type Column } from '../../components/ui/Table'
-import { feedTypes, reorderSuggestion, withBalances, type Balanced, type FeedType, type Movement } from '../../data/inventory'
+import { feedTypes, type FeedType } from '../../data/inventory'
 import { useToast } from '../../components/ui/toastContext'
 import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
@@ -17,26 +17,31 @@ import { AskReorderModal } from '../../features/stock/AskReorderModal'
 import { ReceiveDeliveryDrawer } from '../../features/stock/ReceiveDeliveryDrawer'
 import { isAttendant } from '../../lib/access'
 import { cn } from '../../lib/cn'
+import { downloadCsv } from '../../lib/export'
 import { formatNumber } from '../../lib/format'
 import { InventoryTabs, LedgerNote } from './InventoryTabs'
 import { Presence } from '../../components/ui/Overlay'
 import { farmSettings } from '../../data/farmSettings'
+import { addDays, dayMonth, todayISO, weekdayDm } from '../../data/metrics'
+import { dailyLedger, feedSource, people, reorderSuggestion } from '../../data/stockMetrics'
 
 const dash = <NumberCell tone="muted">—</NumberCell>
 
-const columns: Column<Balanced<Movement>>[] = [
-  { key: 'date', header: 'Date', width: 130, render: (r) => <TextCell tone="primary">{r.date}</TextCell> },
-  { key: 'opening', header: 'Opening', align: 'right', width: 125, render: (r) => <NumberCell>{r.opening}</NumberCell> },
-  { key: 'received', header: 'Received', align: 'right', width: 125, render: (r) => (r.received ? <NumberCell tone="success">+{r.received}</NumberCell> : dash) },
-  { key: 'used', header: 'Used', align: 'right', width: 125, render: (r) => (r.used ? <NumberCell>{r.used}</NumberCell> : dash) },
+type LedgerRow = ReturnType<typeof dailyLedger>[number] & { source: string }
+
+const columns: Column<LedgerRow>[] = [
+  { key: 'date', header: 'Date', width: 130, render: (r) => <TextCell tone="primary">{weekdayDm(r.date)}</TextCell> },
+  { key: 'opening', header: 'Opening', align: 'right', width: 125, render: (r) => <NumberCell>{formatNumber(r.opening)}</NumberCell> },
+  { key: 'received', header: 'Received', align: 'right', width: 125, render: (r) => (r.received ? <NumberCell tone="success">+{formatNumber(r.received)}</NumberCell> : dash) },
+  { key: 'used', header: 'Used', align: 'right', width: 125, render: (r) => (r.used ? <NumberCell>{formatNumber(r.used)}</NumberCell> : dash) },
   {
     key: 'adjust',
     header: 'Adjust',
     align: 'right',
     width: 125,
-    render: (r) => (r.adjust ? <NumberCell tone="warning">{r.adjust > 0 ? `+${r.adjust}` : `−${-r.adjust}`}</NumberCell> : dash),
+    render: (r) => (r.adjusted ? <NumberCell tone="warning">{r.adjusted > 0 ? `+${formatNumber(r.adjusted)}` : `−${formatNumber(-r.adjusted)}`}</NumberCell> : dash),
   },
-  { key: 'closing', header: 'Closing', align: 'right', width: 125, render: (r) => <NumberCell tone="strong">{r.closing}</NumberCell> },
+  { key: 'closing', header: 'Closing', align: 'right', width: 125, render: (r) => <NumberCell tone="strong">{formatNumber(r.closing)}</NumberCell> },
   { key: 'source', header: 'Source', render: (r) => <TextCell>{r.source}</TextCell> },
 ]
 
@@ -44,20 +49,32 @@ export default function FeedStock() {
   const router = useRouter()
   const toast = useToast()
   const user = useCurrentUser()
-  const { stockOf, stockMoves } = useTrade()
+  const { stockOf, history, catalog } = useTrade()
   const keeper = user.role === 'store-keeper'
   // Pen attendants can look, not act (BRD §4: Inventory V).
   const readOnly = isAttendant(user.role)
-  const [selected, setSelected] = useState(feedTypes[0].name)
+  const [selected, setSelected] = useState(feedTypes[0]?.name ?? '')
   const [showReorder, setShowReorder] = useState(true)
   const [overlay, setOverlay] = useState<'receive' | 'reorder' | null>(null)
-  // Stock reflects deliveries and counts saved in this session.
-  const types = feedTypes.map((f) => ({ ...f, bags: stockOf(f.name, f.bags) }))
-  const feed = types.find((f) => f.name === selected)!
-  const low = types.find((f) => f.name === reorderSuggestion.feed)!
-  const sessionRows: Movement[] = stockMoves
-    .filter((m) => m.item === feed.name)
-    .map((m) => ({ date: 'Fri 09/10', received: m.type === 'received' ? m.qty : undefined, used: m.type === 'used' ? -m.qty : undefined, adjust: m.type === 'adjust' ? m.qty : undefined, source: m.source }))
+  const types = feedTypes.map((f) => ({ ...f, bags: stockOf(f.name) }))
+  const feed = types.find((f) => f.name === selected) ?? types[0]
+  const feedId = catalog.feedTypes.find((f) => f.name === feed?.name)?.id
+  const today = todayISO()
+  const rows: LedgerRow[] = feedId
+    ? dailyLedger(history, (d) => d.item === 'feed' && d.feedTypeId === feedId, addDays(today, -13), today).map((r) => ({ ...r, source: feedSource(history, catalog, feedId, r.date) }))
+    : []
+  const suggestion = reorderSuggestion(history, catalog, types)
+  const low = suggestion && suggestion.daysOfCover <= farmSettings.lowStockDays ? suggestion : null
+  const { manager, owner, keeper: keeperName } = people(catalog)
+  const from = suggestion?.supplier ? ` from ${suggestion.supplier}` : ''
+  const about = low?.days ? ` (≈${low.days} days)` : ''
+
+  const exportLedger = () =>
+    downloadCsv(
+      `feed-ledger-${feed.name.toLowerCase().replace(/\W+/g, '-')}`,
+      ['Date', 'Opening (bags)', 'Received', 'Used', 'Adjust', 'Closing', 'Source'],
+      rows.map((r) => [r.date, r.opening, r.received, r.used, r.adjusted, r.closing, r.source]),
+    )
 
   return (
     <>
@@ -67,20 +84,20 @@ export default function FeedStock() {
         description="A daily ledger per feed type, calculated from deliveries and pen entries — counted, never typed."
         actions={
           readOnly ? undefined : (
-          <>
-            <Button leadingIcon={Scale} onClick={() => (keeper ? router.push('/inventory/count') : toast('Bayo runs the weekly count on Fridays'))}>
-              Stock count
-            </Button>
-            {keeper ? (
-              <Button variant="primary" leadingIcon={Truck} onClick={() => setOverlay('receive')}>
-                Receive delivery
+            <>
+              <Button leadingIcon={Scale} onClick={() => (keeper ? router.push('/inventory/count') : toast(`${keeperName.charAt(0).toUpperCase() + keeperName.slice(1)} runs the stock count`))}>
+                Stock count
               </Button>
-            ) : (
-              <Button variant="primary" leadingIcon={Truck} onClick={() => router.push('/purchases')}>
-                Record purchase
-              </Button>
-            )}
-          </>
+              {keeper ? (
+                <Button variant="primary" leadingIcon={Truck} onClick={() => setOverlay('receive')}>
+                  Receive delivery
+                </Button>
+              ) : (
+                <Button variant="primary" leadingIcon={Truck} onClick={() => router.push('/purchases')}>
+                  Record purchase
+                </Button>
+              )}
+            </>
           )
         }
       />
@@ -88,17 +105,17 @@ export default function FeedStock() {
 
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
         {types.map((f) => (
-          <FeedCard key={f.name} feed={f} selected={f.name === selected} onSelect={() => setSelected(f.name)} />
+          <FeedCard key={f.name} feed={f} selected={f.name === feed?.name} onSelect={() => setSelected(f.name)} />
         ))}
       </div>
 
-      {showReorder && !readOnly && low.daysOfCover !== null && (
+      {showReorder && !readOnly && low && (
         <Alert
           tone="warning"
-          title={`Reorder ${low.name} — ${low.daysOfCover} days of cover left`}
+          title={`Reorder ${low.feed} — ${low.daysOfCover} days of cover left`}
           action={
             keeper ? (
-              <AlertAction onClick={() => setOverlay('reorder')}>Ask Emeka to reorder</AlertAction>
+              <AlertAction onClick={() => setOverlay('reorder')}>Ask {manager} to reorder</AlertAction>
             ) : (
               <AlertAction onClick={() => router.push('/purchases')}>Create purchase</AlertAction>
             )
@@ -106,22 +123,24 @@ export default function FeedStock() {
           onDismiss={() => setShowReorder(false)}
         >
           {keeper
-            ? `Suggested: ${reorderSuggestion.bags} bags (≈${reorderSuggestion.days} days) from ${reorderSuggestion.supplier}. Emeka decides and Adeola places the order; the bags appear here when you receive them.`
-            : `Suggested order: ${reorderSuggestion.bags} bags (≈${reorderSuggestion.days} days) from ${reorderSuggestion.supplier} · last price ₦${formatNumber(reorderSuggestion.lastPrice)} per bag on ${reorderSuggestion.lastDate}. Saving the purchase adds the bags here automatically.`}
+            ? `Suggested: ${low.bags} bags${about}${from}. ${manager.charAt(0).toUpperCase() + manager.slice(1)} decides and ${owner} places the order; the bags appear here when you receive them.`
+            : `Suggested order: ${low.bags} bags${about}${from}${low.lastPrice !== null ? ` · last price ₦${formatNumber(low.lastPrice)} per bag on ${dayMonth(low.lastDate!)}` : ''}. Saving the purchase adds the bags here automatically.`}
         </Alert>
       )}
 
-      <Card>
-        <CardHeader
-          title={`${feed.name} ledger`}
-          meta={<span className="type-body-sm text-fg-tertiary">Bags · closing = opening + received − used ± count adjustment</span>}
-          action={{ label: 'Export', to: '#' }}
-        />
-        <Table columns={columns} rows={withBalances(feed.bags, [...sessionRows.reverse(), ...feed.ledger])} rowKey={(r) => r.date + r.source} />
-        <LedgerNote>
-          Opening, received and used are calculated. Only a physical count can adjust stock — and it always needs a reason (FR-INV-2).
-        </LedgerNote>
-      </Card>
+      {feed && (
+        <Card>
+          <CardHeader
+            title={`${feed.name} ledger`}
+            meta={<span className="type-body-sm text-fg-tertiary">Bags · last 14 days · closing = opening + received − used ± count adjustment</span>}
+            action={{ label: 'Export', onClick: exportLedger }}
+          />
+          <Table columns={columns} rows={rows} rowKey={(r) => r.date} />
+          <LedgerNote>
+            Opening, received and used are calculated. Only a physical count can adjust stock — and it always needs a reason (FR-INV-2).
+          </LedgerNote>
+        </Card>
+      )}
 
       <Presence>{overlay === 'receive' && <ReceiveDeliveryDrawer onClose={() => setOverlay(null)} />}</Presence>
       <Presence>{overlay === 'reorder' && <AskReorderModal onClose={() => setOverlay(null)} />}</Presence>
@@ -144,7 +163,7 @@ function FeedCard({ feed, selected, onSelect }: { feed: FeedType; selected: bool
     >
       <span className="type-label-md text-fg-secondary">{feed.name}</span>
       <span className="flex items-baseline gap-1.5">
-        <span className="type-display-lg text-fg-primary">{feed.bags}</span>
+        <span className="type-display-lg text-fg-primary">{formatNumber(feed.bags)}</span>
         <span className="type-body-md text-fg-tertiary">bags</span>
       </span>
       <Badge dot tone={!inUse ? 'neutral' : low ? 'warning' : 'success'}>

@@ -126,6 +126,8 @@ export type Catalog = {
   feedTargets: Row<'feed_targets'>[]
   medications: Row<'medications'>[]
   batches: { purchaseId: number; medicationId: number; batchNo: string | null; expiry: string | null; onHand: number }[]
+  /** Stock on hand per item (stock_levels), including opening stock that isn't tied to a batch. */
+  levels: { item: string; feedTypeId: number | null; medicationId: number | null; onHand: number }[]
   products: Row<'products'>[]
   categories: Row<'expense_categories'>[]
   reasons: Row<'adjustment_reasons'>[]
@@ -347,7 +349,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
           ? { tone: 'warning', label: `Feed ${Number(todayRow!.feed_variance_pct) > 0 ? '+' : ''}${Number(todayRow!.feed_variance_pct).toFixed(0)}%` }
           : todayRow
             ? { tone: 'success', label: 'On track' }
-            : { tone: 'neutral', label: 'Due by 18:00' }
+            : { tone: 'neutral', label: `Due by ${farmSettings.missingEntryCutoff}` }
     const pct = (v: number | null | undefined) => (v === null || v === undefined ? null : `${Number(v) > 0 ? '+' : Number(v) < 0 ? '−' : ''}${Math.abs(Number(v)).toFixed(1)}%`)
     const pen: Pen = {
       id: p.id,
@@ -379,7 +381,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
       died: todayRow ? todayRow.mortality : null,
       feedVsExpected: todayRow?.feed_variance_pct === null || todayRow?.feed_variance_pct === undefined ? null : Number(todayRow.feed_variance_pct),
       layingRate: todayRow?.laying_rate_pct === null || todayRow?.laying_rate_pct === undefined ? null : Number(todayRow.laying_rate_pct),
-      entry: todayRow ? { tone: 'success', label: `Recorded ${time}` } : { tone: 'neutral', label: 'Due by 18:00' },
+      entry: todayRow ? { tone: 'success', label: `Recorded ${time}` } : { tone: 'neutral', label: `Due by ${farmSettings.missingEntryCutoff}` },
     }
     return { pen, penToday, hasFlock: Boolean(flock) }
   })
@@ -657,6 +659,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
       feedTargets: feedTargetRows,
       medications: medicationRows,
       batches: batchRows.map((b) => ({ purchaseId: b.purchase_id!, medicationId: b.medication_id!, batchNo: b.batch_no, expiry: b.expiry_date, onHand: Number(b.on_hand ?? 0) })),
+      levels: levelRows.map((l) => ({ item: l.item!, feedTypeId: l.feed_type_id, medicationId: l.medication_id, onHand: Number(l.on_hand ?? 0) })),
       products: productRows,
       categories: categoryRows,
       reasons: reasonRows,

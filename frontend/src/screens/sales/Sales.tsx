@@ -9,19 +9,22 @@ import { Card, CardHeader } from '../../components/ui/Card'
 import { KpiCard } from '../../components/ui/KpiCard'
 import { useToast } from '../../components/ui/toastContext'
 import { amountOf, products } from '../../data/sales'
-import { salesKpis } from '../../data/salesKpis'
+import { nowHM, todayISO, weekdayDayMonth } from '../../data/metrics'
+import { approvers, salesIn, salesKpis, spanLabel, weekSpans } from '../../data/moneyKpis'
 import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
-import { useSalesFilter } from '../../features/sales/filters'
+import { SALES_CSV_HEADER, saleCsvRows, useSalesFilter } from '../../features/sales/filters'
 import { SalesFilterBar } from '../../features/sales/SalesFilterBar'
 import { SaleOverlays, type SaleOverlay } from '../../features/sales/SaleOverlays'
 import { SalesTable } from '../../features/sales/SalesTable'
 import { canApprove } from '../../lib/access'
+import { downloadCsv } from '../../lib/export'
 import { formatNumber } from '../../lib/format'
 
 export default function Sales() {
   const currentUser = useCurrentUser()
-  const { sales, customers, approveSale, rejectSale } = useTrade()
+  const trade = useTrade()
+  const { sales, customers, approveSale, rejectSale } = trade
   const toast = useToast()
   const f = useSalesFilter(sales, customers, 'This week')
   const [overlay, setOverlay] = useState<SaleOverlay>(null)
@@ -30,6 +33,7 @@ export default function Sales() {
   const first = pending[0]
   const me = currentUser.name.split(' ')[0]
   const approver = canApprove(currentUser.role)
+  const weekCount = salesIn(sales, weekSpans().now).length
 
   const describe = (receipt: string) => {
     const s = sales.find((x) => x.receipt === receipt)!
@@ -43,10 +47,12 @@ export default function Sales() {
       <PageHeader
         eyebrow={['Trade', 'Sales']}
         title="Sales"
-        description={`Fri 09 Oct, ${approved ? '16:51' : '16:40'} · 31 sales this week. Prices are set at each sale; anything below the minimum waits for your approval.`}
+        description={`${weekdayDayMonth(todayISO())}, ${nowHM()} · ${weekCount} sale${weekCount === 1 ? '' : 's'} this week. Prices are set at each sale; anything below the minimum waits for your approval.`}
         actions={
           <>
-            <Button leadingIcon={Download}>Export</Button>
+            <Button leadingIcon={Download} onClick={() => downloadCsv('sales', SALES_CSV_HEADER, saleCsvRows(f.visible, customers))}>
+              Export
+            </Button>
             <Button variant="primary" leadingIcon={Plus} onClick={() => setOverlay({ kind: 'record' })}>
               Record sale
             </Button>
@@ -61,7 +67,7 @@ export default function Sales() {
             <Alert
               tone="warning"
               icon={Clock}
-              title={approver ? `${pending.length} sale${pending.length > 1 ? 's are' : ' is'} waiting for your approval` : 'Waiting for Emeka’s approval'}
+              title={approver ? `${pending.length} sale${pending.length > 1 ? 's are' : ' is'} waiting for your approval` : `Waiting for approval from ${approvers(trade)}`}
               actions={
                 !approver ? (
                   <Button onClick={() => setOverlay({ kind: 'detail', receipt: first.receipt })}>View sale</Button>
@@ -110,7 +116,7 @@ export default function Sales() {
       <SalesFilterBar f={f} />
 
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
-        {salesKpis.map((kpi) => (
+        {salesKpis(trade).map((kpi) => (
           <KpiCard key={kpi.label} kpi={kpi} />
         ))}
       </div>
@@ -118,7 +124,7 @@ export default function Sales() {
       <Card>
         <CardHeader
           title={f.period}
-          meta={<span className="type-body-sm text-fg-tertiary">{f.period === 'Today' ? '09 Oct' : f.period === 'This week' ? '03–09 Oct' : '01–09 Oct'}</span>}
+          meta={<span className="type-body-sm text-fg-tertiary">{spanLabel(f.range)}</span>}
           action={{ label: 'All sales', to: '/sales/all' }}
         />
         <SalesTable

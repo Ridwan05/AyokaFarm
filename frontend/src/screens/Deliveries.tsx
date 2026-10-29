@@ -12,30 +12,37 @@ import { Tabs } from '../components/ui/Tabs'
 import type { Delivery, Order } from '../data/deliveries'
 import { useTrade } from '../data/tradeContext'
 import { ReceiveDeliveryDrawer } from '../features/stock/ReceiveDeliveryDrawer'
+import { inRange, kpi, num, roleWithName } from '../data/metrics'
+import { FLAT, monthSpans, weekSpans, weeksBack } from '../data/moneyKpis'
 import { formatNumber } from '../lib/format'
 import { Presence } from '../components/ui/Overlay'
 
 const TABS = ['All', 'Feed', 'Medication'] as const
-const flat = [1, 1, 1, 1, 1, 1, 1]
 
 type Row = (Delivery & { pending?: false }) | (Order & { pending: true })
 
-/** ST-D52 · what's been ordered and what's arrived. Prices and payments stay with Adeola and Funmi. */
+/** ST-D52 · what's been ordered and what's arrived. Prices and payments stay with the owner and accounts. */
 export default function Deliveries() {
-  const { orders, deliveries, suppliers } = useTrade()
+  const { orders, deliveries, suppliers, history, catalog } = useTrade()
   const [tab, setTab] = useState<(typeof TABS)[number]>('All')
   const [receiving, setReceiving] = useState(false)
   const match = (k: string) => tab === 'All' || k === tab.toLowerCase()
   const rows: Row[] = [...orders.map((o) => ({ ...o, pending: true as const })), ...deliveries].filter((r) => match(r.kind))
-  const thisWeek = deliveries.filter((d) => Number(d.received.slice(0, 2)) >= 3 && d.received.slice(3, 5) === '10')
-  const feedBags = deliveries.filter((d) => d.kind === 'feed' && d.received.slice(3, 5) === '10').reduce((n, d) => n + d.qty - d.sentBack, 0)
-  const sentBack = deliveries.reduce((n, d) => n + d.sentBack, 0)
+  // Received stock purchases (feed and medication) with the day they arrived.
+  const received = history.purchases.filter((p) => p.received_on && p.kind !== 'birds')
+  const receivedIn = (r: { from: string; to: string }) => received.filter((p) => inRange(p.received_on!, r))
+  const week = weekSpans()
+  const month = monthSpans()
+  const feedIn = (r: { from: string; to: string }) => receivedIn(r).filter((p) => p.kind === 'feed').reduce((n, p) => n + Number(p.received_quantity ?? p.quantity), 0)
+  const sentBack = receivedIn(month.now).reduce((n, p) => n + Number(p.returned_quantity), 0)
+  const receivers = [...new Set(receivedIn(week.now).map((p) => catalog.profiles.find((x) => x.id === p.received_by)?.full_name.split(' ')[0]).filter(Boolean))]
+  const accounts = [roleWithName(catalog, 'owner', 'the owner'), roleWithName(catalog, 'sales_accounts', 'accounts')].join(' and ')
 
   const kpis: Kpi[] = [
-    { label: 'Received this week', value: String(thisWeek.length), unit: 'deliveries', delta: 'All checked', trend: 'flat', sentiment: 'neutral', context: 'by Bayo', info: 'Deliveries received since Saturday', spark: flat },
-    { label: 'Due now', value: String(orders.length), unit: 'deliveries', delta: orders.length ? 'Ordered' : 'Nothing late', trend: 'flat', sentiment: 'neutral', context: orders.length ? orders.map((o) => o.ref).join(', ') : 'next: none booked', info: 'Orders placed but not yet received', spark: flat },
-    { label: 'Sent back', value: String(sentBack), unit: 'items', delta: 'This month', trend: 'flat', sentiment: 'neutral', context: 'torn or wet', info: 'Damaged items the driver took back', spark: flat },
-    { label: 'Feed received', value: String(feedBags), unit: 'bags', delta: 'Oct so far', trend: 'up', sentiment: 'bad', context: 'into the store', info: 'Bags of feed received in October', spark: [0.08, 0.07, 0.08, 0.08, 0.07, 0.08, 0.12, 0.17] },
+    kpi({ label: 'Received this week', value: String(receivedIn(week.now).length), unit: 'deliveries', current: receivedIn(week.now).length, previous: receivedIn(week.before).length, goodWhen: 'neither', context: receivers.length ? `by ${receivers.join(', ')}` : 'none yet this week', info: 'Feed and medication deliveries received since Monday', spark: weeksBack().map((w) => receivedIn(w).length) }),
+    kpi({ label: 'Due now', value: String(orders.length), unit: orders.length === 1 ? 'delivery' : 'deliveries', current: null, previous: null, goodWhen: 'neither', context: orders.length ? orders.map((o) => o.ref).slice(0, 3).join(', ') : 'nothing on order', info: 'Orders placed but not yet received', spark: FLAT }),
+    kpi({ label: 'Sent back', value: num(sentBack), unit: 'items', current: null, previous: null, goodWhen: 'neither', context: `${month.now.label} so far`, info: 'Damaged items the driver took back this month', spark: FLAT }),
+    kpi({ label: 'Feed received', value: num(feedIn(month.now)), unit: 'bags', current: feedIn(month.now), previous: feedIn(month.before), goodWhen: 'neither', context: `${month.now.label} vs same days last month`, info: 'Bags of feed received into the store this month', spark: weeksBack().map(feedIn) }),
   ]
 
   const columns: Column<Row>[] = [
@@ -44,15 +51,15 @@ export default function Deliveries() {
     {
       key: 'supplier',
       header: 'Supplier',
-      width: 300,
+      width: 200,
       render: (r) => {
         const s = suppliers.find((x) => x.id === r.supplierId)!
         return <PrimaryCell initials={s.initials} title={s.name} subtitle={s.kind} />
       },
     },
     { key: 'item', header: 'Item', render: (r) => <TextCell>{r.item}</TextCell> },
-    { key: 'qty', header: 'Qty', align: 'right', width: 110, render: (r) => <NumberCell>{formatNumber(r.qty)} {r.unit}</NumberCell> },
-    { key: 'received', header: 'Received', align: 'right', width: 120, render: (r) => (r.pending ? <NumberCell tone="muted">—</NumberCell> : <NumberCell>{r.received}</NumberCell>) },
+    { key: 'qty', header: 'Qty', align: 'right', width: 140, render: (r) => <NumberCell>{formatNumber(r.qty)} {r.unit}</NumberCell> },
+    { key: 'received', header: 'Received', align: 'right', width: 110, render: (r) => (r.pending ? <NumberCell tone="muted">—</NumberCell> : <NumberCell>{r.received}</NumberCell>) },
     { key: 'by', header: 'By', align: 'right', width: 70, render: (r) => <TextCell>{r.pending ? '—' : r.by}</TextCell> },
     {
       key: 'status',
@@ -72,7 +79,7 @@ export default function Deliveries() {
       <PageHeader
         eyebrow={['Trade', 'Deliveries']}
         title="Deliveries"
-        description="What has been ordered and what has arrived. Prices and payments stay with Adeola and Funmi."
+        description={`What has been ordered and what has arrived. Prices and payments stay with ${accounts}.`}
         actions={
           <Button variant="primary" leadingIcon={Plus} onClick={() => setReceiving(true)} disabled={orders.length === 0}>
             Receive delivery
