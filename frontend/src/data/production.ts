@@ -36,6 +36,8 @@ export type ProductionRecord = {
   layingRate: number | null
   medications: MedicationLine[]
   recordedBy: string
+  /** Note for the farm manager or vet. */
+  notes?: string
 }
 
 export const todayISO = () => {

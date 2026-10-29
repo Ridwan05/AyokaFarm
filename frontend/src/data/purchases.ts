@@ -16,6 +16,8 @@ export type Purchase = {
   qty: number
   /** e.g. "bags", "birds", "× 100 g" */
   unit: string
+  /** Stock units in one unit bought, e.g. 100 g in a pack of medication (default 1). */
+  unitsPerUnit?: number
   /** Price per unit as written on the invoice, e.g. "a bag". */
   per: string
   price: number

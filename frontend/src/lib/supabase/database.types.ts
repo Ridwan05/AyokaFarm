@@ -1923,6 +1923,8 @@ export type Database = {
           adjusted_on: string
           counted_quantity: number | null
           created_at: string
+          decided_at: string | null
+          decided_by: string | null
           feed_type_id: number | null
           id: number
           is_opening: boolean
@@ -1932,12 +1934,15 @@ export type Database = {
           purchase_id: number | null
           quantity_change: number
           reason_id: number | null
+          status: string
           recorded_by: string
         }
         Insert: {
           adjusted_on?: string
           counted_quantity?: number | null
           created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
           feed_type_id?: number | null
           id?: never
           is_opening?: boolean
@@ -1947,12 +1952,15 @@ export type Database = {
           purchase_id?: number | null
           quantity_change: number
           reason_id?: number | null
+          status?: string
           recorded_by?: string
         }
         Update: {
           adjusted_on?: string
           counted_quantity?: number | null
           created_at?: string
+          decided_at?: string | null
+          decided_by?: string | null
           feed_type_id?: number | null
           id?: never
           is_opening?: boolean
@@ -1962,6 +1970,7 @@ export type Database = {
           purchase_id?: number | null
           quantity_change?: number
           reason_id?: number | null
+          status?: string
           recorded_by?: string
         }
         Relationships: [
@@ -2420,6 +2429,10 @@ export type Database = {
       }
     }
     Functions: {
+      save_daily_entry: {
+        Args: { entry: Json; entry_id?: number; medications?: Json }
+        Returns: number
+      }
       add_birds_to_flock: {
         Args: { flock_id: number; placed_on: string; sources: Json }
         Returns: undefined

@@ -12,6 +12,7 @@ import { amountOf, type PaymentMethod } from './sales'
 import { farmTodayISO } from './session'
 import { Splash } from './SessionProvider'
 import { useCurrentUser } from './sessionContext'
+import type { ProductionRecord } from './production'
 import { TradeContext, type BirdSource, type Trade } from './tradeContext'
 
 // The farm's records, loaded from Supabase. Screens read and write through useTrade(); every write
@@ -91,6 +92,25 @@ export function TradeProvider({ children }: { children: ReactNode }) {
     return customerOpenBills(sale.customerId).find((b) => b.ref === receipt)?.left ?? 0
   }
 
+  const entryPayload = (r: ProductionRecord, flock: number | null) => ({
+    pen_id: r.penId,
+    flock_id: flock,
+    record_date: r.date,
+    mortality: r.died,
+    feed_type_id: r.feedBags > 0 ? (lookups.feedTypeId.get(r.feedType) ?? null) : null,
+    feed_bags: r.feedBags,
+    eggs_collected: r.eggs,
+    eggs_cracked: r.cracked,
+    notes: r.notes ?? null,
+  })
+  const medicationPayload = (r: ProductionRecord) =>
+    r.medications.map((m) => ({
+      medication_id: lookups.medicationId.get(m.medication)!,
+      quantity: m.qty,
+      mode: m.mode === 'Eye/nose drop' ? 'eye_nose_drop' : m.mode.toLowerCase(),
+      purpose: m.purpose.toLowerCase(),
+    }))
+
   const customerOpenBills = (id: string) => {
     const c = customers.find((x) => x.id === id)
     return c ? customerBills(c, sales, payments) : []
@@ -127,13 +147,23 @@ export function TradeProvider({ children }: { children: ReactNode }) {
     catalog: data.catalog,
     reload,
 
-    receiveDelivery: (ref, delivered, sentBack, note) =>
+    receiveDelivery: (ref, delivered, sentBack, note, _by, batch) =>
       write(() =>
         db
           .from('purchases')
-          .update({ status: 'received', received_on: today, received_quantity: delivered, returned_quantity: sentBack, delivery_note: note || null })
+          .update({
+            status: 'received',
+            received_on: today,
+            received_quantity: delivered,
+            returned_quantity: sentBack,
+            delivery_note: note || null,
+            ...(batch ? { batch_no: batch.batchNo || null, expiry_date: batch.expiry || null } : {}),
+          })
           .eq('id', lookups.purchaseId.get(ref)!),
       ),
+
+    decideCount: (adjustmentId, approve) =>
+      write(() => db.from('stock_adjustments').update({ status: approve ? 'applied' : 'rejected' }).eq('id', adjustmentId)),
 
     addStockMoves: (moves) =>
       write(() =>
@@ -142,12 +172,14 @@ export function TradeProvider({ children }: { children: ReactNode }) {
             const feed = lookups.feedTypeId.get(m.item)
             const med = lookups.medicationId.get(m.item)
             return {
-              item: feed ? ('feed' as const) : med ? ('medication' as const) : ('eggs' as const),
+              item: feed ? ('feed' as const) : med ? ('medication' as const) : (m.stockItem ?? ('eggs' as const)),
               feed_type_id: feed ?? null,
               medication_id: med ?? null,
               quantity_change: m.qty,
-              reason_id: lookups.reasonId.get('Recount')!,
+              counted_quantity: m.counted ?? null,
+              reason_id: lookups.reasonId.get(m.reason ?? 'Recount') ?? lookups.reasonId.get('Recount')!,
               note: m.source,
+              status: m.pending ? 'pending' : 'applied',
               recorded_by: user.id,
             }
           }),
@@ -176,44 +208,19 @@ export function TradeProvider({ children }: { children: ReactNode }) {
         toast.error(`Pen ${r.penId} has no flock to record`)
         return false
       }
-      const { data: saved, error } = await db
-        .from('production_records')
-        .insert({
-          pen_id: r.penId,
-          flock_id: flock,
-          record_date: r.date,
-          mortality: r.died,
-          feed_type_id: r.feedBags > 0 ? (lookups.feedTypeId.get(r.feedType) ?? null) : null,
-          feed_bags: r.feedBags,
-          eggs_collected: r.eggs,
-          eggs_cracked: r.cracked,
-          recorded_by: user.id,
-        })
-        .select('id')
-        .single()
-      if (error || !saved) {
-        toast.error(friendly(error?.message ?? 'The entry wasn’t saved'))
-        return false
-      }
-      if (r.medications.length) {
-        const { error: medError } = await db.from('production_medications').insert(
-          r.medications.map((m) => ({
-            production_record_id: saved.id,
-            medication_id: lookups.medicationId.get(m.medication)!,
-            quantity: m.qty,
-            mode: (m.mode === 'Eye/nose drop' ? 'eye_nose_drop' : m.mode.toLowerCase()) as 'water',
-            purpose: m.purpose.toLowerCase() as 'treatment',
-          })),
-        )
-        if (medError) {
-          toast.error(`Entry saved, but the medication wasn’t: ${friendly(medError.message)}`)
-          await reload()
-          return false
-        }
-      }
-      await reload()
-      return true
+      // The entry and its medication lines are saved together, so a dose can't go missing.
+      return write(() => db.rpc('save_daily_entry', { entry: entryPayload(r, flock), medications: medicationPayload(r) }))
     },
+
+    updateProductionRecord: (recordId, r) =>
+      write(() => db.rpc('save_daily_entry', { entry: entryPayload(r, null), medications: medicationPayload(r), entry_id: recordId })),
+
+    deleteProductionRecord: (recordId, reason) =>
+      write(async () => {
+        const res = await db.from('production_records').update({ deleted_at: new Date().toISOString(), delete_reason: reason }).eq('id', recordId).select('id')
+        // A refused update changes no rows and returns no error; say so.
+        return !res.error && !res.data?.length ? { error: { message: 'permission denied: only the owner can delete an entry' } } : res
+      }),
 
     addCustomer: (c) =>
       write(() =>
@@ -310,6 +317,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
           unit: p.unit,
           unit_price: p.price,
           amount_paid: p.paidAtPurchase,
+          stock_units_per_unit: p.unitsPerUnit ?? 1,
           // Feed and medication wait for the Store Keeper to receive them; birds arrive with the flock.
           status: kind === 'birds' ? 'received' : 'ordered',
           received_on: kind === 'birds' ? p.date : null,

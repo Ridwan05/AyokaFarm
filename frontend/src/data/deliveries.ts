@@ -20,4 +20,17 @@ export type Order = {
 export type Delivery = Omit<Order, 'orderedBy'> & { received: string; by: string; sentBack: number; note: string }
 
 /** A change to stock made in this session (delivery received or count adjustment). */
-export type StockMove = { item: string; qty: number; type: 'received' | 'adjust' | 'used'; source: string }
+export type StockMove = {
+  item: string
+  qty: number
+  type: 'received' | 'adjust' | 'used'
+  source: string
+  /** Adjustment reason name (Settings → Lists); defaults to Recount. */
+  reason?: string
+  /** What was counted, for a stock count (kept even when it matches). */
+  counted?: number
+  /** Big differences wait for a manager before they change stock. */
+  pending?: boolean
+  /** Eggs: 'eggs' or 'cracked_eggs' when item isn't a feed or medication name. */
+  stockItem?: 'eggs' | 'cracked_eggs'
+}

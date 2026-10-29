@@ -50,7 +50,10 @@ export type Trade = {
   stockMoves: StockMove[]
   /** Stock on hand now, from the stock ledger in Supabase. The base argument is ignored (kept for old callers). */
   stockOf: (item: string, base?: number) => number
-  receiveDelivery: (ref: string, delivered: number, sentBack: number, note: string, by: string) => Promise<boolean>
+  /** Medication deliveries also record the batch number and expiry date. */
+  receiveDelivery: (ref: string, delivered: number, sentBack: number, note: string, by: string, batch?: { batchNo: string; expiry: string | null }) => Promise<boolean>
+  /** Manager: apply or reject a count difference that waits for approval. */
+  decideCount: (adjustmentId: number, approve: boolean) => Promise<boolean>
   addStockMoves: (moves: StockMove[]) => Promise<boolean>
   expenses: Expense[]
   addExpense: (expense: Expense) => Promise<boolean>
@@ -58,6 +61,10 @@ export type Trade = {
   productionRecords: ProductionRecord[]
   /** Saves the entry and takes its feed and medication out of stock. */
   addProductionRecord: (record: ProductionRecord) => Promise<boolean>
+  /** Correct a saved entry (within the edit window, or a manager); replaces its medication lines. */
+  updateProductionRecord: (recordId: number, record: ProductionRecord) => Promise<boolean>
+  /** Owner (production delete): remove an entry with a reason; its feed and medication go back to stock. */
+  deleteProductionRecord: (recordId: number, reason: string) => Promise<boolean>
   /** Payment outside a sale/purchase; clears the oldest bills first. Resolves to what it cleared, or null if it didn't save. */
   recordPayment: (payment: NewPayment) => Promise<string | null>
   /** What is still owed on a sale after its own payment and any payments since (0 when cleared). */
