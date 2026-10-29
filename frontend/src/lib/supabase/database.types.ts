@@ -980,6 +980,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "payments_sale_id_fkey"
+            columns: ["sale_id"]
+            isOneToOne: false
+            referencedRelation: "sales"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "payments_supplier_id_fkey"
             columns: ["supplier_id"]
             isOneToOne: false
