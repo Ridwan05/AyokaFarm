@@ -13,6 +13,10 @@ export type Supplier = {
   termsDays: number
   lastPurchase: string
   lastPayment: string
+  /** What we owed them at go-live. */
+  opening?: number
+  openingSource?: string
+  openingChecked?: boolean
 }
 
 export const suppliers: Supplier[] = [

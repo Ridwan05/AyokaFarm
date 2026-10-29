@@ -15,8 +15,9 @@ import { pens as penList, type Pen } from './pens'
 import type { ProductionRecord } from './production'
 import type { Purchase, PurchaseKind } from './purchases'
 import { products, type PaymentMethod, type Product, type ProductKind, type Sale } from './sales'
+import { farmSettings } from './farmSettings'
 import { farmTodayISO, initialsOf, roleFromDb } from './session'
-import { staff, type StaffMember } from './settings'
+import { feedBands, staff, type StaffMember } from './settings'
 import { suppliers as supplierList, type Supplier } from './suppliers'
 
 type DB = SupabaseClient<Database>
@@ -47,6 +48,91 @@ export type Remote = {
   productionRecords: ProductionRecord[]
   stock: Map<string, number>
   lookups: Lookups
+  /** Raw rows and history for dashboards, reports and settings (see metrics.ts). */
+  history: History
+  catalog: Catalog
+}
+
+/** A day's production for one pen, with the calculated fields from the production_daily view. */
+export type DailyRow = {
+  id: number
+  penId: number
+  flockId: number
+  date: string
+  ageDays: number
+  opening: number
+  mortality: number
+  closing: number
+  mortalityPct: number | null
+  feedTypeId: number | null
+  feedBags: number
+  feedKg: number
+  expectedKg: number | null
+  variancePct: number | null
+  eggs: number | null
+  cracked: number | null
+  layingRate: number | null
+  recordedBy: string
+  createdAt: string
+}
+
+/** One item's stock for one day (stock_daily view). Eggs are counted in eggs, not crates. */
+export type StockDay = {
+  item: 'feed' | 'medication' | 'eggs' | 'cracked_eggs'
+  feedTypeId: number | null
+  medicationId: number | null
+  date: string
+  opening: number
+  received: number
+  used: number
+  adjusted: number
+  closing: number
+}
+
+/** A medication given in a daily entry. */
+export type MedLine = {
+  id: number
+  date: string
+  penId: number
+  medicationId: number
+  purchaseId: number | null
+  quantity: number
+  mode: string
+  purpose: string
+  recordedBy: string
+}
+
+export type History = {
+  /** Oldest day loaded (YYYY-MM-DD). */
+  since: string
+  daily: DailyRow[]
+  stockDays: StockDay[]
+  medLines: MedLine[]
+  adjustments: Row<'stock_adjustments'>[]
+  /** Medication stock movements (per batch, per pen). */
+  medMovements: Row<'stock_movements'>[]
+  sales: Row<'sales'>[]
+  purchases: Row<'purchases'>[]
+  expenses: Row<'expenses'>[]
+  payments: Row<'payments'>[]
+  flocks: Row<'flocks'>[]
+}
+
+export type Catalog = {
+  settings: Row<'farm_settings'> | null
+  pens: (Row<'pens'> & { bird_types: { name: string; lays_eggs: boolean } | null })[]
+  birdTypes: Row<'bird_types'>[]
+  feedTypes: Row<'feed_types'>[]
+  feedTargets: Row<'feed_targets'>[]
+  medications: Row<'medications'>[]
+  batches: { purchaseId: number; medicationId: number; batchNo: string | null; expiry: string | null; onHand: number }[]
+  products: Row<'products'>[]
+  categories: Row<'expense_categories'>[]
+  reasons: Row<'adjustment_reasons'>[]
+  profiles: Row<'profiles'>[]
+  staffPens: Row<'staff_pens'>[]
+  customers: Row<'customers'>[]
+  suppliers: Row<'suppliers'>[]
 }
 
 // ── Formatting helpers ──────────────────────────────────────────────
@@ -68,17 +154,28 @@ const UNIT_SHORT: Record<string, string> = { crate: 'cr', bird: 'birds', bag: 'b
 const PURCHASE_KIND: Record<string, PurchaseKind> = { feed: 'Feed', birds: 'Birds', medication: 'Medication' }
 const SUPPLIER_KIND: Record<string, Supplier['kind']> = { feed: 'Feed', birds: 'Birds', medication: 'Medication', equipment: 'Equipment' }
 
-async function all<T>(q: PromiseLike<{ data: T[] | null; error: { message: string } | null }>, what: string): Promise<T[]> {
-  const { data, error } = await q
-  if (error) throw new Error(`Couldn’t load ${what}: ${error.message}`)
-  return data ?? []
+type Page<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+const PAGE = 1000
+
+/** The API returns at most 1,000 rows a request, so read in pages until a short one comes back. Queries need a stable order. */
+async function all<T>(q: { range: (from: number, to: number) => Page<T> }, what: string): Promise<T[]> {
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await q.range(from, from + PAGE - 1)
+    if (error) throw new Error(`Couldn’t load ${what}: ${error.message}`)
+    out.push(...(data ?? []))
+    if ((data?.length ?? 0) < PAGE) return out
+  }
 }
 
 export async function loadRemote(db: DB): Promise<Remote> {
-  const since = daysAgo(8)
+  // A year and a bit, so year-to-date reports work. Farm-scale volumes keep this small.
+  const since = daysAgo(400)
+  const recent = daysAgo(8)
   const [
     settingsRows, productRows, feedTypeRows, medicationRows, categoryRows, reasonRows, penRows, flockRows, staffPenRows, profileRows,
     customerRows, supplierRows, purchaseRows, saleRows, paymentRows, expenseRows, dailyRows, recordRows, medLineRows, levelRows, stockDayRows, batchRows,
+    birdTypeRows, feedTargetRows, adjustmentRows, medMovementRows,
   ] = await Promise.all([
     all(db.from('farm_settings').select('*'), 'settings'),
     all(db.from('products').select('*').order('id'), 'products'),
@@ -87,7 +184,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
     all(db.from('expense_categories').select('*').order('id'), 'expense categories'),
     all(db.from('adjustment_reasons').select('*').order('id'), 'adjustment reasons'),
     all(db.from('pens').select('*, bird_types(name, lays_eggs)').eq('is_active', true).order('id'), 'pens'),
-    all(db.from('flocks').select('*').eq('status', 'active'), 'flocks'),
+    all(db.from('flocks').select('*').order('placed_on'), 'flocks'),
     all(db.from('staff_pens').select('*'), 'pen assignments'),
     all(db.from('profiles').select('*'), 'staff'),
     all(db.from('customers').select('*').order('name'), 'customers'),
@@ -96,15 +193,53 @@ export async function loadRemote(db: DB): Promise<Remote> {
     all(db.from('sales').select('*').is('deleted_at', null).neq('approval', 'rejected').order('sold_on', { ascending: false }).order('id', { ascending: false }), 'sales'),
     all(db.from('payments').select('*').is('deleted_at', null).order('paid_on', { ascending: false }).order('id', { ascending: false }), 'payments'),
     all(db.from('expenses').select('*').is('deleted_at', null).order('spent_on', { ascending: false }).order('id', { ascending: false }), 'expenses'),
-    all(db.from('production_daily').select('*').gte('record_date', since).order('record_date', { ascending: false }), 'production'),
-    all(db.from('production_records').select('id, pen_id, record_date, recorded_by, created_at').is('deleted_at', null).gte('record_date', since), 'production entries'),
-    all(db.from('production_medications').select('*, production_records!inner(record_date)').gte('production_records.record_date', since), 'medication given'),
+    all(db.from('production_daily').select('*').gte('record_date', since).order('record_date', { ascending: false }).order('pen_id'), 'production'),
+    all(db.from('production_records').select('id, pen_id, record_date, recorded_by, created_at').is('deleted_at', null).gte('record_date', since).order('id'), 'production entries'),
+    all(db.from('production_medications').select('*, production_records!inner(record_date, pen_id, recorded_by, deleted_at)').gte('production_records.record_date', since).is('production_records.deleted_at', null).order('id'), 'medication given'),
     all(db.from('stock_levels').select('*'), 'stock levels'),
-    all(db.from('stock_daily').select('*').gte('moved_on', since).order('moved_on', { ascending: false }), 'stock ledger'),
+    all(db.from('stock_daily').select('*').gte('moved_on', since).order('moved_on', { ascending: false }).order('item').order('feed_type_id').order('medication_id'), 'stock ledger'),
     all(db.from('medication_batches').select('*').order('expiry_date'), 'medication batches'),
+    all(db.from('bird_types').select('*').order('id'), 'bird types'),
+    all(db.from('feed_targets').select('*').order('bird_type_id').order('week_from'), 'feed targets'),
+    all(db.from('stock_adjustments').select('*').gte('adjusted_on', since).order('adjusted_on', { ascending: false }), 'stock adjustments'),
+    all(db.from('stock_movements').select('*').eq('item', 'medication').gte('moved_on', since).order('moved_on', { ascending: false }).order('id'), 'medication movements'),
   ])
+  const allFlockRows = flockRows
+  // Most screens only care about the flock in each pen now.
+  const activeFlocks = allFlockRows.filter((f) => f.status === 'active')
 
   const settings = settingsRows[0]
+  if (settings) {
+    Object.assign(farmSettings, {
+      farmName: settings.farm_name,
+      tradingAs: settings.trading_as,
+      address: settings.address,
+      phone: settings.phone,
+      email: settings.email,
+      currency: settings.currency,
+      timeZone: settings.time_zone,
+      financialYearStartMonth: settings.financial_year_start_month,
+      goLiveDate: settings.go_live_date,
+      receiptFooter: settings.receipt_footer,
+      whatsappSender: settings.whatsapp_sender,
+      whatsappMonthlyLimit: settings.whatsapp_monthly_limit,
+      mortalityAlertPct: Number(settings.mortality_alert_pct),
+      feedVariancePct: Number(settings.feed_variance_pct),
+      lowStockDays: settings.low_stock_days,
+      expiryWarningDays: settings.expiry_warning_days,
+      missingEntryCutoff: settings.missing_entry_cutoff.slice(0, 5),
+      overdueDebtDays: settings.overdue_debt_days,
+      eggsPerCrate: settings.eggs_per_crate,
+      editWindowDays: settings.edit_window_days,
+    })
+  }
+  // Expected feed by age, used by the daily entry form.
+  for (const [key, birdName] of [['Layers · Isa Brown', 'Layer'], ['Broilers · Ross 308', 'Broiler']] as const) {
+    const bird = birdTypeRows.find((b) => b.name === birdName)
+    const feed = new Map(feedTypeRows.map((f) => [f.id, f.name]))
+    const bands = feedTargetRows.filter((t) => t.bird_type_id === bird?.id)
+    if (bands.length) fill(feedBands[key], bands.map((t) => ({ from: t.week_from, to: t.week_to, grams: Number(t.grams_per_bird_day), feed: feed.get(t.recommended_feed_type_id ?? -1) ?? '—' })))
+  }
   const variancePct = Number(settings?.feed_variance_pct ?? 10)
   const mortalityPct = Number(settings?.mortality_alert_pct ?? 0.5)
   const today = farmTodayISO()
@@ -143,7 +278,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
     feedTypeRows
       .filter((f) => f.is_active)
       .map<FeedType>((f) => {
-        const days = stockDayRows.filter((d) => d.item === 'feed' && d.feed_type_id === f.id)
+        const days = stockDayRows.filter((d) => d.item === 'feed' && d.feed_type_id === f.id && d.moved_on! >= recent)
         const used = days.filter((d) => d.moved_on! >= daysAgo(7)).reduce((n, d) => n + Number(d.used ?? 0), 0)
         const bagsPerDay = used > 0 ? Math.round((used / 7) * 10) / 10 : null
         const bags = stock.get(f.name) ?? 0
@@ -185,7 +320,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
   )
 
   // ── Pens, flocks, today's entries ──
-  const flockByPen = new Map(flockRows.map((f) => [f.pen_id, f]))
+  const flockByPen = new Map(activeFlocks.map((f) => [f.pen_id, f]))
   const attendantsByPen = new Map<number, string[]>()
   for (const sp of staffPenRows) attendantsByPen.set(sp.pen_id, [...(attendantsByPen.get(sp.pen_id) ?? []), first(profileName.get(sp.profile_id))])
   const recordMeta = new Map(recordRows.map((r) => [r.id, r]))
@@ -194,7 +329,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
     const flock = flockByPen.get(p.id)
     const layers = p.bird_types?.lays_eggs ?? false
     const type: Pen['type'] = layers ? 'Layers' : 'Broilers'
-    const rows = dailyRows.filter((d) => d.pen_id === p.id && d.flock_id === flock?.id)
+    const rows = dailyRows.filter((d) => d.pen_id === p.id && d.flock_id === flock?.id && d.record_date! >= recent)
     const todayRow = rows.find((d) => d.record_date === today)
     const latest = rows[0]
     const ageDays = flock ? Math.round((Date.parse(today) - Date.parse(flock.placed_on)) / 86_400_000) + flock.age_at_placement_days : 0
@@ -337,6 +472,9 @@ export async function loadRemote(db: DB): Promise<Remote> {
       termsDays: s.payment_terms_days ?? 0,
       lastPurchase: lastPurchaseOn.has(s.id) ? dm(lastPurchaseOn.get(s.id)!) : '—',
       lastPayment: lastPaymentOn.has(s.id) ? dm(lastPaymentOn.get(s.id)!) : '—',
+      opening: Number(s.opening_balance),
+      openingSource: s.opening_balance_source ?? undefined,
+      openingChecked: s.opening_balance_checked,
     }
   })
   fill(supplierList, suppliers)
@@ -431,6 +569,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
     pen: e.pen_id,
     supplierId: e.supplier_id ? String(e.supplier_id) : null,
     amount: Number(e.amount),
+    amountPaid: Number(e.amount_paid),
     method: method(e.payment_method) ?? 'cash',
     receipt: Boolean(e.receipt_path),
     addedBy: first(profileName.get(e.recorded_by)),
@@ -450,12 +589,81 @@ export async function loadRemote(db: DB): Promise<Remote> {
     lookups: {
       saleId: new Map(saleRows.map((s) => [s.ref, s.id])),
       purchaseId: new Map(purchaseRows.map((p) => [p.ref, p.id])),
-      activeFlockByPen: new Map(flockRows.map((f) => [f.pen_id, f.id])),
+      activeFlockByPen: new Map(activeFlocks.map((f) => [f.pen_id, f.id])),
       feedTypeId: new Map(feedTypeRows.map((f) => [f.name, f.id])),
       medicationId: new Map(medicationRows.map((m) => [m.name, m.id])),
       categoryId: new Map(categoryRows.map((c) => [c.name, c.id])),
       reasonId: new Map(reasonRows.map((r) => [r.name, r.id])),
       medicationUnit: new Map(medicationRows.map((m) => [m.name, m.stock_unit])),
+    },
+    history: {
+      since,
+      daily: dailyRows.map((d) => ({
+        id: d.id!,
+        penId: d.pen_id!,
+        flockId: d.flock_id!,
+        date: d.record_date!,
+        ageDays: d.age_days ?? 0,
+        opening: d.opening_birds ?? 0,
+        mortality: d.mortality ?? 0,
+        closing: d.closing_birds ?? 0,
+        mortalityPct: d.mortality_pct === null ? null : Number(d.mortality_pct),
+        feedTypeId: d.feed_type_id,
+        feedBags: Number(d.feed_bags ?? 0),
+        feedKg: Number(d.feed_kg ?? 0),
+        expectedKg: d.expected_feed_kg === null ? null : Number(d.expected_feed_kg),
+        variancePct: d.feed_variance_pct === null ? null : Number(d.feed_variance_pct),
+        eggs: d.eggs_collected,
+        cracked: d.eggs_cracked,
+        layingRate: d.laying_rate_pct === null ? null : Number(d.laying_rate_pct),
+        recordedBy: profileName.get(d.recorded_by ?? '') ?? '—',
+        createdAt: d.created_at ?? '',
+      })),
+      stockDays: stockDayRows.map((d) => ({
+        item: d.item!,
+        feedTypeId: d.feed_type_id,
+        medicationId: d.medication_id,
+        date: d.moved_on!,
+        opening: Number(d.opening ?? 0),
+        received: Number(d.received ?? 0),
+        used: Number(d.used ?? 0),
+        adjusted: Number(d.adjusted ?? 0),
+        closing: Number(d.closing ?? 0),
+      })),
+      medLines: medLineRows.map((m) => ({
+        id: m.id,
+        date: m.production_records.record_date,
+        penId: m.production_records.pen_id,
+        medicationId: m.medication_id,
+        purchaseId: m.purchase_id,
+        quantity: Number(m.quantity),
+        mode: m.mode,
+        purpose: m.purpose,
+        recordedBy: profileName.get(m.production_records.recorded_by) ?? '—',
+      })),
+      adjustments: adjustmentRows,
+      medMovements: medMovementRows,
+      sales: saleRows,
+      purchases: purchaseRows,
+      expenses: expenseRows,
+      payments: paymentRows,
+      flocks: allFlockRows,
+    },
+    catalog: {
+      settings: settings ?? null,
+      pens: penRows,
+      birdTypes: birdTypeRows,
+      feedTypes: feedTypeRows,
+      feedTargets: feedTargetRows,
+      medications: medicationRows,
+      batches: batchRows.map((b) => ({ purchaseId: b.purchase_id!, medicationId: b.medication_id!, batchNo: b.batch_no, expiry: b.expiry_date, onHand: Number(b.on_hand ?? 0) })),
+      products: productRows,
+      categories: categoryRows,
+      reasons: reasonRows,
+      profiles: profileRows,
+      staffPens: staffPenRows,
+      customers: customerRows,
+      suppliers: supplierRows,
     },
   }
 }

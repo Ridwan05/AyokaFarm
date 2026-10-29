@@ -1,13 +1,12 @@
 import type { Kpi } from '../components/ui/KpiCard'
-import { FEED_DEVIATION_WARN_PCT, pensToday, type Alert, type PenToday } from './dashboard'
+import { pensToday, type Alert, type PenToday } from './dashboard'
 import { pens, type BirdType } from './pens'
 import { farm } from './session'
-import { feedBands, thresholds } from './settings'
+import { feedBands } from './settings'
 import { formatSignedPct } from '../lib/format'
+import { farmSettings } from './farmSettings'
 
 // Mock data matching P-D6 · Production. Replace with API calls.
-
-export const EGGS_PER_CRATE = 30
 
 export const productionDays = ['2026-10-08', '2026-10-07', '2026-10-06', '2026-10-05'] as const
 export type ProductionDay = (typeof productionDays)[number]
@@ -104,10 +103,7 @@ export const productionTotals = {
 
 // ── Daily entry (P-M · pen attendant) ──────────────────────────────
 
-
 export const BAG_KG = 25
-/** Deaths above this share of the opening birds raise an alert (FR-PRD-4). */
-export const MORTALITY_ALERT_PCT = Number(thresholds.find((t) => t.key === 'mortality')!.value)
 
 export const MEDICATION_MODES = ['Water', 'Feed', 'Injection', 'Spray', 'Eye/nose drop'] as const
 export const MEDICATION_PURPOSES = ['Treatment', 'Prevention', 'Vaccination', 'Vitamin'] as const
@@ -188,9 +184,9 @@ export function entryAlerts(records: ProductionRecord[]): Alert[] {
   return records.flatMap((r) => {
     const pct = (r.died / r.opening) * 100
     const out: Alert[] = []
-    if (pct > MORTALITY_ALERT_PCT)
-      out.push({ id: `m-${r.penId}-${r.date}`, kind: 'mortality', tone: 'danger', title: `Mortality spike — Pen ${r.penId}`, detail: `${r.died} birds (${pct.toFixed(1)}%) today · threshold ${MORTALITY_ALERT_PCT}% · Emeka notified`, time: r.time, to: `/pens/${r.penId}` })
-    if (Math.abs(r.feedVsExpected) > FEED_DEVIATION_WARN_PCT)
+    if (pct > farmSettings.mortalityAlertPct)
+      out.push({ id: `m-${r.penId}-${r.date}`, kind: 'mortality', tone: 'danger', title: `Mortality spike — Pen ${r.penId}`, detail: `${r.died} birds (${pct.toFixed(1)}%) today · threshold ${farmSettings.mortalityAlertPct}% · Emeka notified`, time: r.time, to: `/pens/${r.penId}` })
+    if (Math.abs(r.feedVsExpected) > farmSettings.feedVariancePct)
       out.push({ id: `f-${r.penId}-${r.date}`, kind: 'feed', tone: 'warning', title: `Feed ${formatSignedPct(r.feedVsExpected)} vs expected — Pen ${r.penId}`, detail: `${Math.round(r.feedBags * BAG_KG)} kg used vs ${Math.round(r.expectedKg)} kg expected for ${r.closing.toLocaleString('en-NG')} birds`, time: r.time, to: `/pens/${r.penId}` })
     return out
   })

@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { toast } from 'sonner'
 import { Button } from '../components/ui/Button'
 import { createClient } from '../lib/supabase/client'
-import { allocate, customerBills, customerStatement, describeAllocation, sumLeft, supplierBalance, supplierBills, supplierPurchases, supplierStatement } from './ledger'
+import { allocate, customerBills, customerStatement, describeAllocation, sumLeft, supplierBalance, supplierBills, supplierCharged, supplierStatement } from './ledger'
 import { loadRemote, type Remote } from './remote'
 import type { TablesInsert } from '../lib/supabase/database.types'
 import type { PaymentMethod } from './sales'
@@ -75,6 +75,12 @@ export function TradeProvider({ children }: { children: ReactNode }) {
     return true
   }
 
+  const books = { purchases, expenses: data.expenses, payments }
+  function withSupplier<T>(id: string, run: (s: (typeof suppliers)[number]) => T, none: T): T {
+    const s = suppliers.find((x) => x.id === id)
+    return s ? run(s) : none
+  }
+
   const customerOpenBills = (id: string) => {
     const c = customers.find((x) => x.id === id)
     return c ? customerBills(c, sales, payments) : []
@@ -99,13 +105,16 @@ export function TradeProvider({ children }: { children: ReactNode }) {
     stockOf: (item) => data.stock.get(item) ?? 0,
     expenses: data.expenses,
     productionRecords: data.productionRecords,
-    supplierBalance: (id) => supplierBalance(id, purchases, payments),
-    supplierOpenBills: (id) => supplierBills(id, purchases, payments),
-    supplierStatement: (id) => supplierStatement(id, purchases, payments),
+    supplierBalance: (id) => withSupplier(id, (s) => supplierBalance(s, books), 0),
+    supplierOpenBills: (id) => withSupplier(id, (s) => supplierBills(s, books), []),
+    supplierStatement: (id) => withSupplier(id, (s) => supplierStatement(s, books), []),
     purchasePaid: (ref) => {
       const p = purchases.find((x) => x.ref === ref)
-      return p ? (supplierPurchases(p.supplierId, purchases, payments).find((x) => x.purchase.ref === ref)?.paid ?? 0) : 0
+      return p ? withSupplier(p.supplierId, (s) => supplierCharged(s, books).find((x) => x.ref === ref)?.paid ?? 0, 0) : 0
     },
+    settings: data.catalog.settings,
+    history: data.history,
+    catalog: data.catalog,
     reload,
 
     receiveDelivery: (ref, delivered, sentBack, note) =>
@@ -276,7 +285,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
     },
 
     recordPayment(p) {
-      const bills = p.direction === 'in' ? customerOpenBills(p.partyId) : supplierBills(p.partyId, purchases, payments)
+      const bills = p.direction === 'in' ? customerOpenBills(p.partyId) : withSupplier(p.partyId, (s) => supplierBills(s, books), [])
       const cleared = describeAllocation(allocate(bills, p.amount)) || 'Held as credit'
       void write(() =>
         db.from('payments').insert({

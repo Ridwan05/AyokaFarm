@@ -69,7 +69,6 @@ export const feedTypes: FeedType[] = [
   },
 ]
 
-export const LOW_COVER_DAYS = 5
 
 export const reorderSuggestion = {
   feed: 'Layer mash',

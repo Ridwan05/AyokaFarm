@@ -1,3 +1,4 @@
+import type { Catalog, History } from './remote'
 import { createContext, useContext } from 'react'
 import type { Customer } from './customers'
 import type { Delivery, Order, StockMove } from './deliveries'
@@ -58,6 +59,12 @@ export type Trade = {
   recordPayment: (payment: NewPayment) => string
   addPen: (pen: NewPen) => Promise<boolean>
   placeFlock: (flock: NewFlock) => Promise<boolean>
+  /** The farm_settings row (null before setup). The same values are in farmSettings. */
+  settings: Catalog['settings']
+  /** Up to 400 days of production, stock and money records, for dashboards and reports (see metrics.ts). */
+  history: History
+  /** Reference rows with ids, including inactive ones (for Settings). */
+  catalog: Catalog
   /** Load everything again from Supabase. */
   reload: () => Promise<void>
 }

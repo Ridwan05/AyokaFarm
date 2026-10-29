@@ -15,6 +15,8 @@ export type Expense = {
   pen: number | null
   supplierId: string | null
   amount: number
+  /** Paid so far; a supplier expense paid in part is owed to that supplier. Defaults to the full amount. */
+  amountPaid?: number
   method: PaymentMethod
   receipt: boolean
   addedBy: string

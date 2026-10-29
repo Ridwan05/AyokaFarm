@@ -125,8 +125,6 @@ export const feedStock: FeedStock[] = [
 
 /** Days of cover that fill the bar. */
 export const FEED_COVER_FULL_DAYS = 15
-/** At or below this many days, cover shows as a warning. */
-export const FEED_COVER_WARN_DAYS = 5
 
 // 30 days of feed use (kg/day), deterministic so renders are stable.
 const expected = Array.from({ length: 30 }, (_, i) => 940 + (35 * i) / 29)
@@ -181,5 +179,4 @@ export const pensToday: PenToday[] = [
 ]
 
 /** Thresholds that turn table figures amber/red. */
-export const FEED_DEVIATION_WARN_PCT = 10
 export const MORTALITY_SPIKE_BIRDS = 5
