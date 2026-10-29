@@ -83,7 +83,7 @@ function UserCard({ onNavigate }: { onNavigate?: () => void }) {
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { user } = useSession()
   const role = user.role
-  const settings = { ...settingsItem, to: settingsHomeFor(role) }
+  const settings = { ...settingsItem, to: settingsHomeFor(user) }
   return (
     <>
       <button

@@ -3,7 +3,9 @@ import { RowMenu } from '../../components/ui/Menu'
 import { NumberCell, PrimaryCell, Table, TextCell, type Column } from '../../components/ui/Table'
 import { useToast } from '../../components/ui/toastContext'
 import { amountOf, saleStatus, type Sale } from '../../data/sales'
+import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
+import { canEditRecord, canVoidRecord } from '../records/recordRules'
 import { formatNaira } from '../../lib/format'
 import { customerView, portionsLabel, productOf, statusBadge } from './saleView'
 
@@ -11,10 +13,14 @@ type Props = {
   sales: Sale[]
   onOpen: (sale: Sale) => void
   onRecordPayment: (sale: Sale) => void
+  onEdit?: (sale: Sale) => void
+  onVoid?: (sale: Sale) => void
 }
 
-export function SalesTable({ sales, onOpen, onRecordPayment }: Props) {
-  const { customers, catalog, saleLeft } = useTrade()
+export function SalesTable({ sales, onOpen, onRecordPayment, onEdit, onVoid }: Props) {
+  const user = useCurrentUser()
+  const { customers, catalog, saleLeft, history } = useTrade()
+  const row = (s: Sale) => history.sales.find((x) => x.ref === s.receipt)
   const toast = useToast()
 
   const columns: Column<Sale>[] = [
@@ -78,9 +84,9 @@ export function SalesTable({ sales, onOpen, onRecordPayment }: Props) {
             { label: 'View details', onSelect: () => onOpen(s) },
             { label: 'Receipt PDF', onSelect: () => window.open(`/print/receipt/${encodeURIComponent(s.receipt)}`, '_blank'), disabled: s.pendingApproval },
             { label: 'Send on WhatsApp', onSelect: () => toast('WhatsApp isn’t connected yet — open the receipt PDF and share it instead'), disabled: s.pendingApproval },
-            { label: 'Record a payment', onSelect: () => onRecordPayment(s), disabled: s.paid >= amountOf(s) || s.pendingApproval },
-            { label: 'Edit sale', onSelect: () => onOpen(s) },
-            { label: 'Void sale…', danger: true, onSelect: () => toast(`Voiding needs a reason — open ${s.receipt} to void it`) },
+            { label: 'Record a payment', onSelect: () => onRecordPayment(s), disabled: saleLeft(s.receipt) <= 0 || s.pendingApproval || s.customerId === 'one-off' },
+            ...(onEdit && canEditRecord(user, 'sales', row(s)) ? [{ label: 'Correct sale…', onSelect: () => onEdit(s) }] : []),
+            ...(onVoid && canVoidRecord(user, 'sales') ? [{ label: 'Void sale…', danger: true, onSelect: () => onVoid(s) }] : []),
           ]}
         />
       )}

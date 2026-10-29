@@ -1,6 +1,6 @@
 'use client'
 
-import { Banknote, Printer } from 'lucide-react'
+import { Banknote, Pencil, Printer } from 'lucide-react'
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import { PageHeader } from '../../components/layout/PageHeader'
@@ -10,6 +10,9 @@ import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { daysBetween, TODAY_ISO } from '../../data/ledger'
 import { agingOf } from '../../data/moneyKpis'
 import { useTrade } from '../../data/tradeContext'
+import { useCurrentUser } from '../../data/sessionContext'
+import { can } from '../../lib/access'
+import { EditSupplierModal } from '../../features/suppliers/EditSupplierModal'
 import { AgingBar } from '../../features/customers/AgingBar'
 import { agingLegend } from '../../features/customers/customerView'
 import { PaymentModal } from '../../features/payments/PaymentModal'
@@ -32,7 +35,9 @@ const addDays = (iso: string, days: number) => {
 export default function SupplierStatement() {
   const { supplierId = '' } = useParams<{ supplierId: string }>()
   const { suppliers, supplierBalance, supplierOpenBills, supplierStatement, payments } = useTrade()
+  const user = useCurrentUser()
   const [paying, setPaying] = useState(false)
+  const [editing, setEditing] = useState(false)
   const s = suppliers.find((x) => x.id === supplierId)
   if (!s) return <Placeholder title="Supplier not found" />
 
@@ -55,6 +60,11 @@ export default function SupplierStatement() {
         description={`${s.kind} supplier since ${s.since} · ${s.supplies.toLowerCase()} · ${s.phone} · ${s.termsDays ? `pay within ${s.termsDays} days` : 'pay on delivery'}`}
         actions={
           <>
+            {can(user, 'parties', 'edit') && (
+              <Button leadingIcon={Pencil} onClick={() => setEditing(true)}>
+                Edit
+              </Button>
+            )}
             <Button leadingIcon={Printer} onClick={() => window.open(`/print/statement/supplier/${s.id}`, '_blank')}>
               Statement PDF
             </Button>
@@ -112,6 +122,7 @@ export default function SupplierStatement() {
       <StatementCard lines={lines} side="supplier" balance={balance} exportName={`statement-${s.short.toLowerCase().replace(/\W+/g, '-')}`} onDownload={(r) => window.open(`/print/statement/supplier/${s.id}${r.from ? `?from=${r.from}&to=${r.to}` : ''}`, '_blank')} />
 
       <Presence>{paying && <PaymentModal direction="out" partyId={s.id} onClose={() => setPaying(false)} />}</Presence>
+      <Presence>{editing && <EditSupplierModal supplierId={s.id} onClose={() => setEditing(false)} />}</Presence>
     </>
   )
 }

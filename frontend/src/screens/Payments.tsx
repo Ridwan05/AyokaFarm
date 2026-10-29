@@ -19,6 +19,11 @@ import { dayMonth } from '../features/purchases/purchaseView'
 import { downloadCsv } from '../lib/export'
 import { formatNaira } from '../lib/format'
 import { Presence } from '../components/ui/Overlay'
+import { RowMenu } from '../components/ui/Menu'
+import { EditPaymentModal } from '../features/payments/EditPaymentModal'
+import { VoidModal } from '../features/records/VoidModal'
+import { canEditRecord, canVoidRecord } from '../features/records/recordRules'
+import { useCurrentUser } from '../data/sessionContext'
 
 const DIRECTIONS = ['Received', 'Paid out'] as const
 const PERIODS = ['This week', 'This month', 'All time'] as const
@@ -33,8 +38,12 @@ export default function Payments() {
   const [method, setMethod] = useState<(typeof METHODS)[number]>('All methods')
   const [query, setQuery] = useState('')
   const [recording, setRecording] = useState(false)
+  const [acting, setActing] = useState<{ kind: 'edit' | 'void'; ref: string } | null>(null)
+  const user = useCurrentUser()
+  const rowOf = (p: Payment) => trade.history.payments.find((x) => x.ref === p.ref)
 
   const isIn = direction === 'Received'
+  const actingPayment = acting ? payments.find((p) => p.ref === acting.ref) : undefined
   const party = (p: Payment) =>
     isIn ? customers.find((c) => c.id === p.partyId) : suppliers.find((s) => s.id === p.partyId)
   const q = query.trim().toLowerCase()
@@ -111,11 +120,38 @@ export default function Payments() {
           meta={<span className="type-body-sm text-fg-tertiary">{rows.length} payments</span>}
           action={{ label: 'All payments', onClick: () => setPeriod('All time') }}
         />
-        <Table columns={columns} rows={rows} rowKey={(p) => p.ref} />
+        <Table
+          columns={columns}
+          rows={rows}
+          rowKey={(p) => p.ref}
+          actionsWidth={56}
+          rowActions={(p) => {
+            const items = [
+              ...(canEditRecord(user, 'payments', rowOf(p)) ? [{ label: 'Correct payment…', onSelect: () => setActing({ kind: 'edit', ref: p.ref }) }] : []),
+              ...(canVoidRecord(user, 'payments') ? [{ label: 'Void payment…', danger: true, onSelect: () => setActing({ kind: 'void', ref: p.ref }) }] : []),
+            ]
+            return items.length ? <RowMenu items={items} /> : null
+          }}
+        />
         {rows.length === 0 && <p className="px-5 py-6 type-body-md text-fg-tertiary">No payments match these filters.</p>}
       </Card>
 
       <Presence>{recording && <PaymentModal direction={isIn ? 'in' : 'out'} onClose={() => setRecording(false)} />}</Presence>
+      <Presence>
+        {acting?.kind === 'edit' && actingPayment && (
+          <EditPaymentModal payment={actingPayment} partyName={party(actingPayment)?.name ?? ''} onClose={() => setActing(null)} />
+        )}
+      </Presence>
+      <Presence>
+        {acting?.kind === 'void' && actingPayment && (
+          <VoidModal
+            kind="payments"
+            refId={actingPayment.ref}
+            label={`${party(actingPayment)?.name ?? ''} · ${formatNaira(actingPayment.amount)}`}
+            onClose={() => setActing(null)}
+          />
+        )}
+      </Presence>
     </>
   )
 }

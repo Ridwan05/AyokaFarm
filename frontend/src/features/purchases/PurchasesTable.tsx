@@ -2,7 +2,9 @@ import { Badge } from '../../components/ui/Badge'
 import { RowMenu } from '../../components/ui/Menu'
 import { NumberCell, PrimaryCell, Table, TextCell, type Column } from '../../components/ui/Table'
 import { totalOf, type Purchase } from '../../data/purchases'
+import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
+import { canEditRecord, canVoidRecord } from '../records/recordRules'
 import { formatNaira } from '../../lib/format'
 import { dayMonth, formatQty, purchaseStatus } from './purchaseView'
 
@@ -10,10 +12,13 @@ type Props = {
   purchases: Purchase[]
   onOpen: (p: Purchase) => void
   onPay: (p: Purchase) => void
+  onEdit?: (p: Purchase) => void
+  onVoid?: (p: Purchase) => void
 }
 
-export function PurchasesTable({ purchases, onOpen, onPay }: Props) {
-  const { suppliers, purchasePaid } = useTrade()
+export function PurchasesTable({ purchases, onOpen, onPay, onEdit, onVoid }: Props) {
+  const { suppliers, purchasePaid, history } = useTrade()
+  const user = useCurrentUser()
 
   const columns: Column<Purchase>[] = [
     { key: 'ref', header: 'Ref', width: 88, render: (p) => <TextCell tone="primary" mono>{p.ref}</TextCell> },
@@ -59,6 +64,8 @@ export function PurchasesTable({ purchases, onOpen, onPay }: Props) {
             { label: 'View details', onSelect: () => onOpen(p) },
             { label: 'Record a payment', onSelect: () => onPay(p), disabled: totalOf(p) <= purchasePaid(p.ref) },
             { label: 'Supplier statement (PDF)', onSelect: () => window.open(`/print/statement/supplier/${p.supplierId}`, '_blank') },
+            ...(onEdit && canEditRecord(user, 'purchases', history.purchases.find((x) => x.ref === p.ref)) ? [{ label: 'Correct purchase…', onSelect: () => onEdit(p) }] : []),
+            ...(onVoid && canVoidRecord(user, 'purchases') ? [{ label: 'Void purchase…', danger: true, onSelect: () => onVoid(p) }] : []),
           ]}
         />
       )}

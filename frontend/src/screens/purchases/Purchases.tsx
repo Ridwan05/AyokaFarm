@@ -78,6 +78,8 @@ export default function Purchases() {
           purchases={rows}
           onOpen={(p) => setOverlay({ kind: 'detail', ref: p.ref })}
           onPay={(p) => setOverlay({ kind: 'pay', ref: p.ref })}
+          onEdit={(p) => setOverlay({ kind: 'edit', ref: p.ref })}
+          onVoid={(p) => setOverlay({ kind: 'void', ref: p.ref })}
         />
       </Card>
 

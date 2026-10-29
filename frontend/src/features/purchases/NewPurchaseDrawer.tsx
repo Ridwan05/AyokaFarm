@@ -1,15 +1,14 @@
 import { Bird, Package, Truck } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Button } from '../../components/ui/Button'
-import { AutoInput, Field, SelectInput, SummaryBox, TextInput } from '../../components/ui/Form'
+import { AutoInput, DateInput, Field, SelectInput, SummaryBox, TextInput } from '../../components/ui/Form'
 import { explainMoney } from '../../data/explainMoney'
 import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { Drawer } from '../../components/ui/Overlay'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { useToast } from '../../components/ui/toastContext'
 import { feedTypes, medications } from '../../data/inventory'
-import { TODAY_ISO } from '../../data/ledger'
-import { weekdayDayMonth } from '../../data/metrics'
+import { todayISO, weekdayDayMonth } from '../../data/metrics'
 import { refPrefix, totalOf, type PurchaseKind } from '../../data/purchases'
 import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
@@ -17,9 +16,11 @@ import { formatNumber } from '../../lib/format'
 import { dayMonth } from './purchaseView'
 
 const KINDS = ['Feed', 'Birds', 'Medication'] as const
+const METHODS = ['Cash', 'Transfer', 'POS'] as const
+const METHOD_OF = { Cash: 'cash', Transfer: 'transfer', POS: 'POS' } as const
 const num = (v: string) => Number(v.replace(/,/g, '')) || 0
 
-type Item = { name: string; unit: string; per: string; unitLabel: string; hint: string; defaultPrice: number; /** Medication: what stock is counted in (g, vials…). */ stockUnit?: string }
+type Item = { name: string; unit: string; per: string; unitLabel: string; hint: string; /** Medication: what stock is counted in (g, vials…). */ stockUnit?: string }
 
 /** Built when the drawer opens: feed types and medications are loaded from Supabase after this module is imported. */
 const buildItems = (): Record<PurchaseKind, Item[]> => ({
@@ -29,17 +30,15 @@ const buildItems = (): Record<PurchaseKind, Item[]> => ({
     per: 'a bag',
     unitLabel: 'Bags',
     hint: `${f.bags} bags in store · ${f.daysOfCover === null ? 'not in use' : `${f.daysOfCover} days of cover`}`,
-    defaultPrice: 18500,
   })),
   // Birds are described by type, breed and age below; this is just the unit.
-  Birds: [{ name: 'Birds', unit: 'birds', per: 'a bird', unitLabel: 'Birds', hint: '', defaultPrice: 850 }],
+  Birds: [{ name: 'Birds', unit: 'birds', per: 'a bird', unitLabel: 'Birds', hint: '' }],
   Medication: medications.map((m) => ({
     name: m.name,
     unit: 'packs',
     per: 'a pack',
     unitLabel: 'Packs',
     hint: `${formatNumber(m.stock)} ${m.unit} in stock · reorder at ${formatNumber(m.reorderAt)} ${m.unit}`,
-    defaultPrice: 8500,
     stockUnit: m.unit,
   })),
 })
@@ -56,9 +55,11 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
   const [itemName, setItemName] = useState(items.Feed[0].name)
   const item = items[kind].find((i) => i.name === itemName) ?? items[kind][0]
   const last = purchases.find((p) => p.item === item.name)
-  const [qty, setQty] = useState('100')
-  const [price, setPrice] = useState(formatNumber(last?.price ?? item.defaultPrice))
-  const [paid, setPaid] = useState('1,500,000')
+  const [qty, setQty] = useState('')
+  const [price, setPrice] = useState(last ? formatNumber(last.price) : '')
+  const [paid, setPaid] = useState('')
+  const [date, setDate] = useState(todayISO())
+  const [method, setMethod] = useState<(typeof METHODS)[number]>('Transfer')
   const [submitted, setSubmitted] = useState(false)
   // Medication is bought in packs but stocked in g, vials…: how much of the stock unit is in one pack.
   const [perPack, setPerPack] = useState('')
@@ -83,6 +84,7 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
     qty: num(qty) > 0 ? undefined : 'Enter a quantity',
     price: num(price) > 0 ? undefined : 'Enter a price',
     paid: paidNow > total ? 'More than the total' : undefined,
+    date: date && date <= todayISO() ? undefined : 'Pick a date up to today',
     perPack: kind === 'Medication' && packUnits <= 0 ? `Enter how many ${item.stockUnit ?? 'units'} are in each pack` : undefined,
   }
 
@@ -91,22 +93,23 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
     setSupplierId(defaultSupplier(k))
     const first = items[k][0]
     setItemName(first.name)
-    setPrice(formatNumber((k === 'Birds' ? lastBirds : purchases.find((p) => p.item === first.name))?.price ?? first.defaultPrice))
+    const lastOfKind = k === 'Birds' ? lastBirds : purchases.find((p) => p.item === first.name)
+    setPrice(lastOfKind ? formatNumber(lastOfKind.price) : '')
   }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setSubmitted(true)
-    if (errors.birdType || errors.qty || errors.price || errors.paid || errors.perPack) return
+    if (errors.birdType || errors.qty || errors.price || errors.paid || errors.perPack || errors.date) return
     const prefix = refPrefix[kind]
     const next = Math.max(...purchases.filter((p) => p.ref.startsWith(prefix)).map((p) => Number(p.ref.slice(3)))) + 1
     const ref = `${prefix}-${String(next).padStart(4, '0')}`
     const me = currentUser.name.split(' ')[0]
     const purchase = {
-      ref, date: TODAY_ISO, supplierId, kind, item: kind === 'Birds' ? birdItem : item.name, qty: num(qty), unit: item.unit, per: item.per, price: num(price), paidAtPurchase: paidNow, recordedBy: me,
+      ref, date, supplierId, kind, item: kind === 'Birds' ? birdItem : item.name, qty: num(qty), unit: item.unit, per: item.per, price: num(price), paidAtPurchase: paidNow, method: METHOD_OF[method], recordedBy: me,
       unitsPerUnit: kind === 'Medication' ? packUnits : 1,
       bird: kind === 'Birds' ? { birdTypeId, breed: breed.trim() || null, ageDays: Math.round(weeks * 7) } : undefined,
-      history: [{ title: 'Purchase recorded', detail: `By ${me}${paidNow ? ` · paid ₦${formatNumber(paidNow)}` : ''}`, time: dayMonth(TODAY_ISO) }],
+      history: [{ title: 'Purchase recorded', detail: `By ${me}${paidNow ? ` · paid ₦${formatNumber(paidNow)}` : ''}`, time: dayMonth(date) }],
     }
     if (!(await addPurchase(purchase))) return
     toast(`Purchase saved · ₦${formatNumber(totalOf(purchase))}`)
@@ -118,7 +121,7 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
       open
       onClose={onClose}
       title="New purchase"
-      subtitle={`${weekdayDayMonth(TODAY_ISO)} · recorded by ${currentUser.name.split(' ')[0]}`}
+      subtitle={`${weekdayDayMonth(todayISO())} · recorded by ${currentUser.name.split(' ')[0]}`}
       footer={
         <>
           <Button size="lg" className="flex-1" onClick={onClose}>
@@ -178,7 +181,8 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
                 onChange={(e) => {
                   setItemName(e.target.value)
                   const it = items[kind].find((i) => i.name === e.target.value)!
-                  setPrice(formatNumber(purchases.find((p) => p.item === it.name)?.price ?? it.defaultPrice))
+                  const lastOfItem = purchases.find((p) => p.item === it.name)
+                  setPrice(lastOfItem ? formatNumber(lastOfItem.price) : '')
                 }}
                 options={items[kind].map((i) => ({ value: i.name, label: i.name }))}
               />
@@ -212,11 +216,17 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
         <Field label="Total cost" auto hint={`${formatNumber(num(qty))} ${item.unit} × ₦${formatNumber(num(price))}`}>
           {(id) => <AutoInput id={id} prefix="₦" value={formatNumber(total)} />}
         </Field>
-        <Field label="Amount paid now" hint="Leave 0 if you’ll pay later" error={submitted ? errors.paid : undefined}>
-          {(id) => (
-            <TextInput id={id} prefix="₦" inputMode="numeric" value={paid} onChange={(e) => setPaid(e.target.value)} onBlur={() => setPaid(formatNumber(paidNow))} />
-          )}
-        </Field>
+        <div className="flex gap-3">
+          <Field label="Amount paid now" className="flex-1" hint="Leave empty if you’ll pay later" error={submitted ? errors.paid : undefined}>
+            {(id) => (
+              <TextInput id={id} prefix="₦" inputMode="numeric" value={paid} onChange={(e) => setPaid(e.target.value)} onBlur={() => paidNow && setPaid(formatNumber(paidNow))} />
+            )}
+          </Field>
+          <Field label="Date of purchase" className="flex-1" error={submitted ? errors.date : undefined}>
+            {(id) => <DateInput id={id} value={date} max={todayISO()} onChange={(e) => setDate(e.target.value)} />}
+          </Field>
+        </div>
+        {paidNow > 0 && <SegmentedControl fullWidth label="Paid how" options={METHODS} value={method} onChange={setMethod} />}
         <SummaryBox>
           <KeyValueRow label={`Owed to ${supplier.short} now`} calculated={explainMoney.balanceNow()}>
             ₦ {formatNumber(owed)}

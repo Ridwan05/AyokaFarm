@@ -5,14 +5,19 @@ import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { Drawer } from '../../components/ui/Overlay'
 import { DetailSection, History } from '../../components/ui/Detail'
 import { totalOf, type Purchase } from '../../data/purchases'
+import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
+import { canEditRecord, canVoidRecord } from '../records/recordRules'
 import { formatNumber } from '../../lib/format'
 import { dayMonth, formatQty, purchaseStatus } from './purchaseView'
 
 const naira = (n: number) => `₦${formatNumber(n)}`
 
-export function PurchaseDrawer({ purchase: p, onClose, onPay }: { purchase: Purchase; onClose: () => void; onPay: () => void }) {
-  const { suppliers, supplierBalance, purchasePaid, payments } = useTrade()
+export function PurchaseDrawer({ purchase: p, onClose, onPay, onEdit, onVoid }: { purchase: Purchase; onClose: () => void; onPay: () => void; onEdit?: () => void; onVoid?: () => void }) {
+  const { suppliers, supplierBalance, purchasePaid, payments, history } = useTrade()
+  const user = useCurrentUser()
+  const mayEdit = Boolean(onEdit) && canEditRecord(user, 'purchases', history.purchases.find((x) => x.ref === p.ref))
+  const mayVoid = Boolean(onVoid) && canVoidRecord(user, 'purchases')
   const supplier = suppliers.find((s) => s.id === p.supplierId)!
   const total = totalOf(p)
   const paid = purchasePaid(p.ref)
@@ -63,6 +68,20 @@ export function PurchaseDrawer({ purchase: p, onClose, onPay }: { purchase: Purc
           {balance > 0 ? `${naira(balance)} we owe` : balance < 0 ? `${naira(-balance)} credit` : '₦0'}
         </KeyValueRow>
       </DetailSection>
+      {(mayEdit || mayVoid) && (
+        <div className="flex flex-wrap gap-2 py-2">
+          {mayEdit && (
+            <Button size="sm" onClick={onEdit}>
+              Correct purchase…
+            </Button>
+          )}
+          {mayVoid && (
+            <Button size="sm" variant="ghost" className="text-fg-danger" onClick={onVoid}>
+              Void purchase…
+            </Button>
+          )}
+        </div>
+      )}
       <History events={[...paymentEvents, ...p.history]} />
     </Drawer>
   )

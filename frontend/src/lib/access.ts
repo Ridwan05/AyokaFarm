@@ -44,6 +44,8 @@ const areas: { prefix: string; module: Area; label: string; group: string }[] = 
   { prefix: '/reports/income', module: 'finance', label: 'Income statement', group: 'Insight' },
   { prefix: '/reports/balance-sheet', module: 'finance', label: 'Balance sheet', group: 'Insight' },
   { prefix: '/finance', module: 'finance', label: 'Finance', group: 'Insight' },
+  { prefix: '/print/receipt', module: 'sales', label: 'Receipt', group: 'Trade' },
+  { prefix: '/print/statement', module: 'parties', label: 'Statement', group: 'People' },
   { prefix: '/settings', module: 'admin', label: 'Settings', group: 'Settings' },
   { prefix: '/go-live', module: 'admin', label: 'Go-live setup', group: 'Settings' },
 ]
@@ -83,8 +85,8 @@ export function canAccess(path: string, user: User) {
   if (path === '/') return true
   // Everyone can see their own payslips and loans (the database shows only theirs).
   if (path === '/my-pay' || path.startsWith('/print/payslip/')) return true
-  // The farm manager's settings scope is the staff list only.
-  if (role === 'farm-manager' && (path.startsWith('/settings') || path === '/go-live')) return path === '/settings/staff'
+  // 'Own' access to Admin & settings (the farm manager by default) is the staff list only.
+  if (accessOf(user, 'admin') === 'own' && (path.startsWith('/settings') || path === '/go-live')) return path === '/settings/staff'
   // Pen attendants: their pens, production and read-only stock — nothing else.
   if (isAttendant(role) && !(path.startsWith('/pens/') || ['/production', '/inventory'].some((p) => path === p || path.startsWith(p + '/')))) return false
   const pen = penInPath(path)
@@ -106,8 +108,8 @@ export const canApprove = (role: Role) => role === 'owner' || role === 'farm-man
 export const canRecordProduction = (user: User, penId: number) =>
   (user.role === 'owner' || user.role === 'farm-manager' || isAttendant(user.role)) && canSeePen(user, penId)
 
-/** Where the Settings item points for each role. */
-export const settingsHomeFor = (role: Role) => (role === 'farm-manager' ? '/settings/staff' : '/settings')
+/** Where the Settings item points: the staff list for 'own' access to Admin & settings, else all settings. */
+export const settingsHomeFor = (user: User) => (accessOf(user, 'admin') === 'own' ? '/settings/staff' : '/settings')
 
 /** Owner-level settings changes (RLS: admin add/edit). */
 export const canEditSettings = (user: User) => accessOf(user, 'admin', 'edit') !== 'none'

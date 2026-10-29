@@ -1,3 +1,4 @@
+import type { PaymentMethod } from './sales'
 // Mock purchases matching P-D10 / P-D30 and the purchase overlays.
 
 export type PurchaseKind = 'Feed' | 'Birds' | 'Medication'
@@ -23,6 +24,10 @@ export type Purchase = {
   price: number
   /** Paid at the time of purchase. Later payments are ledger entries (payments.ts). */
   paidAtPurchase: number
+  /** How the amount paid at purchase was paid. */
+  method?: PaymentMethod
+  /** Received into the store (feed and medication); birds are received on purchase. */
+  isReceived?: boolean
   recordedBy: string
   received?: string
   history: PurchaseEvent[]

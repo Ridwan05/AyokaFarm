@@ -17,6 +17,7 @@ import { saleDate } from '../../data/moneyKpis'
 import { formatNumber } from '../../lib/format'
 import { PenPortions } from './PenPortions'
 import { parsePortions, penChoices, portionError, portionRows, type PortionRow } from './portionRules'
+import { canEditRecord, canVoidRecord } from '../records/recordRules'
 import { customerView, productOf, statusBadge } from './saleView'
 
 const naira = (n: number) => `₦${formatNumber(n)}`
@@ -25,10 +26,12 @@ type Props = {
   sale: Sale
   onClose: () => void
   onRecordPayment: (sale: Sale) => void
+  onEdit?: (sale: Sale) => void
+  onVoid?: (sale: Sale) => void
 }
 
 /** Sale detail: what was sold, how it was paid, and its history. */
-export function SaleDrawer({ sale, onClose, onRecordPayment }: Props) {
+export function SaleDrawer({ sale, onClose, onRecordPayment, onEdit, onVoid }: Props) {
   const currentUser = useCurrentUser()
   const trade = useTrade()
   const { customers, approveSale, rejectSale, customerBalance, setSaleAllocations } = trade
@@ -184,6 +187,21 @@ export function SaleDrawer({ sale, onClose, onRecordPayment }: Props) {
             </KeyValueRow>
           ))}
       </DetailSection>
+
+      {(onEdit && canEditRecord(currentUser, 'sales', trade.history.sales.find((x) => x.ref === sale.receipt))) || (onVoid && canVoidRecord(currentUser, 'sales')) ? (
+        <div className="flex flex-wrap gap-2 py-2">
+          {onEdit && canEditRecord(currentUser, 'sales', trade.history.sales.find((x) => x.ref === sale.receipt)) && (
+            <Button size="sm" onClick={() => onEdit(sale)}>
+              Correct sale…
+            </Button>
+          )}
+          {onVoid && canVoidRecord(currentUser, 'sales') && (
+            <Button size="sm" variant="ghost" className="text-fg-danger" onClick={() => onVoid(sale)}>
+              Void sale…
+            </Button>
+          )}
+        </div>
+      ) : null}
 
       <History events={sale.history} />
     </Drawer>

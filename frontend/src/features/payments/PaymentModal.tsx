@@ -11,7 +11,8 @@ import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { Modal } from '../../components/ui/Overlay'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { useToast } from '../../components/ui/toastContext'
-import { allocate, daysBetween, TODAY_ISO } from '../../data/ledger'
+import { allocate, daysBetween } from '../../data/ledger'
+import { todayISO } from '../../data/metrics'
 import type { PaymentMethod } from '../../data/sales'
 import { useTrade, type NewPayment } from '../../data/tradeContext'
 import { formatDayMon, formatNumber } from '../../lib/format'
@@ -37,10 +38,11 @@ export function PaymentModal({ direction: initialDirection = 'in', partyId, onCl
   const [party, setParty] = useState(partyId ?? parties[0]?.id ?? '')
   const bills = isIn ? trade.customerOpenBills(party) : trade.supplierOpenBills(party)
   const balance = isIn ? trade.customerBalance(party) : trade.supplierBalance(party)
-  const [amount, setAmount] = useState(formatNumber(isIn ? Math.min(100000, balance) : Math.max(balance, 0)))
-  const [date, setDate] = useState(TODAY_ISO)
+  // Start from what's owed; the person types what was actually paid.
+  const [amount, setAmount] = useState(balance > 0 ? formatNumber(balance) : '')
+  const [date, setDate] = useState(todayISO())
   const [method, setMethod] = useState<(typeof METHODS)[number]>('Transfer')
-  const [reference, setReference] = useState(isIn ? 'TRF-89120' : 'TRF-89201')
+  const [reference, setReference] = useState('')
   const [notify, setNotify] = useState(false)
   const [error, setError] = useState<string>()
   const online = useOnline()
@@ -58,13 +60,13 @@ export function PaymentModal({ direction: initialDirection = 'in', partyId, onCl
     const next = (d === 'in' ? trade.customers : trade.suppliers)[0]?.id ?? ''
     setParty(next)
     const b = d === 'in' ? trade.customerBalance(next) : trade.supplierBalance(next)
-    setAmount(formatNumber(d === 'in' ? Math.min(100000, b) : Math.max(b, 0)))
+    setAmount(b > 0 ? formatNumber(b) : '')
   }
 
   const changeParty = (id: string) => {
     setParty(id)
     const b = isIn ? trade.customerBalance(id) : trade.supplierBalance(id)
-    setAmount(formatNumber(Math.max(isIn ? Math.min(100000, b) : b, 0)))
+    setAmount(b > 0 ? formatNumber(b) : '')
   }
 
   const save = async (p: NewPayment) => {

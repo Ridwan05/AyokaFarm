@@ -319,7 +319,7 @@ function LevelButton({ value, disabled, label, onCycle }: { value: AccessLevel; 
 function NewRoleModal({ roles, onClose, onCreated }: { roles: RoleRow[]; onClose: () => void; onCreated: (id: string) => void }) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
-  const [copyFrom, setCopyFrom] = useState(roles.find((r) => r.id === 'farm_manager')?.id ?? roles[0].id)
+  const [copyFrom, setCopyFrom] = useState(roles.find((r) => r.id === 'pen_attendant')?.id ?? roles[0].id)
   const [busy, setBusy] = useState(false)
   const id = name
     .trim()

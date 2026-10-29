@@ -89,10 +89,17 @@ export default function FeedTargets() {
         Object.assign(patch, { [t.key]: n })
       }
     }
+    if (patch.eggs_per_crate !== undefined && patch.eggs_per_crate < 1) return toast.error('Eggs in a crate: enter 1 or more')
     setSaving(true)
     const { error } = await db.from('farm_settings').update(patch).eq('id', true)
+    // Egg products sell by the crate but take eggs out of stock, so they follow the crate size too.
+    const crateChanged = !error && patch.eggs_per_crate !== undefined && patch.eggs_per_crate !== Number(settings?.eggs_per_crate ?? 30)
+    const crateError = crateChanged
+      ? (await db.from('products').update({ stock_units_per_unit: patch.eggs_per_crate }).in('stock_item', ['eggs', 'cracked_eggs'])).error
+      : null
     setSaving(false)
     if (error) return toast.error(why(error.message))
+    if (crateError) toast.error(`Thresholds saved, but egg products still use the old crate size: ${why(crateError.message)}`)
     toast.success('Alert thresholds saved')
     await reload()
   }

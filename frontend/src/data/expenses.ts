@@ -18,5 +18,7 @@ export type Expense = {
   amountPaid?: number
   method: PaymentMethod
   receipt: boolean
+  /** Storage path of the receipt photo or PDF (bucket "receipts"). */
+  receiptPath?: string | null
   addedBy: string
 }

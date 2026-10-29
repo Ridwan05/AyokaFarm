@@ -23,6 +23,23 @@ const toSources = (sources: BirdSource[]) => sources.map((x) => ({ purchase_id: 
 
 const dbMethod = (m: PaymentMethod | undefined) => (m === 'POS' ? 'pos' : m) ?? null
 
+const RECEIPTS = 'receipts'
+const receiptError = (message: string) =>
+  /bucket not found/i.test(message) ? 'receipt storage isn’t set up yet (run the latest database migration).' : friendly(message)
+
+/**
+ * A refused update (row-level security) changes no rows and returns no error, so check that a row
+ * came back and turn "nothing changed" into a message.
+ */
+async function changed(
+  q: PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>,
+  refusal = 'You can’t change this record any more — ask the farm manager or owner.',
+): Promise<{ error: { message: string } | null }> {
+  const res = await q
+  if (res.error) return { error: res.error }
+  return res.data?.length ? { error: null } : { error: { message: refusal } }
+}
+
 /** Turn a Postgres/PostgREST error into a sentence for a toast. */
 function friendly(message: string) {
   if (/row-level security|permission denied|42501/i.test(message)) return 'You don’t have permission to do that.'
@@ -82,6 +99,26 @@ export function TradeProvider({ children }: { children: ReactNode }) {
   function withSupplier<T>(id: string, run: (s: (typeof suppliers)[number]) => T, none: T): T {
     const s = suppliers.find((x) => x.id === id)
     return s ? run(s) : none
+  }
+
+  /** The database id behind a money record's reference (receipt or ref). */
+  function recordId(kind: 'sales' | 'purchases' | 'payments' | 'expenses', ref: string) {
+    const rows: { id: number; ref: string }[] = data!.history[kind]
+    const id = rows.find((r) => r.ref === ref)?.id
+    if (!id) toast.error(`${ref} wasn’t found — reload and try again.`)
+    return id
+  }
+
+  /** Upload a receipt and point the expense at it. Upload trouble is reported but the expense stays saved. */
+  async function attachReceipt(expenseId: number, ref: string, file: File) {
+    const path = `${ref}/${Date.now()}-${file.name.replace(/[^\w.-]+/g, '_')}`
+    const { error: upError } = await db.storage.from(RECEIPTS).upload(path, file, { contentType: file.type || undefined })
+    if (upError) {
+      toast.error(`${ref} is saved, but the receipt didn’t upload: ${receiptError(upError.message)}`)
+      return
+    }
+    const { error } = await db.from('expenses').update({ receipt_path: path }).eq('id', expenseId)
+    if (error) toast.error(`${ref} is saved, but the receipt wasn’t linked: ${friendly(error.message)}`)
   }
 
   /** What's still owed on one sale after its own payment and any payments since. */
@@ -186,21 +223,78 @@ export function TradeProvider({ children }: { children: ReactNode }) {
         ),
       ),
 
-    addExpense: (e) =>
-      write(() =>
-        db.from('expenses').insert({
+    async addExpense(e, receipt) {
+      const { data: saved, error } = await db
+        .from('expenses')
+        .insert({
           spent_on: e.date,
           category_id: lookups.categoryId.get(e.category) ?? lookups.categoryId.get('Other')!,
           description: e.description,
           amount: e.amount,
           supplier_id: e.supplierId ? Number(e.supplierId) : null,
-          amount_paid: e.amount,
+          // Anything not paid now is owed to the supplier (FR-SUP-3).
+          amount_paid: e.amountPaid ?? e.amount,
           payment_method: dbMethod(e.method),
           pen_id: e.pen,
           receipt_path: null,
           recorded_by: user.id,
-        }),
-      ),
+        } as TablesInsert<'expenses'>)
+        .select('id, ref')
+        .single()
+      if (error || !saved) {
+        toast.error(friendly(error?.message ?? 'The expense wasn’t saved'))
+        return false
+      }
+      if (receipt) await attachReceipt(saved.id, saved.ref, receipt)
+      await reload()
+      return true
+    },
+
+    receiptUrl: async (path) => {
+      const { data: link, error } = await db.storage.from(RECEIPTS).createSignedUrl(path, 600)
+      if (error) toast.error(receiptError(error.message))
+      return link?.signedUrl ?? null
+    },
+
+    voidRecord: (kind, ref, reason) => {
+      const id = recordId(kind, ref)
+      if (!id) return Promise.resolve(false)
+      const voided = { deleted_at: new Date().toISOString(), delete_reason: reason.trim() }
+      const query =
+        kind === 'sales'
+          ? db.from('sales').update(voided).eq('id', id).select('id')
+          : kind === 'purchases'
+            ? db.from('purchases').update(voided).eq('id', id).select('id')
+            : kind === 'payments'
+              ? db.from('payments').update(voided).eq('id', id).select('id')
+              : db.from('expenses').update(voided).eq('id', id).select('id')
+      return write(() => changed(query, 'Only the owner can void a record.'))
+    },
+
+    updateSale: (receipt, patch) => {
+      const id = recordId('sales', receipt)
+      return id ? write(() => changed(db.from('sales').update(patch).eq('id', id).select('id'))) : Promise.resolve(false)
+    },
+    updatePurchase: (ref, patch) => {
+      const id = recordId('purchases', ref)
+      return id ? write(() => changed(db.from('purchases').update(patch).eq('id', id).select('id'))) : Promise.resolve(false)
+    },
+    updatePayment: (ref, patch) => {
+      const id = recordId('payments', ref)
+      return id ? write(() => changed(db.from('payments').update(patch).eq('id', id).select('id'))) : Promise.resolve(false)
+    },
+    async updateExpense(ref, patch, receipt) {
+      const id = recordId('expenses', ref)
+      if (!id) return false
+      const res = await changed(db.from('expenses').update(patch).eq('id', id).select('id'))
+      if (res.error) {
+        toast.error(friendly(res.error.message))
+        return false
+      }
+      if (receipt) await attachReceipt(id, ref, receipt)
+      await reload()
+      return true
+    },
 
     async addProductionRecord(r) {
       const flock = lookups.activeFlockByPen.get(r.penId)
@@ -317,6 +411,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
           unit: p.unit,
           unit_price: p.price,
           amount_paid: p.paidAtPurchase,
+          payment_method: p.paidAtPurchase > 0 ? dbMethod(p.method) : null,
           stock_units_per_unit: p.unitsPerUnit ?? 1,
           // Feed and medication wait for the Store Keeper to receive them; birds arrive with the flock.
           status: kind === 'birds' ? 'received' : 'ordered',

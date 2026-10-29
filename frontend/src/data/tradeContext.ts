@@ -9,6 +9,10 @@ import type { ProductionRecord } from './production'
 import type { Purchase } from './purchases'
 import type { PaymentMethod, Sale, SalePortion } from './sales'
 import type { Supplier } from './suppliers'
+import type { TablesUpdate } from '../lib/supabase/database.types'
+
+/** The money records that can be voided (soft-deleted with a reason) or corrected. */
+export type MoneyKind = 'sales' | 'purchases' | 'payments' | 'expenses'
 
 export type NewPayment = {
   direction: 'in' | 'out'
@@ -56,7 +60,21 @@ export type Trade = {
   decideCount: (adjustmentId: number, approve: boolean) => Promise<boolean>
   addStockMoves: (moves: StockMove[]) => Promise<boolean>
   expenses: Expense[]
-  addExpense: (expense: Expense) => Promise<boolean>
+  /** Saves the expense, then uploads its receipt (photo or PDF) when one is given. */
+  addExpense: (expense: Expense, receipt?: File | null) => Promise<boolean>
+  /** A short-lived link to view a stored receipt. */
+  receiptUrl: (path: string) => Promise<string | null>
+  /** Owner (delete permission): void a record with a reason; it leaves every list and total. */
+  voidRecord: (kind: MoneyKind, ref: string, reason: string) => Promise<boolean>
+  /** Corrections within the edit window (managers any time). Each refuses with a message if not allowed. */
+  updateSale: (receipt: string, patch: Pick<TablesUpdate<'sales'>, 'customer_id' | 'buyer_name' | 'unit_price' | 'notes' | 'sold_on'>) => Promise<boolean>
+  updatePurchase: (ref: string, patch: Pick<TablesUpdate<'purchases'>, 'purchased_on' | 'supplier_id' | 'quantity' | 'unit_price' | 'amount_paid' | 'payment_method'>) => Promise<boolean>
+  updatePayment: (ref: string, patch: Pick<TablesUpdate<'payments'>, 'paid_on' | 'method' | 'reference' | 'amount'>) => Promise<boolean>
+  updateExpense: (
+    ref: string,
+    patch: Pick<TablesUpdate<'expenses'>, 'spent_on' | 'category_id' | 'description' | 'amount' | 'amount_paid' | 'payment_method' | 'pen_id' | 'supplier_id'>,
+    receipt?: File | null,
+  ) => Promise<boolean>
   /** Today's pen entries. */
   productionRecords: ProductionRecord[]
   /** Saves the entry and takes its feed and medication out of stock. */

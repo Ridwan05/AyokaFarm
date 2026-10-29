@@ -35,10 +35,12 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
   const [customerId, setCustomerId] = useState(customers[0]?.id ?? ONE_OFF.id)
   const [productId, setProductId] = useState(kindProducts[0].id)
   const product = products.find((p) => p.id === productId) ?? kindProducts[0]
-  const [qty, setQty] = useState('25')
+  const [qty, setQty] = useState('')
   const [price, setPrice] = useState(formatNumber(product.price))
-  const [paid, setPaid] = useState('50,000')
-  const [method, setMethod] = useState<(typeof METHODS)[number]>('POS')
+  const [paid, setPaid] = useState('')
+  // Start from how this person took money last time, not a sample value.
+  const lastMethod = sales.find((s) => s.recordedBy === currentUser.name.split(' ')[0] && s.method)?.method
+  const [method, setMethod] = useState<(typeof METHODS)[number]>(lastMethod === 'cash' ? 'Cash' : lastMethod === 'transfer' ? 'Transfer' : 'POS')
   const [submitted, setSubmitted] = useState(false)
   // Pens the sale came from. Birds must say; eggs and droppings can be left to the auto-split.
   const [split, setSplit] = useState(false)

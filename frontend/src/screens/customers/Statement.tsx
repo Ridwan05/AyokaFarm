@@ -1,6 +1,6 @@
 'use client'
 
-import { Banknote, Printer } from 'lucide-react'
+import { Banknote, Pencil, Printer } from 'lucide-react'
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import { PageHeader } from '../../components/layout/PageHeader'
@@ -10,6 +10,9 @@ import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { daysBetween } from '../../data/ledger'
 import { agingOf } from '../../data/moneyKpis'
 import { useTrade } from '../../data/tradeContext'
+import { useCurrentUser } from '../../data/sessionContext'
+import { can } from '../../lib/access'
+import { EditCustomerModal } from '../../features/customers/EditCustomerModal'
 import { AgingBar } from '../../features/customers/AgingBar'
 import { agingLegend } from '../../features/customers/customerView'
 import { PaymentModal } from '../../features/payments/PaymentModal'
@@ -28,7 +31,9 @@ const dmy = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice
 export default function Statement() {
   const { customerId = '' } = useParams<{ customerId: string }>()
   const { customers, customerBalance, customerOpenBills, customerStatement, payments } = useTrade()
+  const user = useCurrentUser()
   const [paying, setPaying] = useState(false)
+  const [editing, setEditing] = useState(false)
   const c = customers.find((x) => x.id === customerId)
   if (!c) return <Placeholder title="Customer not found" />
 
@@ -51,6 +56,11 @@ export default function Statement() {
         description={`Regular customer since ${c.since} · ${c.buys} · ${c.area} · ${c.whatsapp ? 'agreed to WhatsApp statements (not connected yet)' : 'no WhatsApp — print statements'}`}
         actions={
           <>
+            {can(user, 'parties', 'edit') && (
+              <Button leadingIcon={Pencil} onClick={() => setEditing(true)}>
+                Edit
+              </Button>
+            )}
             <Button leadingIcon={Printer} onClick={() => window.open(`/print/statement/customer/${c.id}`, '_blank')}>
               Statement PDF
             </Button>
@@ -117,6 +127,7 @@ export default function Statement() {
       <StatementCard lines={lines} side="customer" balance={balance} exportName={`statement-${c.short.toLowerCase().replace(/\W+/g, '-')}`} onDownload={(r) => window.open(`/print/statement/customer/${c.id}${r.from ? `?from=${r.from}&to=${r.to}` : ''}`, '_blank')} />
 
       <Presence>{paying && <PaymentModal direction="in" partyId={c.id} onClose={() => setPaying(false)} />}</Presence>
+      <Presence>{editing && <EditCustomerModal customerId={c.id} onClose={() => setEditing(false)} />}</Presence>
     </>
   )
 }

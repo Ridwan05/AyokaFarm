@@ -16,11 +16,18 @@ import { SalesTable } from '../../features/sales/SalesTable'
 import { InfoTip } from '../../components/ui/InfoTip'
 import { explainMoney } from '../../data/explainMoney'
 
+const PAGE = 50
+
 export default function AllSales() {
   const { sales, customers } = useTrade()
   const f = useSalesFilter(sales, customers, 'This month')
   const [overlay, setOverlay] = useState<SaleOverlay>(null)
   const total = f.visible.reduce((n, s) => n + amountOf(s), 0)
+  // 50 a page keeps long periods quick to scroll and render.
+  const [page, setPage] = useState(0)
+  const pages = Math.max(1, Math.ceil(f.visible.length / PAGE))
+  const current = Math.min(page, pages - 1)
+  const shown = f.visible.slice(current * PAGE, current * PAGE + PAGE)
 
   return (
     <>
@@ -53,16 +60,20 @@ export default function AllSales() {
           }
         />
         <SalesTable
-          sales={f.visible}
+          sales={shown}
           onOpen={(s) => setOverlay({ kind: 'detail', receipt: s.receipt })}
           onRecordPayment={(s) => setOverlay({ kind: 'payment', receipt: s.receipt })}
+          onEdit={(s) => setOverlay({ kind: 'edit', receipt: s.receipt })}
+          onVoid={(s) => setOverlay({ kind: 'void', receipt: s.receipt })}
         />
         <div className="flex items-center gap-3 px-4 py-3">
-          <span className="flex-1 type-body-sm text-fg-tertiary">Showing all {f.visible.length} sales · {f.period.toLowerCase()}</span>
-          <Button disabled>
+          <span className="flex-1 type-body-sm text-fg-tertiary">
+            {f.visible.length > PAGE ? `${current * PAGE + 1}–${Math.min(f.visible.length, (current + 1) * PAGE)} of ${f.visible.length} sales` : `Showing all ${f.visible.length} sales`} · {f.period.toLowerCase()}
+          </span>
+          <Button disabled={current === 0} onClick={() => setPage(current - 1)}>
             Previous
           </Button>
-          <Button disabled>
+          <Button disabled={current >= pages - 1} onClick={() => setPage(current + 1)}>
             Next
           </Button>
         </div>

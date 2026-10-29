@@ -28,20 +28,28 @@ export type Payroll = {
 
 const empty: Payroll = { employees: [], loans: [], balances: [], runs: [], lines: [], items: [] }
 
-async function rows<T>(q: PromiseLike<{ data: T[] | null; error: { message: string } | null }>, what: string) {
-  const { data, error } = await q
-  if (error) throw new Error(`Couldn’t load ${what}: ${error.message}`)
-  return data ?? []
+type Page<T> = PromiseLike<{ data: T[] | null; error: { message: string } | null }>
+const PAGE = 1000
+
+/** The API returns at most 1,000 rows a request, so read in pages until a short one comes back. Queries need a stable order. */
+async function rows<T>(q: { range: (from: number, to: number) => Page<T> }, what: string): Promise<T[]> {
+  const out: T[] = []
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await q.range(from, from + PAGE - 1)
+    if (error) throw new Error(`Couldn’t load ${what}: ${error.message}`)
+    out.push(...(data ?? []))
+    if ((data?.length ?? 0) < PAGE) return out
+  }
 }
 
 export async function loadPayroll(db = createClient()): Promise<Payroll> {
   const [employees, loans, balances, runs, lines, items] = await Promise.all([
-    rows(db.from('employees').select('*').order('full_name'), 'employees'),
+    rows(db.from('employees').select('*').order('full_name').order('id'), 'employees'),
     rows(db.from('employee_loans').select('*').order('issued_on', { ascending: false }).order('id', { ascending: false }), 'advances and loans'),
-    rows(db.from('employee_loan_balances').select('*'), 'loan balances'),
-    rows(db.from('payroll_runs').select('*').order('period', { ascending: false }), 'payroll months'),
-    rows(db.from('payroll_lines').select('*').order('id').range(0, 9999), 'payslips'),
-    rows(db.from('payslip_items').select('*').order('id').range(0, 19999), 'payslip items'),
+    rows(db.from('employee_loan_balances').select('*').order('loan_id'), 'loan balances'),
+    rows(db.from('payroll_runs').select('*').order('period', { ascending: false }).order('id'), 'payroll months'),
+    rows(db.from('payroll_lines').select('*').order('id'), 'payslips'),
+    rows(db.from('payslip_items').select('*').order('id'), 'payslip items'),
   ])
   return { employees, loans, balances, runs, lines, items }
 }

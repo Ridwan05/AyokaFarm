@@ -131,6 +131,8 @@ export default function Sales() {
           sales={f.visible}
           onOpen={(s) => setOverlay({ kind: 'detail', receipt: s.receipt })}
           onRecordPayment={(s) => setOverlay({ kind: 'payment', receipt: s.receipt })}
+          onEdit={(s) => setOverlay({ kind: 'edit', receipt: s.receipt })}
+          onVoid={(s) => setOverlay({ kind: 'void', receipt: s.receipt })}
         />
         {f.visible.length === 0 && <p className="px-5 py-6 type-body-md text-fg-tertiary">No sales match these filters.</p>}
       </Card>

@@ -19,6 +19,7 @@ import { expenseTotal, expensesIn, pctChange, spanLabel } from '../data/moneyKpi
 import { useTrade } from '../data/tradeContext'
 import { AddExpenseModal } from '../features/expenses/AddExpenseModal'
 import { ExpenseDrawer } from '../features/expenses/ExpenseDrawer'
+import { VoidModal } from '../features/records/VoidModal'
 import { dayMonth } from '../features/purchases/purchaseView'
 import { cn } from '../lib/cn'
 import { downloadCsv } from '../lib/export'
@@ -44,6 +45,8 @@ export default function Expenses() {
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
+  // Correct or void the open expense.
+  const [action, setAction] = useState<'edit' | 'void' | null>(null)
 
   const penName = (id: number | null) => (id === null ? 'General' : (catalog.pens.find((p) => p.id === id)?.name ?? `Pen ${id}`))
   const categories = [...new Set([...catalog.categories.filter((c) => c.is_active).map((c) => c.name), ...expenses.map((e) => e.category)])]
@@ -174,7 +177,21 @@ export default function Expenses() {
       </Card>
 
       <Presence>{adding && <AddExpenseModal onClose={() => setAdding(false)} />}</Presence>
-      <Presence>{open && <ExpenseDrawer expense={open} onClose={() => setOpenId(null)} />}</Presence>
+      <Presence>
+        {open && !action && <ExpenseDrawer expense={open} onClose={() => setOpenId(null)} onEdit={() => setAction('edit')} onVoid={() => setAction('void')} />}
+      </Presence>
+      <Presence>{open && action === 'edit' && <AddExpenseModal expense={open} onClose={() => setAction(null)} />}</Presence>
+      <Presence>
+        {open && action === 'void' && (
+          <VoidModal
+            kind="expenses"
+            refId={open.id}
+            label={`${open.description} · ₦${open.amount.toLocaleString('en-NG')}`}
+            onClose={() => setAction(null)}
+            onVoided={() => setOpenId(null)}
+          />
+        )}
+      </Presence>
     </>
   )
 }
