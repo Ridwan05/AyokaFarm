@@ -174,8 +174,10 @@ async function all<T>(q: { range: (from: number, to: number) => Page<T> }, what:
 }
 
 export async function loadRemote(db: DB): Promise<Remote> {
-  // A year and a bit, so year-to-date reports work. Farm-scale volumes keep this small.
-  const since = daysAgo(400)
+  // A year and a bit, so year-to-date reports work, and never less than the oldest flock still in a
+  // pen, so its rearing cost is complete. Farm-scale volumes keep this small.
+  const { data: oldest } = await db.from('flocks').select('placed_on').eq('status', 'active').order('placed_on').limit(1)
+  const since = oldest?.[0] && oldest[0].placed_on < daysAgo(400) ? oldest[0].placed_on : daysAgo(400)
   const recent = daysAgo(8)
   const [
     settingsRows, productRows, feedTypeRows, medicationRows, categoryRows, reasonRows, penRows, flockRows, staffPenRows, profileRows,
@@ -237,6 +239,8 @@ export async function loadRemote(db: DB): Promise<Remote> {
       overdueDebtDays: settings.overdue_debt_days,
       eggsPerCrate: settings.eggs_per_crate,
       editWindowDays: settings.edit_window_days,
+      spreadRearingCost: settings.spread_rearing_cost,
+      layerLayingWeeks: settings.layer_laying_weeks,
     })
   }
   // Expected feed by age, used by the daily entry form.

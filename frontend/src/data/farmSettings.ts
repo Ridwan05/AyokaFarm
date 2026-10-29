@@ -29,6 +29,10 @@ export const farmSettings = {
   eggsPerCrate: 30,
   /** Non-managers can edit their own records for this many days after creating them (0 = same day). */
   editWindowDays: 0,
+  /** P&L opens in the view that spreads each layer flock's rearing cost over its laying period. */
+  spreadRearingCost: false,
+  /** Expected laying life of a layer flock, for spreading its rearing cost. */
+  layerLayingWeeks: 60,
 }
 
 export type FarmSettings = typeof farmSettings

@@ -286,6 +286,8 @@ export type Database = {
           currency: string
           edit_window_days: number
           eggs_per_crate: number
+          layer_laying_weeks: number
+          spread_rearing_cost: boolean
           email: string | null
           expiry_warning_days: number
           farm_name: string
@@ -311,6 +313,8 @@ export type Database = {
           currency?: string
           edit_window_days?: number
           eggs_per_crate?: number
+          layer_laying_weeks?: number
+          spread_rearing_cost?: boolean
           email?: string | null
           expiry_warning_days?: number
           farm_name: string
@@ -336,6 +340,8 @@ export type Database = {
           currency?: string
           edit_window_days?: number
           eggs_per_crate?: number
+          layer_laying_weeks?: number
+          spread_rearing_cost?: boolean
           email?: string | null
           expiry_warning_days?: number
           farm_name?: string
@@ -434,6 +440,9 @@ export type Database = {
           birds_placed: number
           breed: string | null
           closed_on: string | null
+          close_note: string | null
+          close_reason: string | null
+          laying_started_on: string | null
           code: string
           created_at: string
           created_by: string | null
@@ -450,6 +459,9 @@ export type Database = {
           birds_placed: number
           breed?: string | null
           closed_on?: string | null
+          close_note?: string | null
+          close_reason?: string | null
+          laying_started_on?: string | null
           code: string
           created_at?: string
           created_by?: string | null
@@ -466,6 +478,9 @@ export type Database = {
           birds_placed?: number
           breed?: string | null
           closed_on?: string | null
+          close_note?: string | null
+          close_reason?: string | null
+          laying_started_on?: string | null
           code?: string
           created_at?: string
           created_by?: string | null
