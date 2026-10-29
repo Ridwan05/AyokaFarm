@@ -113,6 +113,8 @@ export type History = {
   /** Medication stock movements (per batch, per pen). */
   medMovements: Row<'stock_movements'>[]
   sales: Row<'sales'>[]
+  /** Each sale's portions by pen (sale_allocations). */
+  saleAllocations: Row<'sale_allocations'>[]
   purchases: Row<'purchases'>[]
   expenses: Row<'expenses'>[]
   payments: Row<'payments'>[]
@@ -178,7 +180,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
   const [
     settingsRows, productRows, feedTypeRows, medicationRows, categoryRows, reasonRows, penRows, flockRows, staffPenRows, profileRows,
     customerRows, supplierRows, purchaseRows, saleRows, paymentRows, expenseRows, dailyRows, recordRows, medLineRows, levelRows, stockDayRows, batchRows,
-    birdTypeRows, feedTargetRows, adjustmentRows, medMovementRows,
+    birdTypeRows, feedTargetRows, adjustmentRows, medMovementRows, allocationRows,
   ] = await Promise.all([
     all(db.from('farm_settings').select('*'), 'settings'),
     all(db.from('products').select('*').order('id'), 'products'),
@@ -206,6 +208,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
     all(db.from('feed_targets').select('*').order('bird_type_id').order('week_from'), 'feed targets'),
     all(db.from('stock_adjustments').select('*').gte('adjusted_on', since).order('adjusted_on', { ascending: false }), 'stock adjustments'),
     all(db.from('stock_movements').select('*').eq('item', 'medication').gte('moved_on', since).order('moved_on', { ascending: false }).order('id'), 'medication movements'),
+    all(db.from('sale_allocations').select('*').order('id'), 'sale portions'),
   ])
   const allFlockRows = flockRows
   // Most screens only care about the flock in each pen now.
@@ -483,6 +486,8 @@ export async function loadRemote(db: DB): Promise<Remote> {
   fill(supplierList, suppliers)
 
   // ── Transactions ──
+  const portionsBySale = new Map<number, Row<'sale_allocations'>[]>()
+  for (const a of allocationRows) portionsBySale.set(a.sale_id, [...(portionsBySale.get(a.sale_id) ?? []), a])
   const sales = saleRows.map<Sale>((s) => {
     const by = first(profileName.get(s.recorded_by))
     const history: Sale['history'] = [{ title: s.approval === 'pending' ? 'Sent for approval' : 'Sale recorded', detail: `By ${by}`, time: hm(s.created_at) }]
@@ -500,6 +505,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
       recordedBy: by,
       pendingApproval: s.approval === 'pending',
       approvedAt: s.approved_at ? hm(s.approved_at) : undefined,
+      allocations: (portionsBySale.get(s.id) ?? []).map((a) => ({ penId: a.pen_id, qty: Number(a.quantity) })),
       history,
     }
   })
@@ -647,6 +653,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
       adjustments: adjustmentRows,
       medMovements: medMovementRows,
       sales: saleRows,
+      saleAllocations: allocationRows,
       purchases: purchaseRows,
       expenses: expenseRows,
       payments: paymentRows,

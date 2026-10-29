@@ -7,7 +7,7 @@ import type { Expense } from './expenses'
 import type { Payment } from './payments'
 import type { ProductionRecord } from './production'
 import type { Purchase } from './purchases'
-import type { PaymentMethod, Sale } from './sales'
+import type { PaymentMethod, Sale, SalePortion } from './sales'
 import type { Supplier } from './suppliers'
 
 export type NewPayment = {
@@ -38,7 +38,10 @@ export type Trade = {
   purchasePaid: (ref: string) => number
   approveSale: (receipt: string, by: string) => Promise<boolean>
   rejectSale: (receipt: string) => Promise<boolean>
+  /** Saves the sale and its pen portions together (record_sale). */
   addSale: (sale: Sale) => Promise<boolean>
+  /** Replace a sale's pen portions; an empty list means auto-split (not allowed for birds). */
+  setSaleAllocations: (receipt: string, portions: SalePortion[]) => Promise<boolean>
   /** Payment against one sale. */
   recordSalePayment: (receipt: string, amount: number, method: PaymentMethod) => Promise<boolean>
   addPurchase: (purchase: Purchase) => Promise<boolean>

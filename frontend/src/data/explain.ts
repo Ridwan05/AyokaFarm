@@ -39,6 +39,7 @@ export const explain = {
   overdue: () => `The part of the balance from sales more than ${s.overdueDebtDays} days old that hasn’t been paid yet.`,
   pastTerms: () => 'Unpaid purchases older than the supplier’s payment terms (days to pay after delivery).',
   daysToPay: () => 'Average days between a sale and the payment that cleared it, matching payments to the oldest unpaid sale first.',
+  penPortion: () => 'This pen’s quantity × the sale price. It counts as this pen’s sales in Costs & profit and the P&L.',
   saleTotal: () => 'Quantity × price for each unit.',
   leftOnSale: () => 'Sale total − what was paid on it, at the time and since.',
   newBalance: () => 'Balance now, plus this sale or purchase, less what’s paid now.',
@@ -48,7 +49,7 @@ export const explain = {
   change: (vs: string) => `Compared with ${vs}.`,
 
   // ── Pen costs and profit ──
-  penRevenue: () => 'Sales tied to this pen or its flock, plus a share of egg-store sales in proportion to the eggs this pen collected.',
+  penRevenue: () => 'This pen’s portions of sales (its quantity × the sale price), plus a share of sales not split by pen, in proportion to the eggs this pen collected.',
   feedCost: () => 'Bags used in daily entries × the average price paid a bag for that feed (from purchases).',
   medicationCost: () => 'Each dose given × the cost a unit of the batch it came from (purchase price ÷ units bought).',
   birdCost: () => 'Bird purchases for this pen’s flock in the period.',

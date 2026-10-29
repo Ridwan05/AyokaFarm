@@ -286,11 +286,13 @@ export function penMoney(history: History, catalog: Catalog, r: { from: string; 
   const sales = history.sales.filter((s) => s.approval === 'approved' && inRange(s.sold_on, r))
   const totalEggs = sum([...out.values()], (m) => m.eggs)
   let storeRevenue = 0
+  const portions = new Map<number, History['saleAllocations']>()
+  for (const a of history.saleAllocations) portions.set(a.sale_id, [...(portions.get(a.sale_id) ?? []), a])
   for (const s of sales) {
-    const amount = Number(s.total ?? s.quantity * s.unit_price)
-    const penId = s.pen_id ?? (s.flock_id ? flockPen.get(s.flock_id) : undefined)
-    if (penId) get(penId).revenue += amount
-    else storeRevenue += amount
+    const split = portions.get(s.id)
+    // A pen's portion earns its quantity × the sale price; unsplit sales are shared by eggs collected.
+    if (split?.length) for (const a of split) get(a.pen_id).revenue += Number(a.quantity) * Number(s.unit_price)
+    else storeRevenue += Number(s.total ?? s.quantity * s.unit_price)
   }
   for (const m of out.values()) if (totalEggs) m.revenue += (storeRevenue * m.eggs) / totalEggs
 

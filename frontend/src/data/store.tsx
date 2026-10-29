@@ -238,16 +238,27 @@ export function TradeProvider({ children }: { children: ReactNode }) {
 
     addSale: (s) =>
       write(() =>
-        db.from('sales').insert({
-          sold_on: today,
-          customer_id: s.customerId === 'one-off' ? null : Number(s.customerId),
-          buyer_name: s.customerId === 'one-off' ? 'Walk-in buyer' : null,
-          product_id: Number(s.productId),
-          quantity: s.qty,
-          unit_price: s.price,
-          amount_paid: s.paid,
-          payment_method: dbMethod(s.method),
-          recorded_by: user.id,
+        // One call so the sale and its pen portions are saved together (and checked by the database).
+        db.rpc('record_sale', {
+          sale: {
+            sold_on: today,
+            customer_id: s.customerId === 'one-off' ? null : Number(s.customerId),
+            buyer_name: s.customerId === 'one-off' ? 'Walk-in buyer' : null,
+            product_id: Number(s.productId),
+            quantity: s.qty,
+            unit_price: s.price,
+            amount_paid: s.paid,
+            payment_method: dbMethod(s.method),
+          },
+          portions: (s.allocations ?? []).map((a) => ({ pen_id: a.penId, quantity: a.qty })),
+        }),
+      ),
+
+    setSaleAllocations: (receipt, portions) =>
+      write(() =>
+        db.rpc('set_sale_allocations', {
+          sale_id: lookups.saleId.get(receipt)!,
+          portions: portions.map((a) => ({ pen_id: a.penId, quantity: a.qty })),
         }),
       ),
 

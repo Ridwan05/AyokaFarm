@@ -852,6 +852,7 @@ export type Database = {
       }
       products: {
         Row: {
+          bird_type_id: number | null
           id: number
           is_active: boolean
           kind: Database["public"]["Enums"]["product_kind"]
@@ -862,6 +863,7 @@ export type Database = {
           unit: string
         }
         Insert: {
+          bird_type_id?: number | null
           id?: never
           is_active?: boolean
           kind: Database["public"]["Enums"]["product_kind"]
@@ -872,6 +874,7 @@ export type Database = {
           unit: string
         }
         Update: {
+          bird_type_id?: number | null
           id?: never
           is_active?: boolean
           kind?: Database["public"]["Enums"]["product_kind"]
@@ -1120,6 +1123,30 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      sale_allocations: {
+        Row: {
+          flock_id: number | null
+          id: number
+          pen_id: number
+          quantity: number
+          sale_id: number
+        }
+        Insert: {
+          flock_id?: number | null
+          id?: never
+          pen_id: number
+          quantity: number
+          sale_id: number
+        }
+        Update: {
+          flock_id?: number | null
+          id?: never
+          pen_id?: number
+          quantity?: number
+          sale_id?: number
+        }
+        Relationships: []
       }
       roles: {
         Row: {
@@ -1733,7 +1760,14 @@ export type Database = {
       }
     }
     Functions: {
-      [_ in never]: never
+      record_sale: {
+        Args: { portions?: Json; sale: Json }
+        Returns: Database["public"]["Tables"]["sales"]["Row"]
+      }
+      set_sale_allocations: {
+        Args: { portions: Json; sale_id: number }
+        Returns: undefined
+      }
     }
     Enums: {
       access_level: "none" | "own" | "all"

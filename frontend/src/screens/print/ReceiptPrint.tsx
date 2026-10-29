@@ -4,7 +4,7 @@ import { useParams } from 'next/navigation'
 import { amountOf, saleStatus } from '../../data/sales'
 import { saleDate } from '../../data/moneyKpis'
 import { useTrade } from '../../data/tradeContext'
-import { customerView, productOf, statusBadge } from '../../features/sales/saleView'
+import { customerView, portionsLabel, productOf, statusBadge } from '../../features/sales/saleView'
 import { PrintSheet } from '../../features/print/PrintSheet'
 import { dmy, money } from '../../features/print/printFormat'
 import Placeholder from '../Placeholder'
@@ -14,7 +14,7 @@ const METHOD = { cash: 'Cash', transfer: 'Transfer', POS: 'POS' } as const
 /** A printable receipt for one sale (Sales › ··· › Receipt PDF). */
 export default function ReceiptPrint() {
   const { ref = '' } = useParams<{ ref: string }>()
-  const { sales, customers, customerBalance } = useTrade()
+  const { sales, customers, customerBalance, catalog } = useTrade()
   const sale = sales.find((s) => s.receipt === decodeURIComponent(ref))
   if (!sale) return <Placeholder title="Receipt not found" />
 
@@ -37,6 +37,7 @@ export default function ReceiptPrint() {
           {dmy(saleDate(sale))} {time}
         </Fact>
         <Fact label="Served by">{sale.recordedBy}</Fact>
+        {sale.allocations?.length ? <Fact label="From">{portionsLabel(sale, catalog.pens).replace(/\bP(\d+)/g, 'Pen $1')}</Fact> : null}
       </div>
       <table className="w-full border-collapse type-body-md">
         <thead>

@@ -18,3 +18,11 @@ export function customerView(s: Sale, customers: Customer[]) {
 }
 
 export const isNeedsApproval = (s: Sale) => saleStatus(s) === 'needs-approval'
+
+/** "P1 25 · P3 15", or "Auto-split" when the sale isn't split by pen. */
+export function portionsLabel(sale: Sale, pens: { id: number; name: string }[]) {
+  if (!sale.allocations?.length) return 'Auto-split'
+  return sale.allocations
+    .map((a) => `${(pens.find((p) => p.id === a.penId)?.name ?? `Pen ${a.penId}`).replace(/^Pen\s*/i, 'P')} ${a.qty.toLocaleString('en-NG')}`)
+    .join(' · ')
+}

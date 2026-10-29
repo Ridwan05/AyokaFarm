@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Button } from '../../components/ui/Button'
 import { DetailSection, History } from '../../components/ui/Detail'
 import { explainMoney } from '../../data/explainMoney'
@@ -8,10 +9,14 @@ import { useToast } from '../../components/ui/toastContext'
 import { amountOf, saleStatus, type Sale } from '../../data/sales'
 import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
-import { canApprove } from '../../lib/access'
+import { can, canApprove } from '../../lib/access'
+import { farmSettings } from '../../data/farmSettings'
+import { daysFrom, todayISO } from '../../data/metrics'
 import { weekdayDayMonth } from '../../data/metrics'
 import { saleDate } from '../../data/moneyKpis'
 import { formatNumber } from '../../lib/format'
+import { PenPortions } from './PenPortions'
+import { parsePortions, penChoices, portionError, portionRows, type PortionRow } from './portionRules'
 import { customerView, productOf, statusBadge } from './saleView'
 
 const naira = (n: number) => `₦${formatNumber(n)}`
@@ -25,7 +30,8 @@ type Props = {
 /** Sale detail: what was sold, how it was paid, and its history. */
 export function SaleDrawer({ sale, onClose, onRecordPayment }: Props) {
   const currentUser = useCurrentUser()
-  const { customers, approveSale, rejectSale, customerBalance } = useTrade()
+  const trade = useTrade()
+  const { customers, approveSale, rejectSale, customerBalance, setSaleAllocations } = trade
   const toast = useToast()
   const product = productOf(sale)
   const { name, customer } = customerView(sale, customers)
@@ -36,6 +42,27 @@ export function SaleDrawer({ sale, onClose, onRecordPayment }: Props) {
   const time = sale.date.split(' ')[1]
   const approver = currentUser.name.split(' ')[0]
   const balance = customer ? customerBalance(customer.id) : 0
+  const portions = sale.allocations ?? []
+  const birds = product.kind === 'Birds'
+  const penName = (id: number) => trade.catalog.pens.find((p) => p.id === id)?.name ?? `Pen ${id}`
+  // Same rule as the database: managers, sales editors, or whoever recorded it within the edit window.
+  const mayEdit =
+    canApprove(currentUser.role) ||
+    can(currentUser, 'sales', 'edit') ||
+    (can(currentUser, 'sales', 'add') && sale.recordedBy === currentUser.name.split(' ')[0] && daysFrom(saleDate(sale), todayISO()) <= farmSettings.editWindowDays)
+  const [editing, setEditing] = useState<PortionRow[] | null>(null)
+  const [saving, setSaving] = useState(false)
+  const choices = penChoices(trade, sale.productId, sale.receipt)
+  const problem = editing && (birds || editing.length) ? portionError(editing, choices, sale.qty, product.unit) : ''
+
+  const savePortions = async (rows: PortionRow[]) => {
+    setSaving(true)
+    const ok = await setSaleAllocations(sale.receipt, parsePortions(rows))
+    setSaving(false)
+    if (!ok) return
+    toast(rows.length ? `Pens saved for ${sale.receipt}` : `${sale.receipt} set to auto-split`)
+    setEditing(null)
+  }
 
   const footer = pending && !canApprove(currentUser.role) ? (
     <Button size="lg" className="flex-1" onClick={onClose}>
@@ -82,7 +109,6 @@ export function SaleDrawer({ sale, onClose, onRecordPayment }: Props) {
     <Drawer open onClose={onClose} title={`${sale.receipt} · ${name}`} subtitle={`${weekdayDayMonth(saleDate(sale))}, ${time} · recorded by ${sale.recordedBy}`} footer={footer}>
       <DetailSection title="Sale">
         <KeyValueRow label="Product">{product.name}</KeyValueRow>
-        <KeyValueRow label="From">{product.from}</KeyValueRow>
         <KeyValueRow label="Quantity">
           {sale.qty} {product.unit}
         </KeyValueRow>
@@ -93,6 +119,49 @@ export function SaleDrawer({ sale, onClose, onRecordPayment }: Props) {
         <KeyValueRow label="Total" strong calculated={explain.saleTotal()}>
           {naira(total)}
         </KeyValueRow>
+      </DetailSection>
+
+      <DetailSection title="From pens">
+        {editing ? (
+          <div className="flex flex-col gap-3 py-2">
+            <PenPortions choices={choices} rows={editing} onChange={setEditing} total={sale.qty} unit={product.unit} showErrors />
+            {problem && <p className="type-body-sm text-fg-danger">{problem}</p>}
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="primary" disabled={saving || Boolean(problem)} onClick={() => void savePortions(editing)}>
+                {saving ? 'Saving…' : 'Save pens'}
+              </Button>
+              {!birds && (
+                <Button size="sm" disabled={saving} onClick={() => void savePortions([])}>
+                  Auto-split instead
+                </Button>
+              )}
+              <Button size="sm" variant="ghost" disabled={saving} onClick={() => setEditing(null)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <>
+            {portions.length ? (
+              portions.map((a) => (
+                <KeyValueRow key={a.penId} label={penName(a.penId)} calculated={explain.penPortion()}>
+                  {formatNumber(a.qty)} {product.unit} · {naira(a.qty * sale.price)}
+                </KeyValueRow>
+              ))
+            ) : (
+              <p className="py-2 type-body-md text-fg-secondary">
+                {birds ? 'No pen recorded for these birds.' : 'Auto-split: reports share this sale across pens by eggs collected.'}
+              </p>
+            )}
+            {mayEdit && (
+              <div className="pt-1 pb-2">
+                <Button size="sm" onClick={() => setEditing(portions.length ? portionRows(portions) : choices[0] ? [{ penId: choices[0].penId, qty: formatNumber(sale.qty) }] : [])}>
+                  {portions.length ? 'Edit pens…' : 'Split across pens…'}
+                </Button>
+              </div>
+            )}
+          </>
+        )}
       </DetailSection>
 
       <DetailSection title="Payment">

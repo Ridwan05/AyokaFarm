@@ -5,7 +5,7 @@ import { useToast } from '../../components/ui/toastContext'
 import { amountOf, saleStatus, type Sale } from '../../data/sales'
 import { useTrade } from '../../data/tradeContext'
 import { formatNaira } from '../../lib/format'
-import { customerView, productOf, statusBadge } from './saleView'
+import { customerView, portionsLabel, productOf, statusBadge } from './saleView'
 
 type Props = {
   sales: Sale[]
@@ -14,7 +14,7 @@ type Props = {
 }
 
 export function SalesTable({ sales, onOpen, onRecordPayment }: Props) {
-  const { customers } = useTrade()
+  const { customers, catalog } = useTrade()
   const toast = useToast()
 
   const columns: Column<Sale>[] = [
@@ -28,7 +28,17 @@ export function SalesTable({ sales, onOpen, onRecordPayment }: Props) {
         return <PrimaryCell initials={c.initials} title={c.name} subtitle={c.subtitle} />
       },
     },
-    { key: 'product', header: 'Product', width: 140, render: (s) => <TextCell>{productOf(s).short}</TextCell> },
+    {
+      key: 'product',
+      header: 'Product',
+      width: 140,
+      render: (s) => (
+        <span className="flex min-w-0 flex-col">
+          <TextCell>{productOf(s).short}</TextCell>
+          <span className="truncate type-body-sm text-fg-tertiary">{portionsLabel(s, catalog.pens)}</span>
+        </span>
+      ),
+    },
     { key: 'qty', header: 'Qty', align: 'right', width: 84, render: (s) => <NumberCell>{s.qty} {productOf(s).unitShort}</NumberCell> },
     { key: 'amount', header: 'Amount', align: 'right', width: 112, render: (s) => <NumberCell>{formatNaira(amountOf(s))}</NumberCell> },
     {

@@ -258,19 +258,23 @@ const saleColumns: Column<SaleRow>[] = [
 
 function SalesTab({ penId }: { penId: number }) {
   const { history, catalog } = useTrade()
-  const flockIds = new Set(history.flocks.filter((f) => f.pen_id === penId).map((f) => f.id))
-  const rows: SaleRow[] = history.sales
-    .filter((s) => s.pen_id === penId || (s.flock_id !== null && flockIds.has(s.flock_id)))
-    .map((s) => {
+  // This pen's portion of each sale split by pen: its quantity × the sale price.
+  const rows: SaleRow[] = history.saleAllocations
+    .filter((a) => a.pen_id === penId)
+    .flatMap((a) => {
+      const s = history.sales.find((x) => x.id === a.sale_id)
+      if (!s) return []
       const product = catalog.products.find((p) => p.id === s.product_id)
+      const qty = Number(a.quantity)
+      const whole = qty === Number(s.quantity) ? '' : ` of ${formatNumber(Number(s.quantity))}`
       return {
         id: s.id,
         date: s.sold_on,
         ref: s.ref,
         product: product?.name ?? '—',
-        qty: `${formatNumber(Number(s.quantity))} ${product?.unit ?? ''}`.trim(),
+        qty: `${formatNumber(qty)}${whole} ${product?.unit ?? ''}`.trim(),
         price: Number(s.unit_price),
-        total: Number(s.total ?? s.quantity * s.unit_price),
+        total: qty * Number(s.unit_price),
         buyer: catalog.customers.find((c) => c.id === s.customer_id)?.name ?? s.buyer_name ?? 'One-off buyer',
         status: s.approval === 'approved' ? 'Approved' : 'Needs approval',
       }
@@ -280,14 +284,14 @@ function SalesTab({ penId }: { penId: number }) {
 
   return (
     <Card>
-      <CardHeader title="Sales from this pen" info="Sales linked to this pen or its flock. The total adds up quantity × price for approved sales only." meta={<span className="type-body-sm text-fg-tertiary">{rows.length ? `${rows.length} sales · ${formatNaira(total)} approved` : 'Since records began'}</span>} />
+      <CardHeader title="Sales from this pen" info="This pen’s portions of sales: its quantity × the sale price. The total counts approved sales only." meta={<span className="type-body-sm text-fg-tertiary">{rows.length ? `${rows.length} sales · ${formatNaira(total)} approved` : 'Since records began'}</span>} />
       {rows.length ? (
         <Table columns={saleColumns} rows={rows} rowKey={(r) => String(r.id)} />
       ) : (
-        <p className="px-5 pb-2 type-body-md text-fg-tertiary">No sales are linked to this pen.</p>
+        <p className="px-5 pb-2 type-body-md text-fg-tertiary">No sales have been split to this pen yet.</p>
       )}
       <p className="px-5 pt-3 pb-5 type-body-sm text-fg-tertiary">
-        Eggs sold from the egg store aren’t tied to one pen; Costs & profit shares their value across layer pens by eggs collected.
+        Sales not split by pen are auto-split: Costs & profit shares their value across pens by eggs collected.
       </p>
     </Card>
   )

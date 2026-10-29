@@ -7,6 +7,7 @@ import { explainMoney } from '../../data/explainMoney'
 import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { Drawer } from '../../components/ui/Overlay'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
+import { Switch } from '../../components/ui/Switch'
 import { useToast } from '../../components/ui/toastContext'
 import { ONE_OFF } from '../../data/customers'
 import { daysBetween } from '../../data/ledger'
@@ -16,6 +17,8 @@ import { products, type PaymentMethod, type ProductKind } from '../../data/sales
 import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
 import { formatNumber } from '../../lib/format'
+import { PenPortions } from './PenPortions'
+import { parsePortions, penChoices, portionError, type PortionRow } from './portionRules'
 
 const KINDS = ['Eggs', 'Birds', 'Droppings'] as const
 const METHODS = ['Cash', 'Transfer', 'POS'] as const
@@ -37,6 +40,9 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
   const [paid, setPaid] = useState('50,000')
   const [method, setMethod] = useState<(typeof METHODS)[number]>('POS')
   const [submitted, setSubmitted] = useState(false)
+  // Pens the sale came from. Birds must say; eggs and droppings can be left to the auto-split.
+  const [split, setSplit] = useState(false)
+  const [portions, setPortions] = useState<PortionRow[]>([])
 
   const customer = customers.find((c) => c.id === customerId)
   const balance = customer ? customerBalance(customer.id) : 0
@@ -51,18 +57,35 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
     paid: paidNow > total ? 'More than the total' : oneOffUnpaid ? 'One-off buyers pay in full' : undefined,
   }
   const unit = product.unit.replace(/s$/, '')
+  const choices = penChoices(trade, product.id)
+  const needsPens = kind === 'Birds'
+  const usePens = needsPens || split
+  const portionProblem = usePens ? portionError(portions, choices, num(qty), product.unit) : ''
+
+  /** Start the pen rows again for a new product: birds get one row with the whole quantity. */
+  const resetPortions = (productId: string, k: ProductKind) => {
+    const first = penChoices(trade, productId)[0]
+    setPortions(k === 'Birds' && first ? [{ penId: first.penId, qty }] : [])
+    setSplit(false)
+  }
+  const changeQty = (v: string) => {
+    setQty(v)
+    // With one pen, it takes the whole sale.
+    if (portions.length === 1) setPortions([{ ...portions[0], qty: v }])
+  }
 
   const changeKind = (k: ProductKind) => {
     setKind(k)
     const first = products.find((p) => p.kind === k)!
     setProductId(first.id)
     setPrice(formatNumber(first.price))
+    resetPortions(first.id, k)
   }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setSubmitted(true)
-    if (errors.qty || errors.price || errors.paid) return
+    if (errors.qty || errors.price || errors.paid || portionProblem) return
     const next = Math.max(...sales.map((s) => Number(s.receipt.slice(2)))) + 1
     const receipt = `S-${next}`
     const m: PaymentMethod = method === 'POS' ? 'POS' : method === 'Cash' ? 'cash' : 'transfer'
@@ -78,6 +101,7 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
       method: paidNow && !belowMin ? m : undefined,
       recordedBy: currentUser.name.split(' ')[0],
       pendingApproval: belowMin,
+      allocations: usePens ? parsePortions(portions) : [],
       history: [{ title: belowMin ? 'Sent for approval' : 'Sale recorded', detail: `By ${currentUser.name.split(' ')[0]}`, time: nowHM() }],
     }))) return
     toast(belowMin ? 'Sale sent for approval' : 'Sale recorded')
@@ -121,7 +145,7 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
             />
           )}
         </Field>
-        <Field label="Product" hint={kind === 'Eggs' ? 'From the egg store · crates on withdrawal are left out' : `From ${product.from}`}>
+        <Field label="Product" hint={kind === 'Eggs' ? 'From the egg store · crates on withdrawal are left out' : kind === 'Birds' ? 'Say which pens below' : undefined}>
           {(id) => (
             <SelectInput
               id={id}
@@ -131,6 +155,7 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
                 const p = products.find((x) => x.id === e.target.value)!
                 setProductId(p.id)
                 setPrice(formatNumber(p.price))
+                resetPortions(p.id, kind)
               }}
               options={kindProducts.map((p) => ({ value: p.id, label: p.name }))}
             />
@@ -138,7 +163,7 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
         </Field>
         <div className="flex gap-3">
           <Field label={product.unit[0].toUpperCase() + product.unit.slice(1)} className="flex-1" hint={kind === 'Eggs' ? 'Whole crates of 30 eggs' : undefined} error={submitted ? errors.qty : undefined}>
-            {(id) => <TextInput id={id} inputMode="numeric" suffix={product.unit} value={qty} onChange={(e) => setQty(e.target.value)} />}
+            {(id) => <TextInput id={id} inputMode="numeric" suffix={product.unit} value={qty} onChange={(e) => changeQty(e.target.value)} />}
           </Field>
           <Field
             label={`Price per ${unit}`}
@@ -159,6 +184,29 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
             )}
           </Field>
         </div>
+        <section aria-label="From pens" className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <span className="flex-1 type-label-md text-fg-primary">From pens</span>
+            {!needsPens && (
+              <Switch
+                label="Split across pens"
+                checked={split}
+                onChange={(on) => {
+                  setSplit(on)
+                  if (on && !portions.length && choices[0]) setPortions([{ penId: choices[0].penId, qty }])
+                }}
+              />
+            )}
+          </div>
+          {usePens ? (
+            <>
+              <PenPortions choices={choices} rows={portions} onChange={setPortions} total={num(qty)} unit={product.unit} showErrors={submitted} />
+              {submitted && portionProblem && <p className="type-body-sm text-fg-danger">{portionProblem}</p>}
+            </>
+          ) : (
+            <p className="type-body-sm text-fg-tertiary">Auto-split: reports share this sale across pens by eggs collected.</p>
+          )}
+        </section>
         {belowMin && (
           <Alert tone="warning" title={`Below the ₦${formatNumber(product.minPrice)} minimum`}>
             This sale will wait for {who} to approve it. The receipt is held until then.

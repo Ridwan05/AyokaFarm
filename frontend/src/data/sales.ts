@@ -42,10 +42,15 @@ export type Sale = {
   recordedBy: string
   /** Waiting for an owner or manager because the price is below the minimum. */
   pendingApproval?: boolean
+  /** How much of the sale came from each pen. Empty = auto-split by eggs collected (not allowed for birds). */
+  allocations?: SalePortion[]
   /** Recently approved — kept highlighted. */
   approvedAt?: string
   history: SaleEvent[]
 }
+
+/** One pen's share of a sale, by quantity. */
+export type SalePortion = { penId: number; qty: number }
 
 export const amountOf = (s: Sale) => s.qty * s.price
 
