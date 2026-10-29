@@ -190,7 +190,7 @@ export type Database = {
           monthly_repayment: number
           payment_method?: Database["public"]["Enums"]["payment_method"] | null
           reason?: string | null
-          ref?: string
+          ref: string
           requested_by?: string | null
           status?: Database["public"]["Enums"]["loan_status"]
         }
@@ -211,7 +211,29 @@ export type Database = {
           requested_by?: string | null
           status?: Database["public"]["Enums"]["loan_status"]
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "employee_loans_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_loans_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employee_loans_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       employees: {
         Row: {
@@ -271,118 +293,22 @@ export type Database = {
           started_on?: string
           updated_at?: string
         }
-        Relationships: []
-      }
-      payroll_lines: {
-        Row: {
-          basic: number
-          deductions: number
-          employee_id: number
-          gross: number
-          id: number
-          net: number
-          paid_on: string | null
-          pay_basis: Database["public"]["Enums"]["pay_basis"]
-          payment_method: Database["public"]["Enums"]["payment_method"] | null
-          payment_ref: string | null
-          rate: number
-          run_id: number
-          units: number
-        }
-        Insert: {
-          basic?: number
-          deductions?: number
-          employee_id: number
-          gross?: number
-          id?: never
-          net?: number
-          paid_on?: string | null
-          pay_basis: Database["public"]["Enums"]["pay_basis"]
-          payment_method?: Database["public"]["Enums"]["payment_method"] | null
-          payment_ref?: string | null
-          rate: number
-          run_id: number
-          units?: number
-        }
-        Update: {
-          basic?: number
-          deductions?: number
-          employee_id?: number
-          gross?: number
-          id?: never
-          net?: number
-          paid_on?: string | null
-          pay_basis?: Database["public"]["Enums"]["pay_basis"]
-          payment_method?: Database["public"]["Enums"]["payment_method"] | null
-          payment_ref?: string | null
-          rate?: number
-          run_id?: number
-          units?: number
-        }
-        Relationships: []
-      }
-      payroll_runs: {
-        Row: {
-          approved_at: string | null
-          approved_by: string | null
-          created_at: string
-          expense_id: number | null
-          id: number
-          notes: string | null
-          period: string
-          prepared_by: string | null
-          status: Database["public"]["Enums"]["payroll_status"]
-        }
-        Insert: {
-          approved_at?: string | null
-          approved_by?: string | null
-          created_at?: string
-          expense_id?: number | null
-          id?: never
-          notes?: string | null
-          period: string
-          prepared_by?: string | null
-          status?: Database["public"]["Enums"]["payroll_status"]
-        }
-        Update: {
-          approved_at?: string | null
-          approved_by?: string | null
-          created_at?: string
-          expense_id?: number | null
-          id?: never
-          notes?: string | null
-          period?: string
-          prepared_by?: string | null
-          status?: Database["public"]["Enums"]["payroll_status"]
-        }
-        Relationships: []
-      }
-      payslip_items: {
-        Row: {
-          amount: number
-          id: number
-          kind: Database["public"]["Enums"]["payslip_item_kind"]
-          label: string
-          line_id: number
-          loan_id: number | null
-        }
-        Insert: {
-          amount: number
-          id?: never
-          kind: Database["public"]["Enums"]["payslip_item_kind"]
-          label: string
-          line_id: number
-          loan_id?: number | null
-        }
-        Update: {
-          amount?: number
-          id?: never
-          kind?: Database["public"]["Enums"]["payslip_item_kind"]
-          label?: string
-          line_id?: number
-          loan_id?: number | null
-        }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "employees_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "employees_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: true
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       expense_categories: {
         Row: {
@@ -950,6 +876,176 @@ export type Database = {
             columns: ["supplier_id"]
             isOneToOne: false
             referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_lines: {
+        Row: {
+          basic: number
+          deductions: number
+          employee_id: number
+          gross: number
+          id: number
+          net: number
+          paid_on: string | null
+          pay_basis: Database["public"]["Enums"]["pay_basis"]
+          payment_method: Database["public"]["Enums"]["payment_method"] | null
+          payment_ref: string | null
+          rate: number
+          run_id: number
+          units: number
+        }
+        Insert: {
+          basic?: number
+          deductions?: number
+          employee_id: number
+          gross?: number
+          id?: never
+          net?: number
+          paid_on?: string | null
+          pay_basis: Database["public"]["Enums"]["pay_basis"]
+          payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          payment_ref?: string | null
+          rate: number
+          run_id: number
+          units?: number
+        }
+        Update: {
+          basic?: number
+          deductions?: number
+          employee_id?: number
+          gross?: number
+          id?: never
+          net?: number
+          paid_on?: string | null
+          pay_basis?: Database["public"]["Enums"]["pay_basis"]
+          payment_method?: Database["public"]["Enums"]["payment_method"] | null
+          payment_ref?: string | null
+          rate?: number
+          run_id?: number
+          units?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_lines_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_lines_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payroll_runs: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          expense_id: number | null
+          id: number
+          notes: string | null
+          period: string
+          prepared_by: string | null
+          status: Database["public"]["Enums"]["payroll_status"]
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          expense_id?: number | null
+          id?: never
+          notes?: string | null
+          period: string
+          prepared_by?: string | null
+          status?: Database["public"]["Enums"]["payroll_status"]
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          expense_id?: number | null
+          id?: never
+          notes?: string | null
+          period?: string
+          prepared_by?: string | null
+          status?: Database["public"]["Enums"]["payroll_status"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payroll_runs_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_runs_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payroll_runs_prepared_by_fkey"
+            columns: ["prepared_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payslip_items: {
+        Row: {
+          amount: number
+          id: number
+          kind: Database["public"]["Enums"]["payslip_item_kind"]
+          label: string
+          line_id: number
+          loan_id: number | null
+        }
+        Insert: {
+          amount: number
+          id?: never
+          kind: Database["public"]["Enums"]["payslip_item_kind"]
+          label: string
+          line_id: number
+          loan_id?: number | null
+        }
+        Update: {
+          amount?: number
+          id?: never
+          kind?: Database["public"]["Enums"]["payslip_item_kind"]
+          label?: string
+          line_id?: number
+          loan_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payslip_items_line_id_fkey"
+            columns: ["line_id"]
+            isOneToOne: false
+            referencedRelation: "payroll_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payslip_items_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "employee_loan_balances"
+            referencedColumns: ["loan_id"]
+          },
+          {
+            foreignKeyName: "payslip_items_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "employee_loans"
             referencedColumns: ["id"]
           },
         ]
@@ -1947,23 +2043,6 @@ export type Database = {
       }
     }
     Views: {
-      employee_loan_balances: {
-        Row: {
-          amount: number | null
-          balance: number | null
-          employee_id: number | null
-          first_month: string | null
-          issued_on: string | null
-          kind: Database["public"]["Enums"]["loan_kind"] | null
-          loan_id: number | null
-          monthly_repayment: number | null
-          months_left: number | null
-          ref: string | null
-          repaid: number | null
-          status: Database["public"]["Enums"]["loan_status"] | null
-        }
-        Relationships: []
-      }
       bird_stock: {
         Row: {
           bird_age_days: number | null
@@ -2035,6 +2114,31 @@ export type Database = {
           ref: string | null
         }
         Relationships: []
+      }
+      employee_loan_balances: {
+        Row: {
+          amount: number | null
+          balance: number | null
+          employee_id: number | null
+          first_month: string | null
+          issued_on: string | null
+          kind: Database["public"]["Enums"]["loan_kind"] | null
+          loan_id: number | null
+          monthly_repayment: number | null
+          months_left: number | null
+          ref: string | null
+          repaid: number | null
+          status: Database["public"]["Enums"]["loan_status"] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "employee_loans_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       medication_batches: {
         Row: {
@@ -2194,20 +2298,37 @@ export type Database = {
       }
     }
     Functions: {
-      approve_payroll: {
-        Args: { run_id: number }
-        Returns: Database["public"]["Tables"]["payroll_runs"]["Row"]
-      }
-      pay_payroll_lines: {
-        Args: { line_ids: number[]; method: Database["public"]["Enums"]["payment_method"]; paid_on: string; reference?: string }
-        Returns: undefined
-      }
-      prepare_payroll: {
-        Args: { period: string }
-        Returns: Database["public"]["Tables"]["payroll_runs"]["Row"]
-      }
       add_birds_to_flock: {
         Args: { flock_id: number; placed_on: string; sources: Json }
+        Returns: undefined
+      }
+      approve_payroll: {
+        Args: { run_id: number }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          expense_id: number | null
+          id: number
+          notes: string | null
+          period: string
+          prepared_by: string | null
+          status: Database["public"]["Enums"]["payroll_status"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payroll_runs"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      pay_payroll_lines: {
+        Args: {
+          line_ids: number[]
+          method: Database["public"]["Enums"]["payment_method"]
+          paid_on: string
+          reference?: string
+        }
         Returns: undefined
       }
       place_flock: {
@@ -2234,6 +2355,26 @@ export type Database = {
         SetofOptions: {
           from: "*"
           to: "flocks"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+      prepare_payroll: {
+        Args: { period: string }
+        Returns: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          expense_id: number | null
+          id: number
+          notes: string | null
+          period: string
+          prepared_by: string | null
+          status: Database["public"]["Enums"]["payroll_status"]
+        }
+        SetofOptions: {
+          from: "*"
+          to: "payroll_runs"
           isOneToOne: true
           isSetofReturn: false
         }
@@ -2299,9 +2440,6 @@ export type Database = {
       flock_status: "active" | "closed"
       loan_kind: "advance" | "loan"
       loan_status: "pending" | "active" | "repaid" | "cancelled"
-      pay_basis: "monthly" | "daily" | "weekly"
-      payroll_status: "draft" | "approved"
-      payslip_item_kind: "earning" | "deduction" | "loan" | "statutory"
       medication_category:
         | "vaccine"
         | "antibiotic"
@@ -2317,8 +2455,11 @@ export type Database = {
         | "spray"
         | "eye_nose_drop"
       medication_purpose: "treatment" | "prevention" | "vaccination" | "vitamin"
+      pay_basis: "monthly" | "daily" | "weekly"
       payment_direction: "in" | "out"
       payment_method: "cash" | "transfer" | "pos"
+      payroll_status: "draft" | "approved"
+      payslip_item_kind: "earning" | "deduction" | "loan" | "statutory"
       product_kind: "eggs" | "birds" | "droppings" | "sacks"
       purchase_kind: "feed" | "birds" | "medication"
       purchase_status: "ordered" | "received"
@@ -2471,9 +2612,12 @@ export const Constants = {
         "payments",
         "parties",
         "admin",
+        "payroll",
       ],
       customer_type: ["regular", "one_off"],
       flock_status: ["active", "closed"],
+      loan_kind: ["advance", "loan"],
+      loan_status: ["pending", "active", "repaid", "cancelled"],
       medication_category: [
         "vaccine",
         "antibiotic",
@@ -2485,8 +2629,11 @@ export const Constants = {
       ],
       medication_mode: ["water", "feed", "injection", "spray", "eye_nose_drop"],
       medication_purpose: ["treatment", "prevention", "vaccination", "vitamin"],
+      pay_basis: ["monthly", "daily", "weekly"],
       payment_direction: ["in", "out"],
       payment_method: ["cash", "transfer", "pos"],
+      payroll_status: ["draft", "approved"],
+      payslip_item_kind: ["earning", "deduction", "loan", "statutory"],
       product_kind: ["eggs", "birds", "droppings", "sacks"],
       purchase_kind: ["feed", "birds", "medication"],
       purchase_status: ["ordered", "received"],

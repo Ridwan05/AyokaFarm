@@ -1,7 +1,8 @@
 'use client'
 
 import Image from 'next/image'
-import { ChevronsUpDown, LogOut, Menu } from 'lucide-react'
+import { ChevronsUpDown, HandCoins, LogOut, Menu } from 'lucide-react'
+import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { Drawer as Sheet } from 'vaul'
@@ -47,8 +48,8 @@ function Logo() {
   return <Image src="/logo-mark.svg" width={18} height={23} alt="" />
 }
 
-/** The signed-in person, with sign out. */
-function UserCard() {
+/** The signed-in person, with their own pay and sign out. */
+function UserCard({ onNavigate }: { onNavigate?: () => void }) {
   const { user, signOut } = useSession()
   return (
     <div className="flex w-full shrink-0 items-center gap-3 border-t border-line-subtle pt-3 pr-2 pl-3">
@@ -57,6 +58,15 @@ function UserCard() {
         <span className="truncate type-label-md text-fg-primary">{user.name}</span>
         <span className="truncate type-body-sm text-fg-tertiary">{user.roleLabel}</span>
       </span>
+      <Link
+        href="/my-pay"
+        aria-label="My pay"
+        title="My pay — payslips and loans"
+        onClick={onNavigate}
+        className="flex size-9 items-center justify-center rounded-md text-icon-secondary transition-[background-color,transform] duration-(--dur-press) ease-out hover:bg-subtle motion-safe:active:scale-[0.94]"
+      >
+        <HandCoins size={16} strokeWidth={1.5} />
+      </Link>
       <button
         type="button"
         aria-label="Sign out"
@@ -105,7 +115,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       </nav>
 
       {canSee(settings, user) && <NavRow item={settings} onNavigate={onNavigate} />}
-      <UserCard />
+      <UserCard onNavigate={onNavigate} />
     </>
   )
 }
