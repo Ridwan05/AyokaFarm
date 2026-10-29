@@ -15,6 +15,7 @@ export const modules: { id: AppModule; label: string }[] = [
   { id: 'payments', label: 'Payments' },
   { id: 'parties', label: 'Customers & suppliers' },
   { id: 'payroll', label: 'Payroll & employees' },
+  { id: 'finance', label: 'Finance & statements' },
   { id: 'admin', label: 'Admin & settings' },
 ]
 
@@ -39,6 +40,10 @@ const areas: { prefix: string; module: Area; label: string; group: string }[] = 
   { prefix: '/employees', module: 'payroll', label: 'Employees', group: 'People' },
   { prefix: '/payroll', module: 'payroll', label: 'Payroll', group: 'People' },
   { prefix: '/reports', module: 'reports', label: 'Reports', group: 'Insight' },
+  // Financial statements and the records behind them: owner and accounts (Roles & permissions).
+  { prefix: '/reports/income', module: 'finance', label: 'Income statement', group: 'Insight' },
+  { prefix: '/reports/balance-sheet', module: 'finance', label: 'Balance sheet', group: 'Insight' },
+  { prefix: '/finance', module: 'finance', label: 'Finance', group: 'Insight' },
   { prefix: '/settings', module: 'admin', label: 'Settings', group: 'Settings' },
   { prefix: '/go-live', module: 'admin', label: 'Go-live setup', group: 'Settings' },
 ]

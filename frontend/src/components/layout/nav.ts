@@ -1,5 +1,6 @@
 import {
   Banknote,
+  Landmark,
   Egg,
   FileText,
   HandCoins,
@@ -60,7 +61,10 @@ export const navGroups: NavGroup[] = [
   },
   {
     label: 'Insight',
-    items: [{ label: 'Reports', to: '/reports', icon: FileText }],
+    items: [
+      { label: 'Reports', to: '/reports', icon: FileText },
+      { label: 'Finance', to: '/finance', icon: Landmark },
+    ],
   },
 ]
 

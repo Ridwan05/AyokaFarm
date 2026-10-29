@@ -10,6 +10,7 @@ import { Field, SelectInput, TextInput } from '../../components/ui/Form'
 import { RowMenu } from '../../components/ui/Menu'
 import { Modal, Presence } from '../../components/ui/Overlay'
 import { NumberCell, Table, TextCell, type Column } from '../../components/ui/Table'
+import { STATEMENT_LINES, type StatementLine } from '../../data/finance'
 import { dm, staffWithRole } from '../../data/metrics'
 import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
@@ -60,7 +61,7 @@ export default function Lists() {
 
   const lists: { id: ListId; name: string; summary: string; description: string }[] = [
     { id: 'products', name: 'Products & minimum prices', summary: `${catalog.products.filter((p) => p.is_active).length} products`, description: '' },
-    { id: 'expense-categories', name: 'Expense categories', summary: `${catalog.categories.filter((c) => c.is_active).length} categories`, description: 'Used by Add expense. Medication and feed are purchases, so they aren’t listed here.' },
+    { id: 'expense-categories', name: 'Expense categories', summary: `${catalog.categories.filter((c) => c.is_active).length} categories`, description: 'Used by Add expense. Medication and feed are purchases, so they aren’t listed here. The statement line says where each category’s expenses go on the Income Statement.' },
     { id: 'medications', name: 'Medication list', summary: `${catalog.medications.filter((m) => m.is_active).length} medications`, description: 'Each medication’s withdrawal period drives the egg and bird sale warnings.' },
     { id: 'adjust-reasons', name: 'Stock-adjustment reasons', summary: `${catalog.reasons.filter((r) => r.is_active).length} reasons`, description: 'A count can only change stock with one of these reasons.' },
     { id: 'payment-methods', name: 'Payment methods', summary: 'Cash · Transfer · POS', description: 'Shown on every payment, sale and purchase. These are fixed: the reports and statements group by them.' },
@@ -75,6 +76,15 @@ export default function Lists() {
     toast.success(active ? `${name} is back on new forms` : `${name} hidden from new forms`, { description: active ? undefined : 'Old records keep it.' })
     await reload()
   }
+
+  /** Where an expense category goes on the Income Statement. */
+  async function setStatementLine(id: number, name: string, line: StatementLine) {
+    const { error } = await db.from('expense_categories').update({ statement_line: line }).eq('id', id)
+    if (error) return toast.error(why(error.message))
+    toast.success(`${name} now goes under ${STATEMENT_LINES[line]}`)
+    await reload()
+  }
+  const lineOf = (id: number) => ((catalog.categories.find((c) => c.id === id) as { statement_line?: string } | undefined)?.statement_line ?? 'misc') as StatementLine
 
   const priceColumns: Column<Product>[] = [
     { key: 'name', header: 'Product', render: (p) => <TextCell tone="primary">{p.name}</TextCell> },
@@ -180,6 +190,19 @@ export default function Lists() {
                     <span className={cn('min-w-0 flex-1 type-body-md', item.is_active ? 'text-fg-primary' : 'text-fg-tertiary')}>{item.name}</span>
                     {!item.is_active && <Badge tone="neutral">Hidden</Badge>}
                     {item.detail && <span className="hidden pr-2 type-body-sm text-fg-tertiary sm:inline">{item.detail}</span>}
+                    {selected === 'expense-categories' &&
+                      (editable ? (
+                        <SelectInput
+                          aria-label={`Statement line for ${item.name}`}
+                          size="md"
+                          className="w-[170px] shrink-0 sm:w-[220px]"
+                          value={lineOf(item.id)}
+                          onChange={(e) => void setStatementLine(item.id, item.name, e.target.value as StatementLine)}
+                          options={Object.entries(STATEMENT_LINES).map(([value, label]) => ({ value, label }))}
+                        />
+                      ) : (
+                        <span className="pr-2 type-body-sm text-fg-tertiary">{STATEMENT_LINES[lineOf(item.id)]}</span>
+                      ))}
                     {editable && !fixed && (
                       <RowMenu
                         items={[
