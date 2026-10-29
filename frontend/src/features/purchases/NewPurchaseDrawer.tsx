@@ -1,4 +1,4 @@
-import { Package, Truck } from 'lucide-react'
+import { Bird, Package, Truck } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Button } from '../../components/ui/Button'
 import { AutoInput, Field, SelectInput, SummaryBox, TextInput } from '../../components/ui/Form'
@@ -31,11 +31,8 @@ const buildItems = (): Record<PurchaseKind, Item[]> => ({
     hint: `${f.bags} bags in store · ${f.daysOfCover === null ? 'not in use' : `${f.daysOfCover} days of cover`}`,
     defaultPrice: 18500,
   })),
-  Birds: [
-    { name: 'Day-old broilers', unit: 'birds', per: 'a bird', unitLabel: 'Birds', hint: 'For the next broiler flock', defaultPrice: 850 },
-    { name: 'Day-old layers', unit: 'birds', per: 'a bird', unitLabel: 'Birds', hint: 'For the next layer flock', defaultPrice: 900 },
-    { name: 'Point-of-lay pullets', unit: 'birds', per: 'a bird', unitLabel: 'Birds', hint: '16–18 weeks old', defaultPrice: 3500 },
-  ],
+  // Birds are described by type, breed and age below; this is just the unit.
+  Birds: [{ name: 'Birds', unit: 'birds', per: 'a bird', unitLabel: 'Birds', hint: '', defaultPrice: 850 }],
   Medication: medications.map((m) => ({
     name: m.name,
     unit: 'packs',
@@ -48,7 +45,7 @@ const buildItems = (): Record<PurchaseKind, Item[]> => ({
 
 export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
   const currentUser = useCurrentUser()
-  const { suppliers, purchases, supplierBalance, addPurchase } = useTrade()
+  const { suppliers, purchases, supplierBalance, addPurchase, catalog } = useTrade()
   const toast = useToast()
   const [items] = useState(buildItems)
   // The first supplier of each kind, e.g. a feed supplier for feed.
@@ -62,6 +59,15 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
   const [price, setPrice] = useState(formatNumber(last?.price ?? item.defaultPrice))
   const [paid, setPaid] = useState('1,500,000')
   const [submitted, setSubmitted] = useState(false)
+  // Birds: what they are, so placing a flock can draw the right ones from bird stock.
+  const [birdTypeId, setBirdTypeId] = useState(catalog.birdTypes[0]?.id ?? 0)
+  const [breed, setBreed] = useState('')
+  const [ageWeeks, setAgeWeeks] = useState('0')
+  const birdType = catalog.birdTypes.find((b) => b.id === birdTypeId)
+  const weeks = num(ageWeeks)
+  /** "Day-old Isa Brown layers", "16-week Isa Brown layers" */
+  const birdItem = [weeks > 0 ? `${formatNumber(weeks)}-week` : 'Day-old', breed.trim(), `${(birdType?.name ?? 'bird').toLowerCase()}s`].filter(Boolean).join(' ')
+  const lastBirds = purchases.find((p) => p.kind === 'Birds')
 
   const supplier = suppliers.find((s) => s.id === supplierId)!
   const owed = supplierBalance(supplier.id)
@@ -69,6 +75,7 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
   const total = num(qty) * num(price)
   const paidNow = num(paid)
   const errors = {
+    birdType: kind === 'Birds' && !birdType ? 'Choose the type of bird' : undefined,
     qty: num(qty) > 0 ? undefined : 'Enter a quantity',
     price: num(price) > 0 ? undefined : 'Enter a price',
     paid: paidNow > total ? 'More than the total' : undefined,
@@ -79,19 +86,20 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
     setSupplierId(defaultSupplier(k))
     const first = items[k][0]
     setItemName(first.name)
-    setPrice(formatNumber(purchases.find((p) => p.item === first.name)?.price ?? first.defaultPrice))
+    setPrice(formatNumber((k === 'Birds' ? lastBirds : purchases.find((p) => p.item === first.name))?.price ?? first.defaultPrice))
   }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setSubmitted(true)
-    if (errors.qty || errors.price || errors.paid) return
+    if (errors.birdType || errors.qty || errors.price || errors.paid) return
     const prefix = refPrefix[kind]
     const next = Math.max(...purchases.filter((p) => p.ref.startsWith(prefix)).map((p) => Number(p.ref.slice(3)))) + 1
     const ref = `${prefix}-${String(next).padStart(4, '0')}`
     const me = currentUser.name.split(' ')[0]
     const purchase = {
-      ref, date: TODAY_ISO, supplierId, kind, item: item.name, qty: num(qty), unit: item.unit, per: item.per, price: num(price), paidAtPurchase: paidNow, recordedBy: me,
+      ref, date: TODAY_ISO, supplierId, kind, item: kind === 'Birds' ? birdItem : item.name, qty: num(qty), unit: item.unit, per: item.per, price: num(price), paidAtPurchase: paidNow, recordedBy: me,
+      bird: kind === 'Birds' ? { birdTypeId, breed: breed.trim() || null, ageDays: Math.round(weeks * 7) } : undefined,
       history: [{ title: 'Purchase recorded', detail: `By ${me}${paidNow ? ` · paid ₦${formatNumber(paidNow)}` : ''}`, time: dayMonth(TODAY_ISO) }],
     }
     if (!(await addPurchase(purchase))) return
@@ -132,21 +140,45 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
             />
           )}
         </Field>
-        <Field label={kind === 'Feed' ? 'Feed type' : kind === 'Birds' ? 'Birds' : 'Medication'} hint={item.hint}>
-          {(id) => (
-            <SelectInput
-              id={id}
-              leadingIcon={Package}
-              value={item.name}
-              onChange={(e) => {
-                setItemName(e.target.value)
-                const it = items[kind].find((i) => i.name === e.target.value)!
-                setPrice(formatNumber(purchases.find((p) => p.item === it.name)?.price ?? it.defaultPrice))
-              }}
-              options={items[kind].map((i) => ({ value: i.name, label: i.name }))}
-            />
-          )}
-        </Field>
+        {kind === 'Birds' ? (
+          <>
+            <Field label="Type of bird" hint="Goes to bird stock until it’s placed in a pen (Pens → Place flock)" error={submitted ? errors.birdType : undefined}>
+              {(id) => (
+                <SelectInput
+                  id={id}
+                  leadingIcon={Bird}
+                  value={String(birdTypeId)}
+                  onChange={(e) => setBirdTypeId(Number(e.target.value))}
+                  options={catalog.birdTypes.map((b) => ({ value: String(b.id), label: b.name }))}
+                />
+              )}
+            </Field>
+            <div className="flex gap-3">
+              <Field label="Breed" className="flex-1" hint="e.g. Isa Brown, Ross 308">
+                {(id) => <TextInput id={id} value={breed} onChange={(e) => setBreed(e.target.value)} placeholder="Optional" />}
+              </Field>
+              <Field label="Age on arrival" className="flex-1" hint="0 = day-old · point-of-lay ≈ 16–18">
+                {(id) => <TextInput id={id} inputMode="decimal" suffix="weeks" value={ageWeeks} onChange={(e) => setAgeWeeks(e.target.value)} />}
+              </Field>
+            </div>
+          </>
+        ) : (
+          <Field label={kind === 'Feed' ? 'Feed type' : 'Medication'} hint={item.hint}>
+            {(id) => (
+              <SelectInput
+                id={id}
+                leadingIcon={Package}
+                value={item.name}
+                onChange={(e) => {
+                  setItemName(e.target.value)
+                  const it = items[kind].find((i) => i.name === e.target.value)!
+                  setPrice(formatNumber(purchases.find((p) => p.item === it.name)?.price ?? it.defaultPrice))
+                }}
+                options={items[kind].map((i) => ({ value: i.name, label: i.name }))}
+              />
+            )}
+          </Field>
+        )}
         <div className="flex gap-3">
           <Field label={item.unitLabel} className="flex-1" hint={kind === 'Feed' ? '25 kg bags' : undefined} error={submitted ? errors.qty : undefined}>
             {(id) => <TextInput id={id} inputMode="numeric" suffix={item.unit} value={qty} onChange={(e) => setQty(e.target.value)} />}
@@ -154,7 +186,7 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
           <Field
             label={`Price per ${item.unit.replace(/s$/, '')}`}
             className="flex-1"
-            hint={last ? `Last: ₦${formatNumber(last.price)} on ${dayMonth(last.date)}` : undefined}
+            hint={(kind === 'Birds' ? lastBirds : last) ? `Last: ₦${formatNumber((kind === 'Birds' ? lastBirds : last)!.price)} on ${dayMonth((kind === 'Birds' ? lastBirds : last)!.date)}` : undefined}
             error={submitted ? errors.price : undefined}
           >
             {(id) => (

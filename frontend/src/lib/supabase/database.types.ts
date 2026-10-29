@@ -433,6 +433,75 @@ export type Database = {
         }
         Relationships: []
       }
+      flock_placements: {
+        Row: {
+          birds: number
+          cost_per_bird: number | null
+          created_at: string
+          created_by: string | null
+          flock_id: number
+          id: number
+          placed_on: string
+          purchase_id: number | null
+        }
+        Insert: {
+          birds: number
+          cost_per_bird?: number | null
+          created_at?: string
+          created_by?: string | null
+          flock_id: number
+          id?: never
+          placed_on: string
+          purchase_id?: number | null
+        }
+        Update: {
+          birds?: number
+          cost_per_bird?: number | null
+          created_at?: string
+          created_by?: string | null
+          flock_id?: number
+          id?: never
+          placed_on?: string
+          purchase_id?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flock_placements_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flock_placements_flock_id_fkey"
+            columns: ["flock_id"]
+            isOneToOne: false
+            referencedRelation: "flocks"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flock_placements_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "bird_stock"
+            referencedColumns: ["purchase_id"]
+          },
+          {
+            foreignKeyName: "flock_placements_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "medication_batches"
+            referencedColumns: ["purchase_id"]
+          },
+          {
+            foreignKeyName: "flock_placements_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       flocks: {
         Row: {
           age_at_placement_days: number
@@ -698,39 +767,6 @@ export type Database = {
           },
         ]
       }
-      flock_placements: {
-        Row: {
-          birds: number
-          cost_per_bird: number | null
-          created_at: string
-          created_by: string | null
-          flock_id: number
-          id: number
-          placed_on: string
-          purchase_id: number | null
-        }
-        Insert: {
-          birds: number
-          cost_per_bird?: number | null
-          created_at?: string
-          created_by?: string | null
-          flock_id: number
-          id?: never
-          placed_on: string
-          purchase_id?: number | null
-        }
-        Update: {
-          birds?: number
-          cost_per_bird?: number | null
-          created_at?: string
-          created_by?: string | null
-          flock_id?: number
-          id?: never
-          placed_on?: string
-          purchase_id?: number | null
-        }
-        Relationships: []
-      }
       production_medications: {
         Row: {
           created_at: string
@@ -783,6 +819,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "production_records"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "production_medications_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "bird_stock"
+            referencedColumns: ["purchase_id"]
           },
           {
             foreignKeyName: "production_medications_purchase_id_fkey"
@@ -1094,6 +1137,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "purchases_bird_type_id_fkey"
+            columns: ["bird_type_id"]
+            isOneToOne: false
+            referencedRelation: "bird_types"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "purchases_deleted_by_fkey"
             columns: ["deleted_by"]
@@ -1490,6 +1540,13 @@ export type Database = {
             foreignKeyName: "stock_adjustments_purchase_id_fkey"
             columns: ["purchase_id"]
             isOneToOne: false
+            referencedRelation: "bird_stock"
+            referencedColumns: ["purchase_id"]
+          },
+          {
+            foreignKeyName: "stock_adjustments_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
             referencedRelation: "medication_batches"
             referencedColumns: ["purchase_id"]
           },
@@ -1585,6 +1642,13 @@ export type Database = {
             foreignKeyName: "stock_movements_purchase_id_fkey"
             columns: ["purchase_id"]
             isOneToOne: false
+            referencedRelation: "bird_stock"
+            referencedColumns: ["purchase_id"]
+          },
+          {
+            foreignKeyName: "stock_movements_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
             referencedRelation: "medication_batches"
             referencedColumns: ["purchase_id"]
           },
@@ -1674,7 +1738,29 @@ export type Database = {
           supplier: string | null
           supplier_id: number | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "purchases_bird_type_id_fkey"
+            columns: ["bird_type_id"]
+            isOneToOne: false
+            referencedRelation: "bird_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchases_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "supplier_balances"
+            referencedColumns: ["supplier_id"]
+          },
+          {
+            foreignKeyName: "purchases_supplier_id_fkey"
+            columns: ["supplier_id"]
+            isOneToOne: false
+            referencedRelation: "suppliers"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       customer_balances: {
         Row: {
@@ -1872,11 +1958,31 @@ export type Database = {
       }
       place_flock: {
         Args: { flock: Json; sources: Json }
-        Returns: Database["public"]["Tables"]["flocks"]["Row"]
-      }
-      set_flock_sources: {
-        Args: { flock_id: number; sources: Json }
-        Returns: undefined
+        Returns: {
+          age_at_placement_days: number
+          bird_type_id: number
+          birds_placed: number
+          breed: string | null
+          close_note: string | null
+          close_reason: string | null
+          closed_on: string | null
+          code: string
+          created_at: string
+          created_by: string | null
+          id: number
+          laying_started_on: string | null
+          notes: string | null
+          pen_id: number
+          placed_on: string
+          status: Database["public"]["Enums"]["flock_status"]
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "flocks"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       record_sale: {
         Args: { portions?: Json; sale: Json }
@@ -1911,6 +2017,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      set_flock_sources: {
+        Args: { flock_id: number; sources: Json }
+        Returns: undefined
       }
       set_sale_allocations: {
         Args: { portions: Json; sale_id: number }

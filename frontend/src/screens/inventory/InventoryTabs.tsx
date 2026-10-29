@@ -8,6 +8,7 @@ export function InventoryTabs() {
         { label: 'Feed', to: '/inventory/feed' },
         { label: 'Medication', to: '/inventory/medication' },
         { label: 'Eggs', to: '/inventory/eggs' },
+        { label: 'Birds', to: '/inventory/birds' },
       ]}
     />
   )

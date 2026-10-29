@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus } from 'lucide-react'
+import { Pencil, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { BarChart } from '../components/charts/BarChart'
@@ -24,7 +24,11 @@ import { flockFacts, mortalitySeries, modeLabel, penEntries, penFlock, penKpis, 
 import { useCurrentUser } from '../data/sessionContext'
 import { rearingCost, suggestedLayStart } from '../data/rearing'
 import { useTrade } from '../data/tradeContext'
+import { AddBirdsDrawer } from '../features/pens/AddBirdsDrawer'
+import { placementLabel } from '../features/pens/birdSourceRules'
 import { CloseFlockDrawer } from '../features/pens/CloseFlockDrawer'
+import { EditFlockDrawer } from '../features/pens/EditFlockDrawer'
+import { EditPenModal } from '../features/pens/EditPenModal'
 import { LayStartModal } from '../features/pens/LayStartModal'
 import { CLOSE_REASONS, saveFlock } from '../features/pens/saveFlock'
 import { accessOf, canRecordProduction, isAttendant } from '../lib/access'
@@ -43,6 +47,7 @@ export default function PenDetail() {
   const pen = catalog.pens.find((p) => p.id === id)
   const [tab, setTab] = useState<(typeof TABS)[number]>('Overview')
   const [showSpike, setShowSpike] = useState(true)
+  const [editPen, setEditPen] = useState(false)
 
   if (!pen) return <Placeholder title="Pen not found" />
 
@@ -61,9 +66,9 @@ export default function PenDetail() {
         }
       : null
 
-  const title = facts?.title ?? penName(catalog, id)
+  const title = facts?.title ?? `${penName(catalog, id)} · Empty`
   const subtitle = !facts
-    ? 'No flock placed'
+    ? (pen.description ?? 'No flock placed')
     : facts.flock.status === 'closed'
       ? `Empty · last flock ${facts.code} closed ${dayMonth(facts.flock.closed_on!)} ${facts.flock.closed_on!.slice(0, 4)}`
       : `Flock ${facts.code} · ${facts.breed} · placed ${facts.placed} · week ${facts.week}`
@@ -76,12 +81,18 @@ export default function PenDetail() {
         title={title}
         description={subtitle}
         actions={
-          facts?.flock.status === 'active' &&
-          canRecordProduction(user, id) && (
-            <Button variant="primary" leadingIcon={Plus} onClick={() => router.push(`/production/entry/${id}`)}>
-              Record entry
-            </Button>
-          )
+          <>
+            {user.role === 'owner' && (
+              <Button leadingIcon={Pencil} onClick={() => setEditPen(true)}>
+                Edit pen…
+              </Button>
+            )}
+            {facts?.flock.status === 'active' && canRecordProduction(user, id) && (
+              <Button variant="primary" leadingIcon={Plus} onClick={() => router.push(`/production/entry/${id}`)}>
+                Record entry
+              </Button>
+            )}
+          </>
         }
       />
 
@@ -108,6 +119,8 @@ export default function PenDetail() {
       ) : (
         <ProductionTab penId={id} />
       )}
+
+      <Presence>{editPen && <EditPenModal pen={catalog.allPens.find((p) => p.id === id) ?? { ...pen }} onClose={() => setEditPen(false)} />}</Presence>
     </>
   )
 }
@@ -117,7 +130,7 @@ function Overview({ penId }: { penId: number }) {
   const user = useCurrentUser()
   const toast = useToast()
   const [unit, setUnit] = useState<'Birds' | '% of flock'>('Birds')
-  const [overlay, setOverlay] = useState<'lay' | 'close' | null>(null)
+  const [overlay, setOverlay] = useState<'lay' | 'close' | 'edit-flock' | 'add-birds' | null>(null)
   const [saving, setSaving] = useState(false)
   const facts = flockFacts(history, catalog, penId)!
   const flock = facts.flock
@@ -129,6 +142,10 @@ function Overview({ penId }: { penId: number }) {
   // Managers mark the start of lay; only the owner closes a flock (the database enforces both).
   const canMarkLay = layer && (user.role === 'owner' || user.role === 'farm-manager')
   const canClose = active && user.role === 'owner'
+  const canEditFlock = user.role === 'owner'
+  const canAddBirds = active && (user.role === 'owner' || user.role === 'farm-manager')
+  const placements = history.placements.filter((p) => p.flock_id === flock.id).sort((a, b) => a.placed_on.localeCompare(b.placed_on) || a.id - b.id)
+  const birdsCost = placements.reduce((n, p) => n + p.birds * Number(p.cost_per_bird ?? 0), 0)
 
   const markSuggested = async () => {
     if (!suggested) return
@@ -207,6 +224,19 @@ function Overview({ penId }: { penId: number }) {
             {facts.age}
           </KeyValueRow>
           <KeyValueRow label="Birds placed">{formatNumber(facts.birdsPlaced)}</KeyValueRow>
+          {placements.length > 0 && (
+            <div className="flex flex-col gap-0.5 py-2">
+              <span className="type-body-md text-fg-secondary">Birds from</span>
+              {placements.map((p) => (
+                <span key={p.id} className="type-body-sm text-fg-primary">
+                  {placementLabel(history, p, flock.placed_on)}
+                </span>
+              ))}
+            </div>
+          )}
+          <KeyValueRow label="Cost of birds" calculated={explain.rearingBirds()}>
+            {formatNaira(Math.round(birdsCost))}
+          </KeyValueRow>
           <KeyValueRow label="Live now" calculated={explain.liveBirds()}>
             {formatNumber(facts.liveNow)}
           </KeyValueRow>
@@ -228,8 +258,18 @@ function Overview({ penId }: { penId: number }) {
               {flock.close_reason ? ` · ${CLOSE_LABEL[flock.close_reason] ?? flock.close_reason}` : ''}
             </KeyValueRow>
           )}
-          {(canMarkLay || canClose) && (
+          {(canMarkLay || canClose || canEditFlock || canAddBirds) && (
             <div className="flex flex-wrap gap-2 pt-3">
+              {canEditFlock && (
+                <Button size="sm" onClick={() => setOverlay('edit-flock')}>
+                  Edit flock…
+                </Button>
+              )}
+              {canAddBirds && (
+                <Button size="sm" onClick={() => setOverlay('add-birds')}>
+                  Add birds…
+                </Button>
+              )}
               {canMarkLay && (
                 <Button size="sm" onClick={() => setOverlay('lay')}>
                   {layingSince ? 'Edit start of lay…' : 'Mark start of lay…'}
@@ -249,6 +289,8 @@ function Overview({ penId }: { penId: number }) {
 
       <Presence>{overlay === 'lay' && <LayStartModal flock={flock} suggested={firstEggs} onClose={() => setOverlay(null)} />}</Presence>
       <Presence>{overlay === 'close' && <CloseFlockDrawer flock={flock} onClose={() => setOverlay(null)} />}</Presence>
+      <Presence>{overlay === 'edit-flock' && <EditFlockDrawer flock={flock} onClose={() => setOverlay(null)} />}</Presence>
+      <Presence>{overlay === 'add-birds' && <AddBirdsDrawer flock={flock} onClose={() => setOverlay(null)} />}</Presence>
 
       <Card>
         <CardHeader title="Daily entries" meta={<span className="type-body-sm text-fg-tertiary">Last 7 entries</span>} />

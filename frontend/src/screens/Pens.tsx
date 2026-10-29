@@ -1,6 +1,6 @@
 'use client'
 
-import { Bird, ChevronRight, Egg, ListFilter, Plus } from 'lucide-react'
+import { Bird, ChevronRight, Egg, ListFilter, Pencil, Plus } from 'lucide-react'
 import { useState } from 'react'
 import Link from 'next/link'
 import { PageHeader } from '../components/layout/PageHeader'
@@ -12,7 +12,9 @@ import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Select } from '../components/ui/Select'
 import { NumberCell, PrimaryCell, Table, TextCell, type Column } from '../components/ui/Table'
 import { AddPenModal } from '../features/pens/AddPenModal'
+import { EditPenModal } from '../features/pens/EditPenModal'
 import { PlaceFlockDrawer } from '../features/pens/PlaceFlockDrawer'
+import { useCurrentUser } from '../data/sessionContext'
 import { pens, type Pen, type Stat } from '../data/pens'
 import { explain } from '../data/explain'
 import { penName } from '../data/farmViews'
@@ -34,9 +36,17 @@ const sorters: Record<(typeof SORTS)[number], (a: Pen, b: Pen) => number> = {
 
 export default function Pens() {
   const trade = useTrade()
+  const user = useCurrentUser()
+  const owner = user.role === 'owner'
   const closedFlocks = closedFlockRows(trade)
-  const layers = pens.filter((p) => p.type === 'Layers').length
-  const broilers = pens.length - layers
+  // The flock decides what a pen holds; empty pens count under All only.
+  const isEmpty = (p: Pen) => p.flock === '—'
+  const layers = pens.filter((p) => !isEmpty(p) && p.type === 'Layers').length
+  const broilers = pens.filter((p) => !isEmpty(p) && p.type === 'Broilers').length
+  const emptyCount = pens.length - layers - broilers
+  const inactive = trade.catalog.allPens.filter((p) => !p.is_active)
+  const [editing, setEditing] = useState<number | null>(null)
+  const editingPen = trade.catalog.allPens.find((p) => p.id === editing)
   const liveBirds = pens.reduce((n, p) => n + p.liveBirds, 0)
 
   const tabs = [`All · ${pens.length}`, `Layers · ${layers}`, `Broilers · ${broilers}`]
@@ -47,7 +57,7 @@ export default function Pens() {
 
   const typeFilter = tab.split(' · ')[0]
   const visible = pens
-    .filter((p) => typeFilter === 'All' || p.type === typeFilter)
+    .filter((p) => typeFilter === 'All' || (!isEmpty(p) && p.type === typeFilter))
     .sort(sorters[sort])
 
   return (
@@ -55,7 +65,7 @@ export default function Pens() {
       <PageHeader
         eyebrow={['Operate', 'Pens & flocks']}
         title="Pens & flocks"
-        description={`${pens.length} pens · ${formatNumber(liveBirds)} live birds · ${layers} layer flocks and ${broilers} broiler flocks. Sorted by what needs attention.`}
+        description={`${pens.length} pens · ${formatNumber(liveBirds)} live birds · ${layers} layer flocks and ${broilers} broiler flocks${emptyCount ? ` · ${emptyCount} empty` : ''}. Sorted by what needs attention.`}
         actions={
           <>
             <Button leadingIcon={Plus} onClick={() => setOverlay('add-pen')}>
@@ -76,7 +86,7 @@ export default function Pens() {
 
       <div className="grid grid-cols-3 gap-x-4 gap-y-6">
         {visible.map((pen) => (
-          <PenTile key={pen.id} pen={pen} />
+          <PenTile key={pen.id} pen={pen} onEdit={owner ? () => setEditing(pen.id) : undefined} />
         ))}
       </div>
 
@@ -92,7 +102,29 @@ export default function Pens() {
         )}
       </Card>
 
+      {owner && inactive.length > 0 && (
+        <Card>
+          <CardHeader title="Pens out of use" meta={<span className="type-body-sm text-fg-tertiary">Hidden from Pens and Place flock</span>} />
+          <ul className="flex flex-col px-5 pb-4">
+            {inactive.map((p) => (
+              <li key={p.id} className="flex items-center gap-3 border-t border-line-subtle py-3 first:border-t-0">
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate type-label-md text-fg-primary">{p.name}</span>
+                  <span className="truncate type-body-sm text-fg-tertiary">
+                    {p.description ? `${p.description} · ` : ''}holds {formatNumber(p.capacity)}
+                  </span>
+                </span>
+                <Button size="sm" leadingIcon={Pencil} onClick={() => setEditing(p.id)}>
+                  Edit…
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
+
       {/* Mounted only while open so each opening starts with a fresh form. */}
+      <Presence>{editingPen && <EditPenModal pen={editingPen} onClose={() => setEditing(null)} />}</Presence>
       <Presence>{overlay === 'add-pen' && <AddPenModal open onClose={close} />}</Presence>
       <Presence>{overlay === 'place-flock' && <PlaceFlockDrawer open onClose={close} />}</Presence>
     </>
@@ -101,57 +133,73 @@ export default function Pens() {
 
 const statTone = { default: 'text-fg-primary', warning: 'text-fg-warning', danger: 'text-fg-danger' }
 
-function PenTile({ pen }: { pen: Pen }) {
+function PenTile({ pen, onEdit }: { pen: Pen; onEdit?: () => void }) {
   const { catalog } = useTrade()
-  const Icon = pen.type === 'Layers' ? Egg : Bird
-  const fill = Math.min(pen.liveBirds / pen.capacity, 1) * 100
   const empty = pen.flock === '—'
+  const Icon = !empty && pen.type === 'Layers' ? Egg : Bird
+  const fill = Math.min(pen.liveBirds / pen.capacity, 1) * 100
+  const description = catalog.pens.find((p) => p.id === pen.id)?.description
   return (
-    <Link
-      href={`/pens/${pen.id}`}
-      className="flex flex-col gap-4 rounded-xl border border-line bg-surface px-5 pt-5 pb-4 transition-shadow hover:shadow-md"
-    >
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand-subtle text-icon-brand">
-          <Icon size={20} strokeWidth={1.5} />
-        </span>
-        <div className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate type-label-lg text-fg-primary">
-            {penName(catalog, pen.id)} · {pen.type}
+    // The edit button sits beside the link, not inside it (no buttons inside links).
+    <div className="relative">
+      <Link
+        href={`/pens/${pen.id}`}
+        className="flex h-full flex-col gap-4 rounded-xl border border-line bg-surface px-5 pt-5 pb-4 transition-shadow hover:shadow-md"
+      >
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-brand-subtle text-icon-brand">
+            <Icon size={20} strokeWidth={1.5} />
           </span>
-          <span className="truncate type-body-sm text-fg-tertiary">{empty ? 'Empty · ready for a new flock' : `${pen.flock} · week ${pen.week}`}</span>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <span className="truncate type-label-lg text-fg-primary">
+              {penName(catalog, pen.id)} · {empty ? 'Empty' : pen.type}
+            </span>
+            <span className="truncate type-body-sm text-fg-tertiary">{empty ? (description ? `${description} · ready for a flock` : 'Ready for a new flock') : `${pen.flock} · week ${pen.week}`}</span>
+          </div>
+          <Badge tone={empty ? 'neutral' : pen.status.tone} dot>
+            {empty ? 'Empty' : pen.status.label}
+          </Badge>
+          {/* Room for the edit button that sits over this corner. */}
+          {onEdit && <span className="w-8 shrink-0" />}
         </div>
-        <Badge tone={empty ? 'neutral' : pen.status.tone} dot>
-          {empty ? 'Empty' : pen.status.label}
-        </Badge>
-      </div>
 
-      <div className="flex flex-col gap-1.5">
-        <div className="flex items-center">
-          <span className="flex flex-1 items-center gap-1.5 type-body-sm text-fg-secondary">
-            Live birds
-            <InfoTip label="Live birds">{explain.liveBirds()} Shown against the pen’s capacity.</InfoTip>
-          </span>
-          <span className="type-numeric-md text-fg-primary">
-            {formatNumber(pen.liveBirds)} / {formatNumber(pen.capacity)}
-          </span>
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center">
+            <span className="flex flex-1 items-center gap-1.5 type-body-sm text-fg-secondary">
+              Live birds
+              <InfoTip label="Live birds">{explain.liveBirds()} Shown against the pen’s capacity.</InfoTip>
+            </span>
+            <span className="type-numeric-md text-fg-primary">
+              {formatNumber(pen.liveBirds)} / {formatNumber(pen.capacity)}
+            </span>
+          </div>
+          <div className="h-1.5 rounded-full bg-subtle">
+            <div className="h-1.5 rounded-full bg-chart-1" style={{ width: `${fill}%` }} />
+          </div>
         </div>
-        <div className="h-1.5 rounded-full bg-subtle">
-          <div className="h-1.5 rounded-full bg-chart-1" style={{ width: `${fill}%` }} />
+
+        <div className="flex gap-3">
+          {pen.stats.map((stat) => (
+            <StatBlock key={stat.label} stat={stat} />
+          ))}
         </div>
-      </div>
 
-      <div className="flex gap-3">
-        {pen.stats.map((stat) => (
-          <StatBlock key={stat.label} stat={stat} />
-        ))}
-      </div>
-
-      <div className="flex items-center gap-2 border-t border-line-subtle pt-3">
-        <span className="flex-1 truncate type-body-sm text-fg-tertiary">{pen.footer}</span>
-        <ChevronRight size={16} strokeWidth={1.5} className="text-icon-secondary" />
-      </div>
-    </Link>
+        <div className="flex items-center gap-2 border-t border-line-subtle pt-3">
+          <span className="flex-1 truncate type-body-sm text-fg-tertiary">{pen.footer}</span>
+          <ChevronRight size={16} strokeWidth={1.5} className="text-icon-secondary" />
+        </div>
+      </Link>
+      {onEdit && (
+        <button
+          type="button"
+          aria-label={`Edit ${penName(catalog, pen.id)}`}
+          onClick={onEdit}
+          className="absolute top-5 right-4 inline-flex size-8 cursor-pointer items-center justify-center rounded-md text-icon-secondary transition-[background-color,transform] duration-(--dur-press) ease-out hover:bg-subtle motion-safe:active:scale-[0.94]"
+        >
+          <Pencil size={16} strokeWidth={1.5} />
+        </button>
+      )}
+    </div>
   )
 }
 

@@ -3,7 +3,6 @@ import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
 import { Field, TextInput } from '../../components/ui/Form'
 import { Modal } from '../../components/ui/Overlay'
-import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { useToast } from '../../components/ui/toastContext'
 import { pens } from '../../data/pens'
 import { useTrade } from '../../data/tradeContext'
@@ -15,7 +14,7 @@ export function AddPenModal({ open, onClose }: Props) {
   const { addPen } = useTrade()
   const nextId = Math.max(0, ...pens.map((p) => p.id)) + 1
   const [name, setName] = useState(`Pen ${nextId}`)
-  const [type, setType] = useState<'Layers' | 'Broilers'>('Broilers')
+  const [description, setDescription] = useState('')
   const [capacity, setCapacity] = useState('1,500')
   const [submitted, setSubmitted] = useState(false)
 
@@ -29,7 +28,7 @@ export function AddPenModal({ open, onClose }: Props) {
     e.preventDefault()
     setSubmitted(true)
     if (errors.name || errors.capacity) return
-    if (!(await addPen({ name: name.trim(), type, capacity: capacityNum }))) return
+    if (!(await addPen({ name: name.trim(), capacity: capacityNum, description: description.trim() }))) return
     toast(`${name} added`)
     onClose()
   }
@@ -55,10 +54,9 @@ export function AddPenModal({ open, onClose }: Props) {
         <Field label="Pen name" error={submitted ? errors.name : undefined}>
           {(id) => <TextInput id={id} value={name} onChange={(e) => setName(e.target.value)} />}
         </Field>
-        <div className="flex flex-col gap-1.5">
-          <span className="type-label-md text-fg-primary">For</span>
-          <SegmentedControl fullWidth label="Bird type" options={['Layers', 'Broilers'] as const} value={type} onChange={setType} />
-        </div>
+        <Field label="Description" hint="Optional, e.g. ‘Deep litter house by the borehole’. The flock placed decides the bird type.">
+          {(id) => <TextInput id={id} value={description} placeholder="Where it is, how it’s built" onChange={(e) => setDescription(e.target.value)} />}
+        </Field>
         <div className="flex gap-3">
           <Field label="Capacity" className="flex-1" error={submitted ? errors.capacity : undefined}>
             {(id) => (

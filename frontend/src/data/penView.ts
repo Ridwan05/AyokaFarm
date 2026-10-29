@@ -70,7 +70,7 @@ export function penKpis(history: History, catalog: Catalog, penId: number): Kpi[
   const live = liveOn(rows, placed, today)
   const liveThen = liveOn(rows, placed, weekAgo)
   const lostPct = (n: number) => ((placed - n) / placed) * 100
-  const layers = catalog.pens.find((p) => p.id === penId)?.bird_types?.lays_eggs ?? false
+  const layers = catalog.birdTypes.find((b) => b.id === flock.bird_type_id)?.lays_eggs ?? false
   const last7 = rows.filter((d) => d.date > weekAgo)
   const prev7 = rows.filter((d) => d.date <= weekAgo && d.date > addDays(weekAgo, -7))
 
@@ -205,7 +205,8 @@ export function flockFacts(history: History, catalog: Catalog, penId: number) {
     feedType: catalog.feedTypes.find((f) => f.id === latest?.feedTypeId)?.name ?? target?.feed ?? '—',
     expectedFeed: target ? `${target.grams} g / bird / day` : 'No feed target set',
     withdrawal: w ? `${w.medication} · clear from ${formatDayMon(w.clearFrom)}` : 'None active',
-    title: `${penName(catalog, penId)} · ${catalog.pens.find((p) => p.id === penId)?.bird_types?.lays_eggs ? 'Layers' : 'Broilers'}`,
+    // The flock decides the bird type; a pen whose flock has closed is empty.
+    title: `${penName(catalog, penId)} · ${flock.status !== 'active' ? 'Empty' : catalog.birdTypes.find((b) => b.id === flock.bird_type_id)?.lays_eggs ? 'Layers' : 'Broilers'}`,
   }
 }
 
