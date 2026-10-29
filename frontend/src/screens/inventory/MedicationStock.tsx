@@ -11,10 +11,8 @@ import { Card, CardHeader } from '../../components/ui/Card'
 import { KpiCard } from '../../components/ui/KpiCard'
 import { NumberCell, Table, TextCell, type Column } from '../../components/ui/Table'
 import { NEAR_REORDER_FACTOR, medications } from '../../data/inventory'
-import { useToast } from '../../components/ui/toastContext'
 import { farmSettings } from '../../data/farmSettings'
 import { dayMonth, daysFrom, kpi, monthName, nairaKpi, num, period, previous, todayISO, weekdayDayMonth, withdrawals } from '../../data/metrics'
-import { people } from '../../data/stockMetrics'
 import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
 import { MedicationDrawer } from '../../features/stock/MedicationDrawer'
@@ -23,6 +21,7 @@ import { isAttendant } from '../../lib/access'
 import { downloadCsv } from '../../lib/export'
 import { formatNumber } from '../../lib/format'
 import { InventoryTabs } from './InventoryTabs'
+import { PendingCounts } from '../../features/stock/PendingCounts'
 import { Presence } from '../../components/ui/Overlay'
 
 /** A flat line for KPIs with no daily trend to show. */
@@ -57,7 +56,6 @@ function status(r: BatchRow, today: string): { tone: Tone; label: string } {
 
 export default function MedicationStock() {
   const router = useRouter()
-  const toast = useToast()
   const user = useCurrentUser()
   const { stockOf, history, catalog } = useTrade()
   const keeper = user.role === 'store-keeper'
@@ -141,7 +139,6 @@ export default function MedicationStock() {
       ['Medication', 'Category', 'Batch', 'Expiry', 'In stock', 'Unit', 'Reorder at', 'Withdrawal days', 'Status'],
       rows.map((r) => [r.name, r.category, r.batch, r.expiry, r.stock, r.unit, r.reorderAt, r.withdrawalDays, status(r, today).label]),
     )
-  const { keeper: keeperName } = people(catalog)
 
   return (
     <>
@@ -152,7 +149,7 @@ export default function MedicationStock() {
         actions={
           readOnly ? undefined : (
             <>
-              <Button leadingIcon={Scale} onClick={() => (keeper ? router.push('/inventory/count') : toast(`${keeperName.charAt(0).toUpperCase() + keeperName.slice(1)} runs the stock count`))}>
+              <Button leadingIcon={Scale} onClick={() => router.push('/inventory/count')}>
                 Stock count
               </Button>
               {keeper ? (
@@ -168,6 +165,8 @@ export default function MedicationStock() {
           )
         }
       />
+      <PendingCounts only="medication" />
+
       <InventoryTabs />
 
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">

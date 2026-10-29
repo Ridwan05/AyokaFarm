@@ -17,11 +17,12 @@ import { Modal, Presence } from '../../components/ui/Overlay'
 import { NumberCell, Table, TextCell, type Column } from '../../components/ui/Table'
 import { farmSettings } from '../../data/farmSettings'
 import { addDays, dayMonth, kpi, layingRate, lastDays, naira, num, period, previous, rowsOn, series, todayISO, weekdayDayMonth, weekdayDm } from '../../data/metrics'
-import { crates, dailyLedger, heldEggs, people, salesOfItem } from '../../data/stockMetrics'
+import { crates, dailyLedger, heldEggs, salesOfItem } from '../../data/stockMetrics'
 import { useTrade } from '../../data/tradeContext'
 import { isAttendant } from '../../lib/access'
 import { downloadCsv } from '../../lib/export'
 import { createClient } from '../../lib/supabase/client'
+import { PendingCounts } from '../../features/stock/PendingCounts'
 import { InventoryTabs } from './InventoryTabs'
 
 /** A flat line for KPIs with no daily trend to show. */
@@ -42,7 +43,6 @@ export default function EggStore() {
   // Pen attendants can look, not act (BRD §4: Inventory V).
   const readOnly = isAttendant(role)
   const today = todayISO()
-  const { keeper: keeperName } = people(catalog)
 
   const held = heldEggs(history, catalog, today)
   const heldTotal = held.reduce((n, h) => n + h.eggs, 0)
@@ -106,7 +106,7 @@ export default function EggStore() {
             </Button>
           ) : (
             <>
-              <Button leadingIcon={Scale} onClick={() => toast(`${keeperName.charAt(0).toUpperCase() + keeperName.slice(1)} runs the stock count`)}>
+              <Button leadingIcon={Scale} onClick={() => router.push('/inventory/count')}>
                 Stock count
               </Button>
               <Button variant="primary" leadingIcon={Plus} onClick={() => setWritingOff(true)}>
@@ -116,6 +116,8 @@ export default function EggStore() {
           )
         }
       />
+      <PendingCounts only="eggs" />
+
       <InventoryTabs />
 
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">

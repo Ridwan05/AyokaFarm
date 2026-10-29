@@ -19,12 +19,12 @@ export const modules: { id: AppModule; label: string }[] = [
   { id: 'admin', label: 'Admin & settings' },
 ]
 
-type Area = AppModule | 'reports' | 'deliveries'
+type Area = AppModule | 'reports' | 'deliveries' | 'count'
 
 /** Which permission module guards each area of the app (longest prefix wins). */
 const areas: { prefix: string; module: Area; label: string; group: string }[] = [
   { prefix: '/deliveries', module: 'deliveries', label: 'Deliveries', group: 'Trade' },
-  { prefix: '/inventory/count', module: 'deliveries', label: 'Weekly count', group: 'Operate' },
+  { prefix: '/inventory/count', module: 'count', label: 'Weekly count', group: 'Operate' },
   { prefix: '/production', module: 'production', label: 'Production', group: 'Operate' },
   { prefix: '/production/entry', module: 'production', label: 'Daily entry', group: 'Operate' },
   { prefix: '/pens', module: 'production', label: 'Pens & flocks', group: 'Operate' },
@@ -59,6 +59,8 @@ export const can = (user: User, module: AppModule, action: keyof ModuleAccess = 
 function canView(user: User, module: Area) {
   // Receiving deliveries and the weekly count: roles that see only their own side of purchases (the store keeper).
   if (module === 'deliveries') return accessOf(user, 'purchases') === 'own'
+  // The weekly count: anyone who can adjust stock (store keeper, farm manager, owner).
+  if (module === 'count') return can(user, 'inventory', 'add') || accessOf(user, 'purchases') === 'own'
   // Reports are for the people who run the farm and its money.
   if (module === 'reports') return user.role !== 'store-keeper' && !isAttendant(user.role) && can(user, 'dashboard')
   // "Own" purchases means receiving deliveries, not the purchases list.

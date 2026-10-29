@@ -1,8 +1,8 @@
 'use client'
 
 import { Check, Minus, Plus, Trash2 } from 'lucide-react'
-import { useParams, useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
+import { useParams, useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useEffect, useState } from 'react'
 import { toast } from 'sonner'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Alert } from '../components/ui/Alert'
@@ -11,12 +11,14 @@ import { Card, CardHeader } from '../components/ui/Card'
 import { AutoInput, Field, SelectInput, TextInput } from '../components/ui/Form'
 
 import { feedTypes, medications } from '../data/inventory'
-import { BAG_KG, entryContext, formatAge, MEDICATION_MODES, MEDICATION_PURPOSES, todayISO, type MedicationLine } from '../data/production'
-import { farm } from '../data/session'
+import { staffWithRole, weekdayDayMonth } from '../data/metrics'
+import { BAG_KG, canCorrectEntry, entryContext, formatAge, MEDICATION_MODES, MEDICATION_PURPOSES, savedEntry, todayISO, type MedicationLine } from '../data/production'
+import { farm, farmTodayISO } from '../data/session'
 import { useCurrentUser } from '../data/sessionContext'
 import { useTrade } from '../data/tradeContext'
 import { isAttendant } from '../lib/access'
 import { cn } from '../lib/cn'
+import { createClient } from '../lib/supabase/client'
 import { formatNumber, formatShortDate, formatSignedPct } from '../lib/format'
 import { explain } from '../data/explain'
 import { farmSettings } from '../data/farmSettings'
@@ -29,6 +31,8 @@ type Draft = {
   pieces: string
   cracked: string
   meds: { medication: string; qty: string; mode: MedicationLine['mode']; purpose: MedicationLine['purpose'] }[]
+  /** For the farm manager or vet, e.g. signs of illness. */
+  notes: string
 }
 
 /** A typed count, or null while the field is empty. */
@@ -40,7 +44,10 @@ const draftKey = (penId: number) => `ayk:entry:${penId}:${todayISO()}`
 function loadDraft(penId: number): Draft | null {
   try {
     const raw = localStorage.getItem(draftKey(penId))
-    return raw ? (JSON.parse(raw) as Draft) : null
+    // Drafts saved before notes existed have none.
+    if (!raw) return null
+    const d = JSON.parse(raw) as Partial<Draft> & Omit<Draft, 'notes'>
+    return { ...d, notes: d.notes ?? '' }
   } catch {
     return null
   }
@@ -75,51 +82,105 @@ function Stepper({ id, value, onChange, invalid }: { id: string; value: string; 
   )
 }
 
-/** P-M2 · Daily entry for one pen (BRD §5.6). One per pen per day. */
+/** P-M2 · Daily entry for one pen (BRD §5.6). One per pen per day; ?entry=<id> corrects a saved one. */
 export default function ProductionEntry() {
+  // useSearchParams needs a Suspense boundary in the App Router.
+  return (
+    <Suspense>
+      <EntryScreen />
+    </Suspense>
+  )
+}
+
+function EntryScreen() {
   const { penId: param } = useParams<{ penId: string }>()
   const penId = Number(param)
+  const editId = Number(useSearchParams().get('entry')) || null
   const router = useRouter()
   const user = useCurrentUser()
-  const { productionRecords, addProductionRecord, stockOf } = useTrade()
+  const { productionRecords, addProductionRecord, updateProductionRecord, stockOf, history, catalog } = useTrade()
   const ctx = entryContext(penId)
+  const found = editId ? savedEntry(history, catalog, editId) : null
+  const editing = found && found.row.penId === penId ? found : null
 
-  const blank: Draft = { died: '', feedType: ctx?.feedType ?? feedTypes[0].name, feedBags: '', crates: '', pieces: '', cracked: '', meds: [] }
+  const blank: Draft = editing
+    ? {
+        died: String(editing.row.mortality),
+        feedType: editing.feedType ?? ctx?.feedType ?? feedTypes[0]?.name ?? '',
+        feedBags: String(editing.row.feedBags),
+        crates: editing.crates,
+        pieces: editing.pieces,
+        cracked: editing.cracked,
+        meds: editing.meds,
+        notes: '',
+      }
+    : { died: '', feedType: ctx?.feedType ?? feedTypes[0]?.name ?? '', feedBags: '', crates: '', pieces: '', cracked: '', meds: [], notes: '' }
   const [draft, setDraft] = useState<Draft>(blank)
   const [restored, setRestored] = useState(false)
   const [saved, setSaved] = useState(false)
 
-  // Read after mount: the server render has no access to this phone's storage.
+  // Read after mount: the server render has no access to this phone's storage. Corrections don't use drafts.
   useEffect(() => {
+    if (editId) return
     const d = loadDraft(penId)
     if (d) {
       // oxlint-disable-next-line react/set-state-in-effect
       setDraft(d)
       setRestored(true)
     }
-  }, [penId])
+  }, [penId, editId])
+  // A correction starts from the saved note (daily rows from the view don't carry it).
+  useEffect(() => {
+    if (!editId) return
+    let live = true
+    void createClient()
+      .from('production_records')
+      .select('notes')
+      .eq('id', editId)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (live && data?.notes) setDraft((d) => ({ ...d, notes: data.notes ?? '' }))
+      })
+    return () => {
+      live = false
+    }
+  }, [editId])
   const touched = JSON.stringify(draft) !== JSON.stringify(blank)
   useEffect(() => {
-    if (!saved && touched) saveDraft(penId, draft)
-  }, [draft, penId, saved, touched])
+    if (!editId && !saved && touched) saveDraft(penId, draft)
+  }, [draft, penId, saved, touched, editId])
 
   if (!ctx) {
     return <PageHeader backTo="/" title="Pen not found" description={`There is no Pen ${param} on the farm.`} />
+  }
+  if (editId && !editing) {
+    return <PageHeader backTo={`/pens/${penId}`} title="Entry not found" description="It may have been deleted, or it’s older than the records loaded." />
+  }
+  if (editing && !canCorrectEntry(user, editing.row)) {
+    return (
+      <>
+        <PageHeader backTo={`/pens/${penId}`} title={`Correct entry · ${weekdayDayMonth(editing.row.date)}`} />
+        <Alert tone="warning" title="You can’t correct this entry">
+          Only whoever recorded it can correct it, on the day it was saved. Ask {managerNames(catalog) || 'the farm manager'} to correct it.
+        </Alert>
+      </>
+    )
   }
 
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }))
   const setMed = (i: number, patch: Partial<Draft['meds'][number]>) => set('meds', draft.meds.map((m, j) => (j === i ? { ...m, ...patch } : m)))
   const layers = ctx.type === 'Layers'
   const today = todayISO()
-  const backTo = isAttendant(user.role) ? '/' : `/pens/${penId}`
+  const backTo = editing ? `/pens/${penId}` : isAttendant(user.role) ? '/' : `/pens/${penId}`
 
   const existing = productionRecords.find((r) => r.penId === penId && r.date === today)
   const recordedAt = existing?.time ?? ctx.recordedAt
 
-  // Calculated fields
+  // Calculated fields. A correction starts from that day's opening birds, not today's.
+  const opening = editing ? editing.row.opening : ctx.opening
   const died = num(draft.died)
-  const closing = ctx.opening - (died ?? 0)
-  const mortalityPct = died !== null && ctx.opening ? (died / ctx.opening) * 100 : 0
+  const closing = opening - (died ?? 0)
+  const mortalityPct = died !== null && opening ? (died / opening) * 100 : 0
   const overMortality = mortalityPct > farmSettings.mortalityAlertPct
   const bags = num(draft.feedBags)
   const feedKg = (bags ?? 0) * BAG_KG
@@ -131,9 +192,11 @@ export default function ProductionEntry() {
   const layingRate = eggs !== null && closing ? (eggs / closing) * 100 : null
 
   // FR-MED-1: a pen can't use more of a medication than the store holds.
+  // A correction can reuse what this entry already took out of the store.
+  const alreadyUsed = (name: string) => (editing ? editing.meds.filter((m) => m.medication === name).reduce((n, m) => n + (num(m.qty) ?? 0), 0) : 0)
   const medStock = (name: string) => {
     const m = medications.find((x) => x.name === name)
-    return m ? { stock: stockOf(m.name, m.stock), unit: m.unit } : { stock: 0, unit: '' }
+    return m ? { stock: stockOf(m.name, m.stock) + alreadyUsed(m.name), unit: m.unit } : { stock: 0, unit: '' }
   }
   const medError = (i: number) => {
     const line = draft.meds[i]
@@ -145,7 +208,7 @@ export default function ProductionEntry() {
     return usedOnPen > stock ? `Only ${formatNumber(stock)} ${unit} in the store` : undefined
   }
 
-  const diedError = died !== null && died > ctx.opening ? `There are only ${formatNumber(ctx.opening)} birds in the pen` : undefined
+  const diedError = died !== null && died > opening ? `There are only ${formatNumber(opening)} birds in the pen` : undefined
   const valid =
     died !== null &&
     !diedError &&
@@ -155,11 +218,12 @@ export default function ProductionEntry() {
 
   async function save() {
     if (!valid || !ctx) return
-    if (!(await addProductionRecord({
+    const record = {
       penId,
-      date: today,
+      // New entries are for the farm's today at the moment of saving (a screen left open past midnight).
+      date: editing ? editing.row.date : farmTodayISO(),
       time: clockTime(),
-      opening: ctx.opening,
+      opening,
       died: died!,
       closing,
       feedType: draft.feedType,
@@ -171,13 +235,18 @@ export default function ProductionEntry() {
       layingRate,
       medications: draft.meds.map((m) => ({ medication: m.medication, qty: num(m.qty)!, mode: m.mode, purpose: m.purpose })),
       recordedBy: user.name.split(' ')[0],
-    }))) return
-    saveDraft(penId, null)
+      notes: draft.notes.trim() || undefined,
+    }
+    if (!(await (editing ? updateProductionRecord(editing.row.id, record) : addProductionRecord(record)))) return
+    if (!editing) saveDraft(penId, null)
     setSaved(true)
+    const who = managerNames(catalog)
     if (overMortality) {
-      toast.warning(`Pen ${penId}: ${died} died today (${mortalityPct.toFixed(1)}%)`, { description: 'Above the 0.5% alert level. Emeka and Adeola have been told on WhatsApp.' })
+      toast.warning(`Pen ${penId}: ${died} died (${mortalityPct.toFixed(1)}%)`, {
+        description: `Above the ${farmSettings.mortalityAlertPct}% alert level. It shows in Alerts${who ? ` for ${who}` : ''}.`,
+      })
     } else {
-      toast.success(`Pen ${penId} recorded for today`)
+      toast.success(editing ? `Pen ${penId} entry for ${weekdayDayMonth(editing.row.date)} corrected` : `Pen ${penId} recorded for today`)
     }
     window.setTimeout(() => router.push(backTo), 700)
   }
@@ -185,22 +254,30 @@ export default function ProductionEntry() {
   const header = (
     <PageHeader
       backTo={backTo}
-      eyebrow={[`Pen ${penId} · ${ctx.type}`, formatShortDate(farm.today)]}
-      title="Today’s entry"
+      eyebrow={[`Pen ${penId} · ${ctx.type}`, editing ? weekdayDayMonth(editing.row.date) : formatShortDate(farm.today)]}
+      title={editing ? `Correct entry · ${weekdayDayMonth(editing.row.date)}` : 'Today’s entry'}
       description={`Flock ${ctx.pen.flock} · ${ctx.pen.breed} · age ${formatAge(ctx.ageDays)}`}
     />
   )
 
   // FR-PRD-1: one record per pen per day.
-  if (recordedAt && !saved) {
+  if (!editing && recordedAt && !saved) {
+    const todays = history.daily.find((d) => d.penId === penId && d.date === today)
+    const mayCorrect = todays && canCorrectEntry(user, todays)
     return (
       <>
         {header}
         <Alert tone="success" title={`Pen ${penId} is already recorded for today (${recordedAt})`}>
-          There’s one entry per pen per day. To correct it, ask Emeka — the farm manager can edit it with a reason.
+          There’s one entry per pen per day.{' '}
+          {mayCorrect ? 'You can still correct it today.' : `To correct it, ask ${managerNames(catalog) || 'the farm manager'}.`}
         </Alert>
-        <div>
+        <div className="flex flex-wrap gap-3">
           <Button onClick={() => router.push(backTo)}>Back</Button>
+          {mayCorrect && (
+            <Button variant="primary" onClick={() => router.push(`/production/entry/${penId}?entry=${todays.id}`)}>
+              Correct today’s entry
+            </Button>
+          )}
         </div>
       </>
     )
@@ -226,7 +303,7 @@ export default function ProductionEntry() {
           <CardHeader title="Birds" />
           <div className="grid grid-cols-1 gap-4 px-5 pb-5 sm:grid-cols-3">
             <Field label="Opening" auto hint="Yesterday’s closing">
-              {(id) => <AutoInput id={id} value={formatNumber(ctx.opening)} label="Opening" info="Yesterday’s closing count for this flock, or the birds placed if this is the first entry." />}
+              {(id) => <AutoInput id={id} value={formatNumber(opening)} label="Opening" info="Yesterday’s closing count for this flock, or the birds placed if this is the first entry." />}
             </Field>
             <Field label="Died today" error={diedError}>
               {(id) => <Stepper id={id} value={draft.died} onChange={(v) => set('died', v)} invalid={!!diedError} />}
@@ -238,7 +315,7 @@ export default function ProductionEntry() {
           {overMortality && (
             <div className="px-5 pb-5">
               <Alert tone="danger" compact title={`${mortalityPct.toFixed(1)}% died — above the ${farmSettings.mortalityAlertPct}% alert level`}>
-                Saving tells Emeka and Adeola straight away. Add a note to the vet if you see signs of illness.
+                Saving puts it in Alerts{managerNames(catalog) ? ` for ${managerNames(catalog)}` : ''}. Add a note below if you see signs of illness.
               </Alert>
             </div>
           )}
@@ -300,7 +377,7 @@ export default function ProductionEntry() {
                 {(id) => <TextInput id={id} inputMode="numeric" pattern="[0-9]*" placeholder="0" value={draft.cracked} onChange={(e) => set('cracked', e.target.value.replace(/\D/g, ''))} />}
               </Field>
               <Field label="Laying rate" auto hint={`${formatNumber(eggs ?? 0)} eggs`}>
-                {(id) => <AutoInput id={id} value={layingRate === null ? '—' : `${layingRate.toFixed(1)}%`} label="Laying rate" info={`Eggs collected (crates × ${farmSettings.eggsPerCrate} + loose) ÷ opening birds.`} />}
+                {(id) => <AutoInput id={id} value={layingRate === null ? '—' : `${layingRate.toFixed(1)}%`} label="Laying rate" info={`Eggs collected (crates × ${farmSettings.eggsPerCrate} + loose) ÷ birds at the end of the day (closing).`} />}
               </Field>
             </div>
           </Card>
@@ -360,11 +437,31 @@ export default function ProductionEntry() {
             <div>
               <Button
                 leadingIcon={Plus}
-                onClick={() => set('meds', [...draft.meds, { medication: medications[0].name, qty: '', mode: 'Water', purpose: 'Prevention' }])}
+                disabled={!medications.length}
+                onClick={() => medications[0] && set('meds', [...draft.meds, { medication: medications[0].name, qty: '', mode: 'Water', purpose: 'Prevention' }])}
               >
                 Add medication
               </Button>
+              {!medications.length && <p className="pt-2 type-body-sm text-fg-tertiary">No medications are set up yet (Settings → Lists).</p>}
             </div>
+          </div>
+        </Card>
+
+        <Card>
+          <CardHeader title="Notes" meta={<span className="type-body-sm text-fg-tertiary">Optional</span>} />
+          <div className="px-5 pb-5">
+            <Field label="Note for the farm manager or vet" hint="e.g. birds sneezing, water line low, feeder broken">
+              {(id) => (
+                <textarea
+                  id={id}
+                  rows={3}
+                  maxLength={500}
+                  value={draft.notes}
+                  onChange={(e) => set('notes', e.target.value)}
+                  className="w-full resize-y rounded-md border border-line-strong bg-surface px-3 py-2.5 type-body-lg text-fg-primary outline-none placeholder:text-fg-tertiary focus:border-line-focus"
+                />
+              )}
+            </Field>
           </div>
         </Card>
 
@@ -376,7 +473,7 @@ export default function ProductionEntry() {
           <Button type="submit" variant="primary" size="lg" className="flex-[2] lg:flex-none" disabled={!valid || saved}>
             {/* Crossfade the label with a little blur so the state change reads as one motion. */}
             <span className="grid place-items-center">
-              <span className={cn('col-start-1 row-start-1 transition-[opacity,filter] duration-200 ease-out', saved && 'opacity-0 blur-[2px]')}>Save entry</span>
+              <span className={cn('col-start-1 row-start-1 transition-[opacity,filter] duration-200 ease-out', saved && 'opacity-0 blur-[2px]')}>{editing ? 'Save correction' : 'Save entry'}</span>
               <span className={cn('col-start-1 row-start-1 flex items-center gap-1.5 transition-[opacity,filter] duration-200 ease-out', !saved && 'opacity-0 blur-[2px]')} aria-hidden={!saved}>
                 <Check size={20} strokeWidth={2} /> Saved
               </span>
@@ -386,4 +483,9 @@ export default function ProductionEntry() {
       </form>
     </>
   )
+}
+
+/** First names of the owner(s) and farm manager(s), who see alerts, e.g. "Emeka, Ridwan". */
+function managerNames(catalog: Parameters<typeof staffWithRole>[0]) {
+  return [...staffWithRole(catalog, 'farm_manager'), ...staffWithRole(catalog, 'owner')].join(', ')
 }

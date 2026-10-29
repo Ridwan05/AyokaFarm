@@ -12,7 +12,6 @@ import { InfoTip } from '../../components/ui/InfoTip'
 import { explain } from '../../data/explain'
 import { NumberCell, Table, TextCell, type Column } from '../../components/ui/Table'
 import { feedTypes, type FeedType } from '../../data/inventory'
-import { useToast } from '../../components/ui/toastContext'
 import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
 import { AskReorderModal } from '../../features/stock/AskReorderModal'
@@ -25,6 +24,7 @@ import { InventoryTabs, LedgerNote } from './InventoryTabs'
 import { Presence } from '../../components/ui/Overlay'
 import { farmSettings } from '../../data/farmSettings'
 import { addDays, dayMonth, todayISO, weekdayDm } from '../../data/metrics'
+import { PendingCounts } from '../../features/stock/PendingCounts'
 import { dailyLedger, feedSource, people, reorderSuggestion } from '../../data/stockMetrics'
 
 const dash = <NumberCell tone="muted">—</NumberCell>
@@ -49,7 +49,6 @@ const columns: Column<LedgerRow>[] = [
 
 export default function FeedStock() {
   const router = useRouter()
-  const toast = useToast()
   const user = useCurrentUser()
   const { stockOf, history, catalog } = useTrade()
   const keeper = user.role === 'store-keeper'
@@ -67,7 +66,7 @@ export default function FeedStock() {
     : []
   const suggestion = reorderSuggestion(history, catalog, types)
   const low = suggestion && suggestion.daysOfCover <= farmSettings.lowStockDays ? suggestion : null
-  const { manager, owner, keeper: keeperName } = people(catalog)
+  const { manager, owner } = people(catalog)
   const from = suggestion?.supplier ? ` from ${suggestion.supplier}` : ''
   const about = low?.days ? ` (≈${low.days} days)` : ''
 
@@ -87,7 +86,7 @@ export default function FeedStock() {
         actions={
           readOnly ? undefined : (
             <>
-              <Button leadingIcon={Scale} onClick={() => (keeper ? router.push('/inventory/count') : toast(`${keeperName.charAt(0).toUpperCase() + keeperName.slice(1)} runs the stock count`))}>
+              <Button leadingIcon={Scale} onClick={() => router.push('/inventory/count')}>
                 Stock count
               </Button>
               {keeper ? (
@@ -103,6 +102,8 @@ export default function FeedStock() {
           )
         }
       />
+      <PendingCounts only="feed" />
+
       <InventoryTabs />
 
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">

@@ -31,6 +31,7 @@ import { EditFlockDrawer } from '../features/pens/EditFlockDrawer'
 import { EditPenModal } from '../features/pens/EditPenModal'
 import { LayStartModal } from '../features/pens/LayStartModal'
 import { PenMoneyItemsModal } from '../features/pens/PenMoneyItemsModal'
+import { EntryActions } from '../features/production/EntryActions'
 import { CLOSE_REASONS, saveFlock } from '../features/pens/saveFlock'
 import { accessOf, canRecordProduction, isAttendant } from '../lib/access'
 import { downloadCsv } from '../lib/export'
@@ -296,7 +297,7 @@ function Overview({ penId }: { penId: number }) {
       <Card>
         <CardHeader title="Daily entries" meta={<span className="type-body-sm text-fg-tertiary">Last 7 entries</span>} />
         {entries.length ? (
-          <Table columns={entryColumns(m.thresholdBirds, m.typicalMax)} rows={entries} rowKey={(e) => e.iso} />
+          <Table columns={entryColumns(m.thresholdBirds, m.typicalMax)} rows={entries} rowKey={(e) => e.iso} rowActions={(e) => <EntryActions row={rows.find((d) => d.date === e.iso)} />} />
         ) : (
           <p className="px-5 pb-6 type-body-md text-fg-tertiary">No entries recorded for this flock yet.</p>
         )}
@@ -423,7 +424,7 @@ function ProductionTab({ penId }: { penId: number }) {
         action={{ label: 'Export', onClick: exportRows }}
       />
       {entries.length ? (
-        <Table columns={entryColumns(m.thresholdBirds, m.typicalMax)} rows={entries} rowKey={(e) => e.iso} />
+        <Table columns={entryColumns(m.thresholdBirds, m.typicalMax)} rows={entries} rowKey={(e) => e.iso} rowActions={(e) => <EntryActions row={rows.find((d) => d.date === e.iso)} />} />
       ) : (
         <p className="px-5 pb-6 type-body-md text-fg-tertiary">No entries in the last 30 days.</p>
       )}

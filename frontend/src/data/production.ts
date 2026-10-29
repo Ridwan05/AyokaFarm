@@ -1,6 +1,9 @@
+import { accessOf } from '../lib/access'
 import { pensToday, type PenToday } from './dashboard'
+import { farmSettings } from './farmSettings'
 import { pens, type BirdType } from './pens'
-import { farm } from './session'
+import type { Catalog, DailyRow, History } from './remote'
+import { farm, farmTodayISO, type User } from './session'
 import { feedBands } from './settings'
 
 // ── Daily entry (P-M · pen attendant) ──────────────────────────────
@@ -68,6 +71,50 @@ export function entryContext(penId: number) {
 }
 
 export const formatAge = (days: number) => `${Math.floor(days / 7)} wk ${days % 7} d`
+
+// ── Correcting a saved entry ────────────────────────────────────────
+
+const MODE_LABEL: Record<string, MedicationLine['mode']> = { water: 'Water', feed: 'Feed', injection: 'Injection', spray: 'Spray', eye_nose_drop: 'Eye/nose drop' }
+const PURPOSE_LABEL: Record<string, MedicationLine['purpose']> = { treatment: 'Treatment', prevention: 'Prevention', vaccination: 'Vaccination', vitamin: 'Vitamin' }
+
+/** A saved entry as form values: counts, feed, eggs as crates + loose, and its medication lines. */
+export function savedEntry(history: History, catalog: Catalog, recordId: number) {
+  const row = history.daily.find((d) => d.id === recordId)
+  if (!row) return null
+  const perCrate = farmSettings.eggsPerCrate
+  return {
+    row,
+    feedType: catalog.feedTypes.find((f) => f.id === row.feedTypeId)?.name ?? null,
+    crates: row.eggs === null ? '' : String(Math.floor(row.eggs / perCrate)),
+    pieces: row.eggs === null ? '' : String(row.eggs % perCrate),
+    cracked: row.cracked === null ? '' : String(row.cracked),
+    meds: history.medLines
+      .filter((l) => l.penId === row.penId && l.date === row.date)
+      .map((l) => ({
+        medication: catalog.medications.find((m) => m.id === l.medicationId)?.name ?? '',
+        qty: String(l.quantity),
+        mode: MODE_LABEL[l.mode] ?? 'Water',
+        purpose: PURPOSE_LABEL[l.purpose] ?? 'Treatment',
+      })),
+  }
+}
+
+/** The farm day an entry was first saved on. */
+const savedOn = (row: DailyRow) => (row.createdAt ? farmTodayISO(new Date(row.createdAt)) : row.date)
+
+/**
+ * Who may correct a saved entry (same rule as the database's edit window): the owner and farm
+ * manager always; whoever recorded it, within the edit window (the same day by default).
+ */
+export function canCorrectEntry(user: User, row: DailyRow) {
+  if (user.role === 'owner' || user.role === 'farm-manager') return true
+  if (accessOf(user, 'production', 'edit') === 'none' || row.recordedBy !== user.name) return false
+  const days = Math.round((Date.parse(farmTodayISO()) - Date.parse(savedOn(row))) / 86_400_000)
+  return days <= farmSettings.editWindowDays
+}
+
+/** Deleting an entry needs production delete permission (the owner by default). */
+export const canDeleteEntry = (user: User) => accessOf(user, 'production', 'delete') !== 'none'
 
 /** Today's row for a pen, with any entry saved this session filled in. */
 export function withTodaysRecord(p: PenToday, records: ProductionRecord[]): PenToday {

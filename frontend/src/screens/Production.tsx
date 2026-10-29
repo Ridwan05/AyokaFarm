@@ -43,6 +43,7 @@ import type { DailyRow } from '../data/remote'
 import { farm } from '../data/session'
 import { useCurrentUser } from '../data/sessionContext'
 import { useTrade } from '../data/tradeContext'
+import { EntryActions } from '../features/production/EntryActions'
 import { canRecordProduction, canSeePen, isAttendant } from '../lib/access'
 import { downloadCsv } from '../lib/export'
 import { formatCrates, formatDayMon, formatNumber, formatShortDate, formatSignedPct, parseISODate } from '../lib/format'
@@ -253,7 +254,14 @@ export default function Production() {
           title={`Pen entries · ${range.label}`}
           meta={<span className="type-body-sm text-fg-tertiary">{period === 'Day' ? 'Opening and closing birds are calculated' : 'Opening is the first day, closing the last'}</span>}
         />
-        <Table columns={columns} rows={rows} rowKey={(p) => String(p.penId)} onRowClick={(p) => router.push(`/pens/${p.penId}`)} />
+        <Table
+          columns={columns}
+          rows={rows}
+          rowKey={(p) => String(p.penId)}
+          onRowClick={(p) => router.push(`/pens/${p.penId}`)}
+          // One day shows one entry per pen, which can be corrected or deleted here.
+          rowActions={period === 'Day' ? (p) => <EntryActions row={history.daily.find((d) => d.penId === p.penId && d.date === day)} /> : undefined}
+        />
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-b-xl bg-canvas px-5 py-3 type-label-md">
           <span className="flex flex-1 items-center gap-1.5 text-fg-primary">
             Farm total · {range.label}

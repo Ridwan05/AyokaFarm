@@ -1934,8 +1934,8 @@ export type Database = {
           purchase_id: number | null
           quantity_change: number
           reason_id: number | null
-          status: string
           recorded_by: string
+          status: string
         }
         Insert: {
           adjusted_on?: string
@@ -1952,8 +1952,8 @@ export type Database = {
           purchase_id?: number | null
           quantity_change: number
           reason_id?: number | null
-          status?: string
           recorded_by?: string
+          status?: string
         }
         Update: {
           adjusted_on?: string
@@ -1970,10 +1970,17 @@ export type Database = {
           purchase_id?: number | null
           quantity_change?: number
           reason_id?: number | null
-          status?: string
           recorded_by?: string
+          status?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "stock_adjustments_decided_by_fkey"
+            columns: ["decided_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "stock_adjustments_feed_type_id_fkey"
             columns: ["feed_type_id"]
@@ -2429,10 +2436,6 @@ export type Database = {
       }
     }
     Functions: {
-      save_daily_entry: {
-        Args: { entry: Json; entry_id?: number; medications?: Json }
-        Returns: number
-      }
       add_birds_to_flock: {
         Args: { flock_id: number; placed_on: string; sources: Json }
         Returns: undefined
@@ -2547,6 +2550,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      save_daily_entry: {
+        Args: { entry: Json; entry_id?: number; medications?: Json }
+        Returns: number
       }
       set_flock_sources: {
         Args: { flock_id: number; sources: Json }

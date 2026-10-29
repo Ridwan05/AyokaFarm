@@ -11,7 +11,7 @@ import type { StockKind } from '../../data/deliveries'
 import { feedTypes, medications } from '../../data/inventory'
 import { useCurrentUser } from '../../data/sessionContext'
 import { useTrade } from '../../data/tradeContext'
-import { nowHM, todayISO, weekdayDm } from '../../data/metrics'
+import { nowHM, roleWithName, todayISO, weekdayDm } from '../../data/metrics'
 import { formatNumber } from '../../lib/format'
 
 const KINDS = ['Feed', 'Medication'] as const
@@ -19,7 +19,7 @@ const num = (v: string) => Number(v.replace(/,/g, '')) || 0
 
 /** Store Keeper receives an order: what arrived, what went back, what goes into the store. */
 export function ReceiveDeliveryDrawer({ onClose }: { onClose: () => void }) {
-  const { orders, suppliers, stockOf, receiveDelivery } = useTrade()
+  const { orders, suppliers, stockOf, receiveDelivery, catalog } = useTrade()
   const user = useCurrentUser()
   const toast = useToast()
   const [kind, setKind] = useState<(typeof KINDS)[number]>(orders[0]?.kind === 'medication' ? 'Medication' : 'Feed')
@@ -30,6 +30,9 @@ export function ReceiveDeliveryDrawer({ onClose }: { onClose: () => void }) {
   const [note, setNote] = useState('')
   const [sentBack, setSentBack] = useState('0')
   const [submitted, setSubmitted] = useState(false)
+  // Medication: the batch printed on the pack, so doses come out first-expiry-first-out.
+  const [batchNo, setBatchNo] = useState('')
+  const [expiry, setExpiry] = useState('')
 
   const pick = (r: string) => {
     setRef(r)
@@ -47,13 +50,16 @@ export function ReceiveDeliveryDrawer({ onClose }: { onClose: () => void }) {
     delivered: num(delivered) > 0 ? undefined : 'Enter what arrived',
     sentBack: num(sentBack) > num(delivered) ? 'More than was delivered' : undefined,
     note: note.trim() ? undefined : 'Copy the number from the delivery note',
+    batchNo: kind === 'Medication' && !batchNo.trim() ? 'Copy the batch number from the pack' : undefined,
+    expiry: kind !== 'Medication' ? undefined : !expiry ? 'Enter the expiry date on the pack' : expiry <= todayISO() ? 'This batch has already expired — send it back' : undefined,
   }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setSubmitted(true)
-    if (!order || errors.delivered || errors.sentBack || errors.note) return
-    if (!(await receiveDelivery(order.ref, num(delivered), num(sentBack), note.trim(), user.name.split(' ')[0]))) return
+    if (!order || errors.delivered || errors.sentBack || errors.note || errors.batchNo || errors.expiry) return
+    const batch = kind === 'Medication' ? { batchNo: batchNo.trim(), expiry } : undefined
+    if (!(await receiveDelivery(order.ref, num(delivered), num(sentBack), note.trim(), user.name.split(' ')[0], batch))) return
     toast(`${order.ref} received · ${formatNumber(intoStore)} ${order.stockUnit} into the store`)
     onClose()
   }
@@ -78,7 +84,7 @@ export function ReceiveDeliveryDrawer({ onClose }: { onClose: () => void }) {
       <form id="receive" onSubmit={submit} className="flex flex-col gap-5">
         <SegmentedControl fullWidth label="Delivery type" options={KINDS} value={kind} onChange={(k) => { setKind(k); const first = orders.find((o) => o.kind === k.toLowerCase()); if (first) pick(first.ref) }} />
         {!order ? (
-          <p className="type-body-md text-fg-secondary">No {kind.toLowerCase()} orders are waiting. Ask Emeka to reorder if stock is low.</p>
+          <p className="type-body-md text-fg-secondary">No {kind.toLowerCase()} orders are waiting. Ask {roleWithName(catalog, 'farm_manager', 'the farm manager')} to reorder if stock is low.</p>
         ) : (
           <>
             <Field label="Order" hint={`Ordered by ${order.orderedBy} on ${order.ordered} · ${order.qty} ${order.unit} ${order.item}`}>
@@ -103,6 +109,16 @@ export function ReceiveDeliveryDrawer({ onClose }: { onClose: () => void }) {
                 {(id) => <TextInput id={id} placeholder="GF-DN-5521" value={note} onChange={(e) => setNote(e.target.value)} />}
               </Field>
             </div>
+            {kind === 'Medication' && (
+              <div className="flex gap-3">
+                <Field label="Batch number" hint="On the pack or box" className="flex-1" error={submitted ? errors.batchNo : undefined}>
+                  {(id) => <TextInput id={id} value={batchNo} onChange={(e) => setBatchNo(e.target.value)} placeholder="AX-2209" />}
+                </Field>
+                <Field label="Expiry date" hint="Used for expiry alerts" className="flex-1" error={submitted ? errors.expiry : undefined}>
+                  {(id) => <TextInput id={id} type="date" min={todayISO()} value={expiry} onChange={(e) => setExpiry(e.target.value)} />}
+                </Field>
+              </div>
+            )}
             <Field label="Into the store" auto hint={`${num(delivered)} delivered − ${num(sentBack)} sent back`}>
               {(id) => <AutoInput id={id} value={`${formatNumber(intoStore)} ${order.stockUnit}`} />}
             </Field>

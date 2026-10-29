@@ -19,7 +19,7 @@ import { dayMonth } from './purchaseView'
 const KINDS = ['Feed', 'Birds', 'Medication'] as const
 const num = (v: string) => Number(v.replace(/,/g, '')) || 0
 
-type Item = { name: string; unit: string; per: string; unitLabel: string; hint: string; defaultPrice: number }
+type Item = { name: string; unit: string; per: string; unitLabel: string; hint: string; defaultPrice: number; /** Medication: what stock is counted in (g, vials…). */ stockUnit?: string }
 
 /** Built when the drawer opens: feed types and medications are loaded from Supabase after this module is imported. */
 const buildItems = (): Record<PurchaseKind, Item[]> => ({
@@ -40,6 +40,7 @@ const buildItems = (): Record<PurchaseKind, Item[]> => ({
     unitLabel: 'Packs',
     hint: `${formatNumber(m.stock)} ${m.unit} in stock · reorder at ${formatNumber(m.reorderAt)} ${m.unit}`,
     defaultPrice: 8500,
+    stockUnit: m.unit,
   })),
 })
 
@@ -59,6 +60,9 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
   const [price, setPrice] = useState(formatNumber(last?.price ?? item.defaultPrice))
   const [paid, setPaid] = useState('1,500,000')
   const [submitted, setSubmitted] = useState(false)
+  // Medication is bought in packs but stocked in g, vials…: how much of the stock unit is in one pack.
+  const [perPack, setPerPack] = useState('')
+  const packUnits = num(perPack)
   // Birds: what they are, so placing a flock can draw the right ones from bird stock.
   const [birdTypeId, setBirdTypeId] = useState(catalog.birdTypes[0]?.id ?? 0)
   const [breed, setBreed] = useState('')
@@ -79,6 +83,7 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
     qty: num(qty) > 0 ? undefined : 'Enter a quantity',
     price: num(price) > 0 ? undefined : 'Enter a price',
     paid: paidNow > total ? 'More than the total' : undefined,
+    perPack: kind === 'Medication' && packUnits <= 0 ? `Enter how many ${item.stockUnit ?? 'units'} are in each pack` : undefined,
   }
 
   const changeKind = (k: PurchaseKind) => {
@@ -92,13 +97,14 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setSubmitted(true)
-    if (errors.birdType || errors.qty || errors.price || errors.paid) return
+    if (errors.birdType || errors.qty || errors.price || errors.paid || errors.perPack) return
     const prefix = refPrefix[kind]
     const next = Math.max(...purchases.filter((p) => p.ref.startsWith(prefix)).map((p) => Number(p.ref.slice(3)))) + 1
     const ref = `${prefix}-${String(next).padStart(4, '0')}`
     const me = currentUser.name.split(' ')[0]
     const purchase = {
       ref, date: TODAY_ISO, supplierId, kind, item: kind === 'Birds' ? birdItem : item.name, qty: num(qty), unit: item.unit, per: item.per, price: num(price), paidAtPurchase: paidNow, recordedBy: me,
+      unitsPerUnit: kind === 'Medication' ? packUnits : 1,
       bird: kind === 'Birds' ? { birdTypeId, breed: breed.trim() || null, ageDays: Math.round(weeks * 7) } : undefined,
       history: [{ title: 'Purchase recorded', detail: `By ${me}${paidNow ? ` · paid ₦${formatNumber(paidNow)}` : ''}`, time: dayMonth(TODAY_ISO) }],
     }
@@ -194,6 +200,15 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
             )}
           </Field>
         </div>
+        {kind === 'Medication' && (
+          <Field
+            label={`${item.stockUnit ?? 'Units'} in each pack`}
+            hint={packUnits > 0 && num(qty) > 0 ? `= ${formatNumber(packUnits * num(qty))} ${item.stockUnit ?? ''} into stock` : 'From the pack label, e.g. 100 g or 10 vials'}
+            error={submitted ? errors.perPack : undefined}
+          >
+            {(id) => <TextInput id={id} inputMode="decimal" suffix={item.stockUnit} value={perPack} onChange={(e) => setPerPack(e.target.value)} />}
+          </Field>
+        )}
         <Field label="Total cost" auto hint={`${formatNumber(num(qty))} ${item.unit} × ₦${formatNumber(num(price))}`}>
           {(id) => <AutoInput id={id} prefix="₦" value={formatNumber(total)} />}
         </Field>

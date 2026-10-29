@@ -109,7 +109,10 @@ export type History = {
   daily: DailyRow[]
   stockDays: StockDay[]
   medLines: MedLine[]
+  /** Applied adjustments only (they changed stock). */
   adjustments: Row<'stock_adjustments'>[]
+  /** Count differences waiting for a manager; they don't change stock until approved. */
+  pendingCounts: Row<'stock_adjustments'>[]
   /** Medication stock movements (per batch, per pen). */
   medMovements: Row<'stock_movements'>[]
   sales: Row<'sales'>[]
@@ -678,7 +681,8 @@ export async function loadRemote(db: DB): Promise<Remote> {
         purpose: m.purpose,
         recordedBy: profileName.get(m.production_records.recorded_by) ?? '—',
       })),
-      adjustments: adjustmentRows,
+      adjustments: adjustmentRows.filter((a) => a.status === 'applied'),
+      pendingCounts: adjustmentRows.filter((a) => a.status === 'pending'),
       medMovements: medMovementRows,
       sales: saleRows,
       saleAllocations: allocationRows,

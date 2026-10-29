@@ -14,15 +14,20 @@ import { farm } from '../data/session'
 import { useCurrentUser } from '../data/sessionContext'
 import { useTrade } from '../data/tradeContext'
 import { formatLongDate, formatNumber, greeting } from '../lib/format'
+import { PendingCounts } from '../features/stock/PendingCounts'
 import { farmSettings } from '../data/farmSettings'
 
 /** Store Keeper's home: what's in the store, what's arriving, and the weekly count. */
 export default function StockHome() {
   const user = useCurrentUser()
   const { orders, suppliers, stockOf, history, catalog } = useTrade()
-  // Last count: the latest recount adjustment.
+  // Last count: the latest counted line (matching counts are saved too), or a recount adjustment.
   const recount = catalog.reasons.find((r) => r.name === 'Recount')?.id
-  const lastCount = history.adjustments.find((a) => !a.is_opening && a.reason_id === recount)?.adjusted_on
+  const lastCount = [...history.adjustments, ...history.pendingCounts]
+    .filter((a) => !a.is_opening && (a.counted_quantity !== null || a.reason_id === recount))
+    .map((a) => a.adjusted_on)
+    .sort()
+    .at(-1)
   const countNote = lastCount ? `last count ${daysFrom(lastCount, todayISO())} days ago` : 'no count recorded yet'
   const feed = feedTypes.map((f) => {
     const bags = stockOf(f.name, f.bags)
@@ -40,6 +45,8 @@ export default function StockHome() {
         title={`${greeting(farm.today)}, ${user.name.split(' ')[0]}`}
         description={`${orders.length} ${orders.length === 1 ? 'delivery' : 'deliveries'} on the way · ${low} ${low === 1 ? 'item' : 'items'} low · ${countNote}`}
       />
+      <PendingCounts />
+
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <QuickAction href="/deliveries" icon={<PackageCheck size={22} strokeWidth={1.5} />} title="Receive a delivery" detail={`${orders.length} waiting`} />
