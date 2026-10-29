@@ -27,7 +27,7 @@ import { useTrade } from '../data/tradeContext'
 import { CloseFlockDrawer } from '../features/pens/CloseFlockDrawer'
 import { LayStartModal } from '../features/pens/LayStartModal'
 import { CLOSE_REASONS, saveFlock } from '../features/pens/saveFlock'
-import { canRecordProduction, isAttendant } from '../lib/access'
+import { accessOf, canRecordProduction, isAttendant } from '../lib/access'
 import { downloadCsv } from '../lib/export'
 import { formatCrates, formatNaira, formatNumber, formatSignedPct } from '../lib/format'
 import Placeholder from './Placeholder'
@@ -265,6 +265,13 @@ function Overview({ penId }: { penId: number }) {
 const CLOSE_LABEL: Record<string, string> = Object.fromEntries(CLOSE_REASONS.map((r) => [r.value, r.label]))
 
 /** What the flock cost from placement to point of lay (layers) or to date (broilers). */
+/** Roles that only see their own expenses (RLS) get totals that leave out farm costs; say so. */
+function PartialCostsNote() {
+  const user = useCurrentUser()
+  if (accessOf(user, 'expenses', 'view') === 'all') return null
+  return <p className="type-body-sm text-fg-warning">Your role only sees expenses you recorded, so farm costs and other people’s expenses are left out of these totals.</p>
+}
+
 function RearingCard({ penId }: { penId: number }) {
   const { history, catalog } = useTrade()
   const flock = flockFacts(history, catalog, penId)!.flock
@@ -283,6 +290,7 @@ function RearingCard({ penId }: { penId: number }) {
         <span className="flex-1" />
         <span className="type-body-sm text-fg-tertiary">{r.to >= r.from ? `${weekdayDm(r.from)} – ${weekdayDm(r.to)}` : 'Not started'}</span>
       </div>
+      <PartialCostsNote />
       {r.provisional && r.layingSince && (
         <p className="pb-1 type-body-sm text-fg-warning">Start of lay not marked — using first eggs ({weekdayDm(r.layingSince)}).</p>
       )}
@@ -529,6 +537,7 @@ function CostsTab({ penId }: { penId: number }) {
           {which === 'Flock to date' && flock && flock.placed_on < history.since ? ' · records loaded from this date' : ''}
         </span>
       </div>
+      <PartialCostsNote />
       {!m ? (
         <Card className="items-center p-12">
           <p className="type-body-md text-fg-tertiary">No sales or costs for this pen in this period.</p>

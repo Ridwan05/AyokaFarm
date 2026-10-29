@@ -286,8 +286,6 @@ export type Database = {
           currency: string
           edit_window_days: number
           eggs_per_crate: number
-          layer_laying_weeks: number
-          spread_rearing_cost: boolean
           email: string | null
           expiry_warning_days: number
           farm_name: string
@@ -295,6 +293,7 @@ export type Database = {
           financial_year_start_month: number
           go_live_date: string | null
           id: boolean
+          layer_laying_weeks: number
           logo_path: string | null
           low_stock_days: number
           missing_entry_cutoff: string
@@ -302,6 +301,7 @@ export type Database = {
           overdue_debt_days: number
           phone: string | null
           receipt_footer: string | null
+          spread_rearing_cost: boolean
           time_zone: string
           trading_as: string | null
           updated_at: string
@@ -313,8 +313,6 @@ export type Database = {
           currency?: string
           edit_window_days?: number
           eggs_per_crate?: number
-          layer_laying_weeks?: number
-          spread_rearing_cost?: boolean
           email?: string | null
           expiry_warning_days?: number
           farm_name: string
@@ -322,6 +320,7 @@ export type Database = {
           financial_year_start_month?: number
           go_live_date?: string | null
           id?: boolean
+          layer_laying_weeks?: number
           logo_path?: string | null
           low_stock_days?: number
           missing_entry_cutoff?: string
@@ -329,6 +328,7 @@ export type Database = {
           overdue_debt_days?: number
           phone?: string | null
           receipt_footer?: string | null
+          spread_rearing_cost?: boolean
           time_zone?: string
           trading_as?: string | null
           updated_at?: string
@@ -340,8 +340,6 @@ export type Database = {
           currency?: string
           edit_window_days?: number
           eggs_per_crate?: number
-          layer_laying_weeks?: number
-          spread_rearing_cost?: boolean
           email?: string | null
           expiry_warning_days?: number
           farm_name?: string
@@ -349,6 +347,7 @@ export type Database = {
           financial_year_start_month?: number
           go_live_date?: string | null
           id?: boolean
+          layer_laying_weeks?: number
           logo_path?: string | null
           low_stock_days?: number
           missing_entry_cutoff?: string
@@ -356,6 +355,7 @@ export type Database = {
           overdue_debt_days?: number
           phone?: string | null
           receipt_footer?: string | null
+          spread_rearing_cost?: boolean
           time_zone?: string
           trading_as?: string | null
           updated_at?: string
@@ -439,14 +439,14 @@ export type Database = {
           bird_type_id: number
           birds_placed: number
           breed: string | null
-          closed_on: string | null
           close_note: string | null
           close_reason: string | null
-          laying_started_on: string | null
+          closed_on: string | null
           code: string
           created_at: string
           created_by: string | null
           id: number
+          laying_started_on: string | null
           notes: string | null
           pen_id: number
           placed_on: string
@@ -458,14 +458,14 @@ export type Database = {
           bird_type_id: number
           birds_placed: number
           breed?: string | null
-          closed_on?: string | null
           close_note?: string | null
           close_reason?: string | null
-          laying_started_on?: string | null
+          closed_on?: string | null
           code: string
           created_at?: string
           created_by?: string | null
           id?: never
+          laying_started_on?: string | null
           notes?: string | null
           pen_id: number
           placed_on: string
@@ -477,14 +477,14 @@ export type Database = {
           bird_type_id?: number
           birds_placed?: number
           breed?: string | null
-          closed_on?: string | null
           close_note?: string | null
           close_reason?: string | null
-          laying_started_on?: string | null
+          closed_on?: string | null
           code?: string
           created_at?: string
           created_by?: string | null
           id?: never
+          laying_started_on?: string | null
           notes?: string | null
           pen_id?: number
           placed_on?: string
