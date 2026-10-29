@@ -1,3 +1,4 @@
+import { ChevronRight } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { InfoTip } from './InfoTip'
 
@@ -8,9 +9,11 @@ type KeyValueRowProps = {
   calculated?: string
   /** The line that matters most, e.g. a total. */
   strong?: boolean
+  /** Makes the label and value open the items behind the figure. */
+  onClick?: () => void
 }
 
-export function KeyValueRow({ label, children, calculated, strong }: KeyValueRowProps) {
+export function KeyValueRow({ label, children, calculated, strong, onClick }: KeyValueRowProps) {
   const tip = calculated ? <InfoTip label={label}>{calculated}</InfoTip> : null
   if (strong) {
     return (
@@ -19,6 +22,31 @@ export function KeyValueRow({ label, children, calculated, strong }: KeyValueRow
         {tip}
         <span className="flex-1" />
         <span className="type-h2 text-right text-fg-primary">{children}</span>
+      </div>
+    )
+  }
+  if (onClick) {
+    // Two buttons rather than one row button, so the info icon isn't nested inside a button.
+    return (
+      <div className="flex h-9 items-center gap-2 py-2">
+        <button
+          type="button"
+          onClick={onClick}
+          className="cursor-pointer type-body-md whitespace-nowrap text-fg-secondary underline decoration-line-strong decoration-dotted underline-offset-4 transition-colors duration-(--dur-press) hover:text-fg-primary"
+        >
+          {label}
+        </button>
+        {tip}
+        <span className="flex-1" />
+        <button
+          type="button"
+          onClick={onClick}
+          aria-label={`Show the items behind ${label}`}
+          className="-mr-1 inline-flex cursor-pointer items-center gap-0.5 rounded-sm type-label-md whitespace-nowrap text-fg-primary transition-colors duration-(--dur-press) hover:text-fg-brand"
+        >
+          {children}
+          <ChevronRight size={16} strokeWidth={1.5} className="text-icon-secondary" aria-hidden />
+        </button>
       </div>
     )
   }

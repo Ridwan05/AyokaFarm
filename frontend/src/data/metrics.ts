@@ -307,6 +307,74 @@ export function penMoney(history: History, catalog: Catalog, r: { from: string; 
 
 export const penCost = (m: PenMoney) => m.feed + m.medication + m.birds + m.overhead + m.direct
 
+export type MoneyItem = { key: string; date: string; title: string; detail: string; amount: number }
+
+/**
+ * The items behind one pen's Sales, Feed and Pen expenses in penMoney(), by the same rules, so each
+ * list adds up to the figure shown.
+ */
+export function penMoneyItems(history: History, catalog: Catalog, r: { from: string; to: string }, penId: number) {
+  const rows = rowsIn(history.daily, r)
+  const product = (id: number) => catalog.products.find((p) => p.id === id)
+  const unitOf = (id: number) => product(id)?.unit ?? ''
+  const qty = (n: number, unit: string) => `${num(n, n % 1 ? 1 : 0)} ${unit}${n === 1 ? '' : 's'}`
+
+  // Sales: this pen's portions, plus its eggs-collected share of sales not split by pen.
+  const totalEggs = sum(rows, (d) => d.eggs ?? 0)
+  const penEggs = sum(rows.filter((d) => d.penId === penId), (d) => d.eggs ?? 0)
+  const share = totalEggs ? penEggs / totalEggs : 0
+  const portions = new Map<number, History['saleAllocations']>()
+  for (const a of history.saleAllocations) portions.set(a.sale_id, [...(portions.get(a.sale_id) ?? []), a])
+  const sales: MoneyItem[] = []
+  for (const s of history.sales.filter((x) => x.approval === 'approved' && inRange(x.sold_on, r))) {
+    const split = portions.get(s.id)
+    const name = product(s.product_id)?.name ?? 'Sale'
+    const price = Number(s.unit_price)
+    if (split?.length) {
+      const mine = split.find((a) => a.pen_id === penId)
+      if (mine) {
+        const q = Number(mine.quantity)
+        const of = q === Number(s.quantity) ? '' : ` of ${num(Number(s.quantity))}`
+        sales.push({ key: `s${s.id}`, date: s.sold_on, title: `${s.ref} · ${name}`, detail: `This pen’s portion: ${qty(q, unitOf(s.product_id))}${of} × ${naira(price)}`, amount: q * price })
+      }
+    } else if (share) {
+      const total = Number(s.total ?? s.quantity * s.unit_price)
+      sales.push({
+        key: `s${s.id}`,
+        date: s.sold_on,
+        title: `${s.ref} · ${name}`,
+        detail: `Auto-split: ${naira(total)} × ${(share * 100).toFixed(1)}% (this pen’s share of eggs collected)`,
+        amount: total * share,
+      })
+    }
+  }
+
+  // Feed: each daily entry's bags × the average price paid a bag for that feed.
+  const bagCost = new Map<number, number>()
+  const feed: MoneyItem[] = rows
+    .filter((d) => d.penId === penId && d.feedTypeId && d.feedBags > 0)
+    .map((d) => {
+      if (!bagCost.has(d.feedTypeId!)) bagCost.set(d.feedTypeId!, unitCost(history, { feedTypeId: d.feedTypeId }))
+      const perBag = bagCost.get(d.feedTypeId!)!
+      const feedName = catalog.feedTypes.find((f) => f.id === d.feedTypeId)?.name ?? 'Feed'
+      return { key: `f${d.id}`, date: d.date, title: feedName, detail: `${num(d.feedBags, 1)} bags × ${naira(perBag)} average a bag`, amount: d.feedBags * perBag }
+    })
+
+  // Pen expenses: expenses recorded against this pen.
+  const expenses: MoneyItem[] = history.expenses
+    .filter((e) => e.pen_id === penId && inRange(e.spent_on, r))
+    .map((e) => ({
+      key: `e${e.id}`,
+      date: e.spent_on,
+      title: e.description,
+      detail: `${e.ref} · ${catalog.categories.find((c) => c.id === e.category_id)?.name ?? 'Expense'}`,
+      amount: Number(e.amount),
+    }))
+
+  const byDate = (a: MoneyItem, b: MoneyItem) => b.date.localeCompare(a.date) || a.key.localeCompare(b.key)
+  return { sales: sales.sort(byDate), feed: feed.sort(byDate), expenses: expenses.sort(byDate) }
+}
+
 // ── Medication ──────────────────────────────────────────────────────
 
 export type Withdrawal = { penId: number; medication: string; lastDose: string; days: number; clearFrom: string; dayOf: number }

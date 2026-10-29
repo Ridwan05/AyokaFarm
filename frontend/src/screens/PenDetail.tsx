@@ -19,7 +19,7 @@ import { useToast } from '../components/ui/toastContext'
 import { farmSettings } from '../data/farmSettings'
 import { explain } from '../data/explain'
 import { penName } from '../data/farmViews'
-import { addDays, dayMonth, inRange, niceTicks, penCost, penMoney, period, timeOf, todayISO, weekdayDm, withdrawals, type Range } from '../data/metrics'
+import { addDays, dayMonth, inRange, niceTicks, penCost, penMoney, penMoneyItems, period, timeOf, todayISO, weekdayDm, withdrawals, type Range } from '../data/metrics'
 import { flockFacts, mortalitySeries, modeLabel, penEntries, penFlock, penKpis, type DailyEntry } from '../data/penView'
 import { useCurrentUser } from '../data/sessionContext'
 import { rearingCost, suggestedLayStart } from '../data/rearing'
@@ -30,6 +30,7 @@ import { CloseFlockDrawer } from '../features/pens/CloseFlockDrawer'
 import { EditFlockDrawer } from '../features/pens/EditFlockDrawer'
 import { EditPenModal } from '../features/pens/EditPenModal'
 import { LayStartModal } from '../features/pens/LayStartModal'
+import { PenMoneyItemsModal } from '../features/pens/PenMoneyItemsModal'
 import { CLOSE_REASONS, saveFlock } from '../features/pens/saveFlock'
 import { accessOf, canRecordProduction, isAttendant } from '../lib/access'
 import { downloadCsv } from '../lib/export'
@@ -556,6 +557,9 @@ function CostsTab({ penId }: { penId: number }) {
         ? period('last-month', today)
         : { from: flock && flock.placed_on > history.since ? flock.placed_on : history.since, to: flock?.closed_on ?? today, label: 'Flock to date' }
   const m = penMoney(history, catalog, range).find((x) => x.penId === penId)
+  // Which figure's items are open: Sales, Feed or Pen expenses.
+  const [open, setOpen] = useState<'Sales' | 'Feed' | 'Pen expenses' | null>(null)
+  const items = open ? penMoneyItems(history, catalog, range, penId) : null
   const cost = m ? penCost(m) : 0
   const margin = m ? m.revenue - cost : 0
   const crates = m ? m.eggs / farmSettings.eggsPerCrate : 0
@@ -588,11 +592,16 @@ function CostsTab({ penId }: { penId: number }) {
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
           <Card className="min-w-0 flex-1 gap-1 px-5 pt-4 pb-5">
             <h2 className="pb-2 type-h3 text-fg-primary">Costs & profit · {range.label}</h2>
-            <KeyValueRow label="Sales" calculated={explain.penRevenue()}>
+            <KeyValueRow label="Sales" calculated={explain.penRevenue()} onClick={() => setOpen('Sales')}>
               {formatNaira(m.revenue)}
             </KeyValueRow>
             {lines.map(([label, value, how]) => (
-              <KeyValueRow key={label} label={label} calculated={how}>
+              <KeyValueRow
+                key={label}
+                label={label}
+                calculated={how}
+                onClick={label === 'Feed' || label === 'Pen expenses' ? () => setOpen(label) : undefined}
+              >
                 − {formatNaira(Math.round(value))}
               </KeyValueRow>
             ))}
@@ -607,6 +616,7 @@ function CostsTab({ penId }: { penId: number }) {
                 {formatNaira(Math.abs(Math.round(margin)))}
               </span>
             </p>
+            <p className="pt-2 type-body-sm text-fg-tertiary">Tap Sales, Feed or Pen expenses to see the items behind them.</p>
           </Card>
           <Card className="w-full shrink-0 lg:w-[400px] gap-1 px-5 pt-4 pb-5">
             <h2 className="pb-2 type-h3 text-fg-primary">Unit costs</h2>
@@ -636,6 +646,19 @@ function CostsTab({ penId }: { penId: number }) {
           </Card>
         </div>
       )}
+      <Presence>
+        {open && items && m && (
+          <PenMoneyItemsModal
+            title={open}
+            penName={penName(catalog, penId)}
+            range={range}
+            items={open === 'Sales' ? items.sales : open === 'Feed' ? items.feed : items.expenses}
+            total={open === 'Sales' ? m.revenue : open === 'Feed' ? m.feed : m.direct}
+            note={open === 'Sales' ? explain.penRevenue() : open === 'Feed' ? explain.feedCost() : explain.penExpenses()}
+            onClose={() => setOpen(null)}
+          />
+        )}
+      </Presence>
     </>
   )
 }
