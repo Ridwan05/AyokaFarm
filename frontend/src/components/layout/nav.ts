@@ -2,6 +2,8 @@ import {
   Banknote,
   Egg,
   FileText,
+  HandCoins,
+  IdCard,
   LayoutDashboard,
   Package,
   Receipt,
@@ -52,6 +54,8 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: 'Customers', to: '/customers', icon: Users },
       { label: 'Suppliers', to: '/suppliers', icon: Store },
+      { label: 'Employees', to: '/employees', icon: IdCard },
+      { label: 'Payroll', to: '/payroll', icon: HandCoins },
     ],
   },
   {

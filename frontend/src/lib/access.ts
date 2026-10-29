@@ -14,6 +14,7 @@ export const modules: { id: AppModule; label: string }[] = [
   { id: 'purchases', label: 'Purchases' },
   { id: 'payments', label: 'Payments' },
   { id: 'parties', label: 'Customers & suppliers' },
+  { id: 'payroll', label: 'Payroll & employees' },
   { id: 'admin', label: 'Admin & settings' },
 ]
 
@@ -35,6 +36,8 @@ const areas: { prefix: string; module: Area; label: string; group: string }[] = 
   { prefix: '/payments', module: 'payments', label: 'Payments', group: 'Trade' },
   { prefix: '/customers', module: 'parties', label: 'Customers', group: 'People' },
   { prefix: '/suppliers', module: 'parties', label: 'Suppliers', group: 'People' },
+  { prefix: '/employees', module: 'payroll', label: 'Employees', group: 'People' },
+  { prefix: '/payroll', module: 'payroll', label: 'Payroll', group: 'People' },
   { prefix: '/reports', module: 'reports', label: 'Reports', group: 'Insight' },
   { prefix: '/settings', module: 'admin', label: 'Settings', group: 'Settings' },
   { prefix: '/go-live', module: 'admin', label: 'Go-live setup', group: 'Settings' },
@@ -71,6 +74,8 @@ export function canAccess(path: string, user: User) {
   const { role } = user
   // Every role has a home: the dashboard, or its own start page for the narrower roles.
   if (path === '/') return true
+  // Everyone can see their own payslips and loans (the database shows only theirs).
+  if (path === '/my-pay' || path.startsWith('/print/payslip/')) return true
   // The farm manager's settings scope is the staff list only.
   if (role === 'farm-manager' && (path.startsWith('/settings') || path === '/go-live')) return path === '/settings/staff'
   // Pen attendants: their pens, production and read-only stock — nothing else.
