@@ -2,7 +2,7 @@
 
 import { Check, Minus, Plus, Trash2 } from 'lucide-react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
-import { Suspense, useEffect, useState } from 'react'
+import { Suspense, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Alert } from '../components/ui/Alert'
@@ -114,10 +114,14 @@ function EntryScreen() {
         meds: editing.meds,
         notes: '',
       }
-    : { died: '', feedType: ctx?.feedType ?? feedTypes[0]?.name ?? '', feedBags: '', crates: '', pieces: '', cracked: '', meds: [], notes: '' }
+    : // Deaths and loose eggs are usually none, so they start at 0; crates and bags must be counted.
+      { died: '0', feedType: ctx?.feedType ?? feedTypes[0]?.name ?? '', feedBags: '', crates: '', pieces: '0', cracked: '', meds: [], notes: '' }
   const [draft, setDraft] = useState<Draft>(blank)
   const [restored, setRestored] = useState(false)
   const [saved, setSaved] = useState(false)
+  // Set by a Save tap with fields missing: empty fields then show their message.
+  const [tried, setTried] = useState(false)
+  const formRef = useRef<HTMLFormElement>(null)
 
   // Read after mount: the server render has no access to this phone's storage. Corrections don't use drafts.
   useEffect(() => {
@@ -203,14 +207,19 @@ function EntryScreen() {
   const medError = (i: number) => {
     const line = draft.meds[i]
     const qty = num(line.qty)
-    if (qty === null) return undefined
+    if (qty === null) return tried ? 'Enter how much was used, or remove this line' : undefined
     if (qty <= 0) return 'Enter how much was used'
     const usedOnPen = draft.meds.filter((m) => m.medication === line.medication).reduce((n, m) => n + (num(m.qty) ?? 0), 0)
     const { stock, unit } = medStock(line.medication)
     return usedOnPen > stock ? `Only ${formatNumber(stock)} ${unit} in the store` : undefined
   }
 
-  const diedError = died !== null && died > opening ? `There are only ${formatNumber(opening)} birds in the pen` : undefined
+  const diedError =
+    died !== null && died > opening ? `There are only ${formatNumber(opening)} birds in the pen` : died === null && tried ? 'Enter 0 if none died' : undefined
+  // A mistyped number (e.g. "5.5.5") is flagged straight away; an empty box only after a Save tap.
+  const bagsError =
+    bags !== null ? undefined : draft.feedBags.trim() !== '' ? 'Enter a number, e.g. 5.5' : tried ? 'Enter the bags used, 0 if none' : undefined
+  const eggsError = (s: string) => (layers && tried && num(s) === null ? 'Enter 0 if none' : undefined)
   const valid =
     died !== null &&
     !diedError &&
@@ -219,7 +228,17 @@ function EntryScreen() {
     draft.meds.every((m, i) => num(m.qty) !== null && !medError(i))
 
   async function save() {
-    if (!valid || !ctx) return
+    if (!ctx) return
+    if (!valid) {
+      // Mark what's missing, then take the attendant to the first one (after the messages render).
+      setTried(true)
+      window.requestAnimationFrame(() => {
+        const first = formRef.current?.querySelector<HTMLInputElement>('[aria-invalid="true"]')
+        first?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+        first?.focus({ preventScroll: true })
+      })
+      return
+    }
     const record = {
       penId,
       // New entries are for the farm's today at the moment of saving (a screen left open past midnight).
@@ -295,6 +314,8 @@ function EntryScreen() {
       )}
 
       <form
+        ref={formRef}
+        noValidate
         className="flex flex-col gap-4 lg:max-w-[720px]"
         onSubmit={(e) => {
           e.preventDefault()
@@ -336,13 +357,14 @@ function EntryScreen() {
                 />
               )}
             </Field>
-            <Field label="Bags used">
+            <Field label="Bags used" error={bagsError}>
               {(id) => (
                 <TextInput
                   id={id}
                   inputMode="decimal"
                   placeholder="e.g. 5.5"
                   suffix="bags"
+                  invalid={!!bagsError}
                   value={draft.feedBags}
                   onChange={(e) => set('feedBags', e.target.value.replace(/[^\d.]/g, ''))}
                 />
@@ -369,11 +391,15 @@ function EntryScreen() {
           <Card>
             <CardHeader title="Eggs" meta={<span className="type-body-sm text-fg-tertiary">{farmSettings.eggsPerCrate} to a crate</span>} />
             <div className="grid grid-cols-2 gap-4 px-5 pb-5 sm:grid-cols-4">
-              <Field label="Crates">
-                {(id) => <TextInput id={id} inputMode="numeric" pattern="[0-9]*" value={draft.crates} onChange={(e) => set('crates', e.target.value.replace(/\D/g, ''))} />}
+              <Field label="Crates" error={eggsError(draft.crates)}>
+                {(id) => (
+                  <TextInput id={id} inputMode="numeric" pattern="[0-9]*" invalid={!!eggsError(draft.crates)} value={draft.crates} onChange={(e) => set('crates', e.target.value.replace(/\D/g, ''))} />
+                )}
               </Field>
-              <Field label="Loose eggs">
-                {(id) => <TextInput id={id} inputMode="numeric" pattern="[0-9]*" value={draft.pieces} onChange={(e) => set('pieces', e.target.value.replace(/\D/g, ''))} />}
+              <Field label="Loose eggs" error={eggsError(draft.pieces)}>
+                {(id) => (
+                  <TextInput id={id} inputMode="numeric" pattern="[0-9]*" invalid={!!eggsError(draft.pieces)} value={draft.pieces} onChange={(e) => set('pieces', e.target.value.replace(/\D/g, ''))} />
+                )}
               </Field>
               <Field label="Cracked" hint="Of those collected">
                 {(id) => <TextInput id={id} inputMode="numeric" pattern="[0-9]*" placeholder="0" value={draft.cracked} onChange={(e) => set('cracked', e.target.value.replace(/\D/g, ''))} />}
@@ -472,7 +498,7 @@ function EntryScreen() {
           <Button size="lg" className="flex-1 lg:flex-none" onClick={() => router.push(backTo)}>
             Cancel
           </Button>
-          <Button type="submit" variant="primary" size="lg" className="flex-[2] lg:flex-none" disabled={!valid || saved}>
+          <Button type="submit" variant="primary" size="lg" className="flex-[2] lg:flex-none" disabled={saved}>
             {/* Crossfade the label with a little blur so the state change reads as one motion. */}
             <span className="grid place-items-center">
               <span className={cn('col-start-1 row-start-1 transition-[opacity,filter] duration-200 ease-out', saved && 'opacity-0 blur-[2px]')}>{editing ? 'Save correction' : 'Save entry'}</span>

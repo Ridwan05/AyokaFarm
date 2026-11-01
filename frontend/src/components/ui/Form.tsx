@@ -53,6 +53,7 @@ export function TextInput({ prefix, suffix, leadingIcon: Icon, invalid, size = '
       {Icon && <Icon size={20} strokeWidth={1.5} className="shrink-0 text-icon-secondary" />}
       {prefix && <span className="type-body-lg text-fg-tertiary">{prefix}</span>}
       <input
+        aria-invalid={invalid || undefined}
         {...props}
         className="min-w-0 flex-1 bg-transparent type-body-lg text-fg-primary outline-none placeholder:text-fg-disabled focus-visible:shadow-none"
       />
