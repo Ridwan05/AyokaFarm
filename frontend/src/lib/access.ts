@@ -91,6 +91,8 @@ export function canAccess(path: string, user: User) {
   if (isAttendant(role) && !(path.startsWith('/pens/') || ['/production', '/inventory'].some((p) => path === p || path.startsWith(p + '/')))) return false
   const pen = penInPath(path)
   if (pen !== null && !canSeePen(user, pen)) return false
+  // The daily entry form is for roles that can record production, not only view it.
+  if (pen !== null && path.startsWith('/production/entry/') && !canRecordProduction(user, pen)) return false
   const area = areaFor(path)
   return area ? canView(user, area.module) : true
 }
@@ -104,9 +106,8 @@ export function describeArea(path: string) {
 /** Below-minimum sales wait for the farm manager or owner (FR-SAL-5). */
 export const canApprove = (role: Role) => role === 'owner' || role === 'farm-manager'
 
-/** Who can record a pen's daily entry: its attendant, the farm manager or the owner. */
-export const canRecordProduction = (user: User, penId: number) =>
-  (user.role === 'owner' || user.role === 'farm-manager' || isAttendant(user.role)) && canSeePen(user, penId)
+/** Who can record a pen's daily entry: roles allowed to add production (Roles & permissions), for pens they see. */
+export const canRecordProduction = (user: User, penId: number) => can(user, 'production', 'add') && canSeePen(user, penId)
 
 /** Where the Settings item points: the staff list for 'own' access to Admin & settings, else all settings. */
 export const settingsHomeFor = (user: User) => (accessOf(user, 'admin') === 'own' ? '/settings/staff' : '/settings')

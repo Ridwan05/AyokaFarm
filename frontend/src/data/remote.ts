@@ -229,6 +229,15 @@ export async function loadRemote(db: DB): Promise<Remote> {
     all(db.from('flock_placements').select('*').order('id'), 'flock placements'),
     all(db.from('bird_stock').select('*').order('received_on', { ascending: false }).order('purchase_id'), 'bird stock'),
   ])
+  // Profiles are only readable by the owner and farm manager; everyone gets colleagues' names and roles
+  // (staff_names) so "recorded by" and "ask …" read right. Until that function exists, names come from profiles.
+  const nameRows = (await db.rpc('staff_names')).data ?? []
+  const knownProfiles: Row<'profiles'>[] = [
+    ...profileRows,
+    ...nameRows
+      .filter((n) => !profileRows.some((p) => p.id === n.id))
+      .map((n) => ({ ...n, phone: null, last_active_at: null, whatsapp_opt_in: false, created_at: '', updated_at: '' })),
+  ]
   const allFlockRows = flockRows
   // Most screens only care about the flock in each pen now.
   const activeFlocks = allFlockRows.filter((f) => f.status === 'active')
@@ -279,7 +288,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
   const variancePct = Number(settings?.feed_variance_pct ?? 10)
   const mortalityPct = Number(settings?.mortality_alert_pct ?? 0.5)
   const today = farmTodayISO()
-  const profileName = new Map(profileRows.map((p) => [p.id, p.full_name]))
+  const profileName = new Map(knownProfiles.map((p) => [p.id, p.full_name]))
   const feedName = new Map(feedTypeRows.map((f) => [f.id, f.name]))
   const medName = new Map(medicationRows.map((m) => [m.id, m.name]))
 
@@ -714,7 +723,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
       products: productRows,
       categories: categoryRows,
       reasons: reasonRows,
-      profiles: profileRows,
+      profiles: knownProfiles,
       staffPens: staffPenRows,
       customers: customerRows,
       suppliers: supplierRows,

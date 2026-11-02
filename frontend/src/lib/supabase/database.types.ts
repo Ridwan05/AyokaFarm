@@ -2696,6 +2696,15 @@ export type Database = {
         Args: { portions: Json; sale_id: number }
         Returns: undefined
       }
+      staff_names: {
+        Args: never
+        Returns: {
+          full_name: string
+          id: string
+          is_active: boolean
+          role_id: string
+        }[]
+      }
     }
     Enums: {
       access_level: "none" | "own" | "all"

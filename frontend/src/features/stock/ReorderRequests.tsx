@@ -51,7 +51,7 @@ export function ReorderRequests({ canDecide, onRecordPurchase }: Props) {
               </span>
             </span>
             {canDecide && (
-              <span className="flex gap-2">
+              <span className="flex flex-wrap gap-2">
                 {onRecordPurchase && (
                   <Button size="sm" leadingIcon={Plus} onClick={onRecordPurchase}>
                     Record purchase
