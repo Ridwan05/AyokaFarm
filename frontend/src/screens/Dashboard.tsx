@@ -27,6 +27,7 @@ import {
   feedVariance,
   inRange,
   kpi,
+  flockBirdsOn,
   lastDays,
   layingRate,
   liveBirdsByPen,
@@ -154,11 +155,7 @@ function dashboardKpis(trade: Trade, r: Range, penOk: (id: number) => boolean, f
   // Birds alive at the end of a day: each active flock's latest count on or before it.
   const flocks = history.flocks.filter((f) => f.status === 'active' && penOk(f.pen_id))
   const birdsOn = (date: string) =>
-    sum(flocks, (f) => {
-      if (f.placed_on > date) return 0
-      const latest = history.daily.filter((d) => d.flockId === f.id && d.date <= date).sort((a, b) => b.date.localeCompare(a.date))[0]
-      return latest ? latest.closing : f.birds_placed
-    })
+    sum(flocks, (f) => (f.placed_on > date ? 0 : flockBirdsOn(history, f, date)))
   const live = sum([...liveBirdsByPen(history, penOk).values()], (n) => n)
 
   const lay = layingRate(cur)

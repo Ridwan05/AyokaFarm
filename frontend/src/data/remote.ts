@@ -17,6 +17,7 @@ import type { Purchase, PurchaseKind } from './purchases'
 import { products, type PaymentMethod, type Product, type ProductKind, type Sale } from './sales'
 import { explain } from './explain'
 import { farmSettings } from './farmSettings'
+import { flockBirdsAfter } from './metrics'
 import { farmTodayISO, initialsOf, roleFromDb } from './session'
 import { feedBands, staff, type StaffMember } from './settings'
 import { suppliers as supplierList, type Supplier } from './suppliers'
@@ -366,10 +367,11 @@ export async function loadRemote(db: DB): Promise<Remote> {
     const type: Pen['type'] = layers ? 'Layers' : 'Broilers'
     const rows = dailyRows.filter((d) => d.pen_id === p.id && d.flock_id === flock?.id && d.record_date! >= recent)
     const todayRow = rows.find((d) => d.record_date === today)
-    const latest = rows[0]
     const ageDays = flock ? Math.round((Date.parse(today) - Date.parse(flock.placed_on)) / 86_400_000) + flock.age_at_placement_days : 0
     const week = Math.floor(ageDays / 7) + 1
-    const birds = todayRow?.closing_birds ?? latest?.closing_birds ?? flock?.birds_placed ?? 0
+    // Birds now: today's count, or the last entry's plus birds added and less birds sold since (as the database counts).
+    const lastRow = flock ? dailyRows.find((d) => d.flock_id === flock.id) : undefined
+    const birds = todayRow?.closing_birds ?? (flock ? flockBirdsAfter({ placements: placementRows, sales: saleRows, saleAllocations: allocationRows, purchases: purchaseRows }, flock, lastRow ? { date: lastRow.record_date!, closing: lastRow.closing_birds! } : undefined) : 0)
     const meta = todayRow ? recordMeta.get(todayRow.id!) : undefined
     const time = meta ? hm(meta.created_at) : ''
     const spike = todayRow && Number(todayRow.mortality_pct ?? 0) > mortalityPct

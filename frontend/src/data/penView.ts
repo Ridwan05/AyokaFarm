@@ -1,7 +1,7 @@
 import type { Kpi } from '../components/ui/KpiCard'
 import { farmSettings } from './farmSettings'
 import { penName } from './farmViews'
-import { addDays, daysFrom, dm, feedVariance, kpi, lastDays, layingRate, nairaKpi, penCost, penMoney, period, previous, timeOf, todayISO, weekdayDm, withdrawals } from './metrics'
+import { addDays, birdsPlacedIn, daysFrom, dm, feedVariance, flockBirdsOn, kpi, lastDays, layingRate, nairaKpi, penCost, penMoney, period, previous, sum, timeOf, todayISO, weekdayDm, withdrawals } from './metrics'
 import type { Catalog, DailyRow, History } from './remote'
 import { formatDayMon } from '../lib/format'
 
@@ -57,8 +57,6 @@ export function penFlock(history: History, penId: number) {
   return { flock, rows }
 }
 
-/** Birds alive at the end of a day: the latest closing count on or before it. */
-const liveOn = (rows: DailyRow[], placed: number, date: string) => [...rows].reverse().find((d) => d.date <= date)?.closing ?? placed
 
 export function penKpis(history: History, catalog: Catalog, penId: number): Kpi[] {
   const { flock, rows } = penFlock(history, penId)
@@ -66,10 +64,15 @@ export function penKpis(history: History, catalog: Catalog, penId: number): Kpi[
   const today = todayISO()
   const weekAgo = addDays(today, -7)
   const spark = lastDays(8)
-  const placed = flock.birds_placed
-  const live = liveOn(rows, placed, today)
-  const liveThen = liveOn(rows, placed, weekAgo)
-  const lostPct = (n: number) => ((placed - n) / placed) * 100
+  // Birds alive at the end of a day, counting birds added and sold since the last entry.
+  const liveOn = (date: string) => flockBirdsOn(history, flock, date)
+  const placedOn = (date: string) => sum(history.placements.filter((p) => p.flock_id === flock.id && p.placed_on <= date), (p) => p.birds) || flock.birds_placed
+  const placed = birdsPlacedIn(history, flock)
+  const live = liveOn(today)
+  const liveThen = liveOn(weekAgo)
+  // Deaths, not birds sold, over every bird placed up to that day.
+  const diedBy = (date: string) => sum(rows.filter((d) => d.date <= date), (d) => d.mortality)
+  const lostPct = (date: string) => (diedBy(date) / placedOn(date)) * 100
   const layers = catalog.birdTypes.find((b) => b.id === flock.bird_type_id)?.lays_eggs ?? false
   const last7 = rows.filter((d) => d.date > weekAgo)
   const prev7 = rows.filter((d) => d.date <= weekAgo && d.date > addDays(weekAgo, -7))
@@ -119,21 +122,21 @@ export function penKpis(history: History, catalog: Catalog, penId: number): Kpi[
       previous: liveThen,
       goodWhen: 'neither',
       context: `of ${placed.toLocaleString('en-NG')} placed · vs 7 days ago`,
-      info: 'The closing count from this pen’s latest daily entry: birds placed less every death recorded.',
-      spark: spark.map((d) => liveOn(rows, placed, d)),
+      info: 'The closing count from this pen’s latest daily entry, plus birds added and less birds sold since that entry.',
+      spark: spark.map((d) => liveOn(d)),
     }),
     kpi({
       label: 'Flock mortality',
-      value: lostPct(live).toFixed(1),
+      value: lostPct(today).toFixed(1),
       unit: '%',
-      current: lostPct(live),
-      previous: lostPct(liveThen),
+      current: lostPct(today),
+      previous: lostPct(weekAgo),
       points: true,
       digits: 1,
       goodWhen: 'down',
-      context: `${(placed - live).toLocaleString('en-NG')} birds since placement`,
+      context: `${diedBy(today).toLocaleString('en-NG')} died since placement`,
       info: 'All deaths recorded since the flock was placed ÷ birds placed.',
-      spark: spark.map((d) => lostPct(liveOn(rows, placed, d))),
+      spark: spark.map((d) => lostPct(d)),
     }),
     third,
     kpi({
@@ -200,8 +203,8 @@ export function flockFacts(history: History, catalog: Catalog, penId: number) {
     placed: `${formatDayMon(flock.placed_on)} ${flock.placed_on.slice(0, 4)} · ${placedAge === 0 ? 'day-old' : `${Math.floor(placedAge / 7)} weeks old`}`,
     age: `${Math.floor(ageDays / 7)} weeks ${ageDays % 7} days`,
     week: Math.floor(ageDays / 7) + 1,
-    birdsPlaced: flock.birds_placed,
-    liveNow: latest?.closing ?? flock.birds_placed,
+    birdsPlaced: birdsPlacedIn(history, flock),
+    liveNow: flockBirdsOn(history, flock),
     feedType: catalog.feedTypes.find((f) => f.id === latest?.feedTypeId)?.name ?? target?.feed ?? '—',
     expectedFeed: target ? `${target.grams} g / bird / day` : 'No feed target set',
     withdrawal: w ? `${w.medication} · clear from ${formatDayMon(w.clearFrom)}` : 'None active',
@@ -216,15 +219,5 @@ export function flockFacts(history: History, catalog: Catalog, penId: number) {
  * out, for editing it.
  */
 export function birdsOnRecord(history: History, flock: History['flocks'][number], exceptSaleId?: number) {
-  const rows = history.daily.filter((d) => d.flockId === flock.id)
-  const latest = rows.reduce<DailyRow | undefined>((m, d) => (!m || d.date > m.date ? d : m), undefined)
-  const lastEntry = latest?.date ?? ''
-  const soldSince = history.saleAllocations
-    .filter((a) => a.flock_id === flock.id && a.sale_id !== exceptSaleId)
-    .filter((a) => {
-      const s = history.sales.find((x) => x.id === a.sale_id)
-      return s && s.approval !== 'rejected' && s.sold_on >= lastEntry
-    })
-    .reduce((n, a) => n + Number(a.quantity), 0)
-  return Math.max(0, (latest?.closing ?? flock.birds_placed) - soldSince)
+  return flockBirdsOn(history, flock, undefined, exceptSaleId)
 }

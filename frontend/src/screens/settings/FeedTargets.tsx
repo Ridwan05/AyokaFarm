@@ -152,7 +152,7 @@ export default function FeedTargets() {
         <Card className="min-w-0 flex-1 gap-4 p-5">
           <SectionTitle title="Expected feed by age" note="g per bird per day" />
           {groups.length > 0 && (
-            <div className="self-start">
+            <div className="max-w-full min-w-0 self-start">
               <SegmentedControl label="Bird type and breed" options={groups.map(([label]) => label)} value={groupLabel} onChange={setGroupLabel} />
             </div>
           )}

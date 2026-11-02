@@ -59,8 +59,8 @@ export const accessOf = (user: User, module: AppModule, action: keyof ModuleAcce
 export const can = (user: User, module: AppModule, action: keyof ModuleAccess = 'view') => accessOf(user, module, action) !== 'none'
 
 function canView(user: User, module: Area) {
-  // Receiving deliveries and the weekly count: roles that see only their own side of purchases (the store keeper).
-  if (module === 'deliveries') return accessOf(user, 'purchases') === 'own'
+  // Receiving deliveries: the store keeper, and anyone who can adjust stock (a farm without a store keeper still receives).
+  if (module === 'deliveries') return accessOf(user, 'purchases') === 'own' || can(user, 'inventory', 'add')
   // The weekly count: anyone who can adjust stock (store keeper, farm manager, owner).
   if (module === 'count') return can(user, 'inventory', 'add') || accessOf(user, 'purchases') === 'own'
   // Reports are for the people who run the farm and its money.

@@ -222,13 +222,51 @@ export function feedVariance(rows: DailyRow[]) {
 
 export const sum = <T>(rows: T[], f: (r: T) => number) => rows.reduce((n, r) => n + f(r), 0)
 
-/** Live birds per active flock: the latest closing count, or birds placed if nothing recorded yet. */
+type Flock = History['flocks'][number]
+type BirdInputs = Pick<History, 'placements' | 'sales' | 'saleAllocations' | 'purchases'>
+
+/** Every bird put into a flock: the first placement plus birds added later. */
+export const birdsPlacedIn = (history: Pick<History, 'placements'>, flock: Flock) =>
+  sum(history.placements.filter((p) => p.flock_id === flock.id), (p) => p.birds) || flock.birds_placed
+
+/**
+ * Birds in a flock at the end of `date`, counted as the database does (recalc_flock): the given
+ * latest entry's closing count (or the first placement), plus birds added after it, less birds
+ * sold since. Added and sold birds only reach the daily counts with the next entry.
+ */
+export function flockBirdsAfter(h: BirdInputs, flock: Flock, latest: { date: string; closing: number } | undefined, date = '9999-12-31', exceptSaleId?: number) {
+  const from = latest?.date ?? flock.placed_on
+  const after = (d: string | null) => Boolean(d && d > flock.placed_on && d > from && d <= date)
+  const added =
+    sum(h.placements.filter((p) => p.flock_id === flock.id && after(p.placed_on)), (p) => p.birds) +
+    sum(
+      h.purchases.filter((p) => p.flock_id === flock.id && p.kind === 'birds' && p.status === 'received' && after(p.received_on)),
+      (p) => Number(p.received_quantity ?? p.quantity) - Number(p.returned_quantity ?? 0),
+    )
+  const sales = new Map(h.sales.map((s) => [s.id, s]))
+  const sold = sum(
+    h.saleAllocations.filter((a) => {
+      const s = a.flock_id === flock.id && a.sale_id !== exceptSaleId ? sales.get(a.sale_id) : undefined
+      return Boolean(s && s.approval !== 'rejected' && s.sold_on >= from && s.sold_on <= date)
+    }),
+    (a) => Number(a.quantity),
+  )
+  return Math.max(0, (latest?.closing ?? flock.birds_placed) + added - sold)
+}
+
+/** Birds in a flock at the end of `date` (default: now), from its entries, added birds and sales. */
+export function flockBirdsOn(history: Pick<History, 'daily'> & BirdInputs, flock: Flock, date = '9999-12-31', exceptSaleId?: number) {
+  if (date < flock.placed_on) return 0
+  const latest = history.daily
+    .filter((d) => d.flockId === flock.id && d.date <= date)
+    .reduce<DailyRow | undefined>((m, d) => (!m || d.date > m.date ? d : m), undefined)
+  return flockBirdsAfter(history, flock, latest, date, exceptSaleId)
+}
+
+/** Live birds per active flock now. */
 export function liveBirdsByPen(history: History, pen: PenFilter = allPens) {
   const out = new Map<number, number>()
-  for (const f of history.flocks.filter((x) => x.status === 'active' && pen(x.pen_id))) {
-    const latest = history.daily.filter((d) => d.flockId === f.id).sort((a, b) => b.date.localeCompare(a.date))[0]
-    out.set(f.pen_id, latest ? latest.closing : f.birds_placed)
-  }
+  for (const f of history.flocks.filter((x) => x.status === 'active' && pen(x.pen_id))) out.set(f.pen_id, flockBirdsOn(history, f))
   return out
 }
 
@@ -274,10 +312,27 @@ export function penMoney(history: History, catalog: Catalog, r: { from: string; 
     if (!out.has(id)) out.set(id, { penId: id, revenue: 0, feed: 0, medication: 0, birds: 0, overhead: 0, direct: 0, birdDays: 0, eggs: 0, feedKg: 0 })
     return out.get(id)!
   }
+  // Bird-days: birds at the start of every day each flock was in its pen (to today), from the entry
+  // that day, or the last count carried forward when none was saved. A pen still waiting for its
+  // entries carries its share of overhead all the same.
+  const end = r.to < todayISO() ? r.to : todayISO()
+  for (const f of history.flocks.filter((x) => x.placed_on <= end && (!x.closed_on || x.closed_on >= r.from))) {
+    const from = f.placed_on > r.from ? f.placed_on : r.from
+    const to = f.closed_on && f.closed_on < end ? f.closed_on : end
+    if (from > to) continue
+    const entries = new Map(history.daily.filter((d) => d.flockId === f.id && d.date >= from && d.date <= to).map((d) => [d.date, d]))
+    let carry = from === f.placed_on ? f.birds_placed : flockBirdsOn(history, f, addDays(from, -1))
+    let held = 0
+    for (const day of datesBetween(from, to)) {
+      const e = entries.get(day)
+      held += e ? e.opening : carry
+      if (e) carry = e.closing
+    }
+    get(f.pen_id).birdDays += held
+  }
   const bagCost = new Map<number, number>()
   for (const d of rows) {
     const m = get(d.penId)
-    m.birdDays += d.opening
     m.eggs += d.eggs ?? 0
     m.feedKg += d.feedKg
     if (d.feedTypeId) {

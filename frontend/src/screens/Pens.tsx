@@ -18,7 +18,7 @@ import { useCurrentUser } from '../data/sessionContext'
 import { pens, type Pen, type Stat } from '../data/pens'
 import { explain } from '../data/explain'
 import { penName } from '../data/farmViews'
-import { dayMonth, penCost, penMoney } from '../data/metrics'
+import { birdsPlacedIn, dayMonth, flockBirdsOn, penCost, penMoney } from '../data/metrics'
 import { rearingCost } from '../data/rearing'
 import { useTrade, type Trade } from '../data/tradeContext'
 import { CLOSE_REASONS } from '../features/pens/saveFlock'
@@ -249,7 +249,7 @@ function closedFlockRows({ history, catalog }: Trade): ClosedFlock[] {
     .sort((a, b) => (b.closed_on ?? '').localeCompare(a.closed_on ?? ''))
     .map((f) => {
       const rows = history.daily.filter((d) => d.flockId === f.id).sort((a, b) => a.date.localeCompare(b.date))
-      const out = rows.at(-1)?.closing ?? f.birds_placed
+      const placedIn = birdsPlacedIn(history, f)
       const lays = catalog.birdTypes.find((b) => b.id === f.bird_type_id)?.lays_eggs
       const closed = f.closed_on ?? rows.at(-1)?.date ?? f.placed_on
       const m = f.placed_on >= history.since ? penMoney(history, catalog, { from: f.placed_on, to: closed }).find((x) => x.penId === f.pen_id) : undefined
@@ -262,9 +262,9 @@ function closedFlockRows({ history, catalog }: Trade): ClosedFlock[] {
         breed: f.breed ?? '—',
         placed: `${dayMonth(f.placed_on)} ${f.placed_on.slice(0, 4)}`,
         closed: `${dayMonth(closed)} ${closed.slice(0, 4)}`,
-        birdsIn: f.birds_placed,
-        birdsOut: out,
-        mortalityPct: (rows.reduce((n, d) => n + d.mortality, 0) * 100) / f.birds_placed,
+        birdsIn: placedIn,
+        birdsOut: flockBirdsOn(history, f, closed),
+        mortalityPct: (rows.reduce((n, d) => n + d.mortality, 0) * 100) / placedIn,
         margin: m ? m.revenue - penCost(m) : null,
         reason: CLOSE_REASONS.find((r) => r.value === f.close_reason)?.label ?? '—',
         rearing: f.placed_on >= history.since ? rear.total : null,

@@ -5,7 +5,7 @@ import { toast } from 'sonner'
 import { createClient } from '../lib/supabase/client'
 import type { Database } from '../lib/supabase/database.types'
 import { farmSettings } from './farmSettings'
-import { addDays, daysFrom, inRange, medicationUnitCost, penMoney, sum, unitCost, type MoneyItem } from './metrics'
+import { addDays, daysFrom, flockBirdsOn, inRange, medicationUnitCost, penMoney, sum, unitCost, type MoneyItem } from './metrics'
 import type { Payroll } from './payroll'
 import { rearingCost, suggestedLayStart } from './rearing'
 import { penLaysIn } from './farmViews'
@@ -204,11 +204,6 @@ function birdStockValue(history: History, d: string) {
 
 // ── Live birds and eggs at cost ─────────────────────────────────────
 
-function birdsOnRecord(history: History, flockId: number, d: string, fallback: number) {
-  const latest = history.daily.filter((r) => r.flockId === flockId && r.date <= d).sort((a, b) => b.date.localeCompare(a.date))[0]
-  return latest ? latest.closing : fallback
-}
-
 /**
  * Live birds at cost on day d. Layers that have started laying: their rearing cost, less the share
  * already used up over the laying period. Flocks still growing: what they have cost so far. Both
@@ -219,7 +214,7 @@ export function flockValues(history: History, catalog: Catalog, d: string): Mone
   const days = farmSettings.layerLayingWeeks * 7
   for (const f of history.flocks.filter((x) => x.placed_on <= d && (!x.closed_on || x.closed_on > d))) {
     const placedBirds = sum(history.placements.filter((p) => p.flock_id === f.id && p.placed_on <= d), (p) => p.birds) || f.birds_placed
-    const alive = birdsOnRecord(history, f.id, d, placedBirds)
+    const alive = flockBirdsOn(history, f, d)
     const layer = catalog.birdTypes.find((b) => b.id === f.bird_type_id)?.lays_eggs ?? false
     const layStart = layer ? (f.laying_started_on ?? suggestedLayStart(history, f)) : null
     if (layStart && layStart <= d) {

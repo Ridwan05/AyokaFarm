@@ -23,6 +23,7 @@ import {
   daysFrom,
   feedVariance,
   kpi,
+  flockBirdsOn,
   lastDays,
   layingRate,
   missingEntries,
@@ -291,7 +292,6 @@ function penRows(trade: ReturnType<typeof useTrade>, range: Range, penOk: (id: n
   return flocks
     .map((f) => {
       const rows = history.daily.filter((d) => d.flockId === f.id && d.date >= range.from && d.date <= range.to).sort((a, b) => a.date.localeCompare(b.date))
-      const before = history.daily.filter((d) => d.flockId === f.id && d.date < range.from).sort((a, b) => b.date.localeCompare(a.date))[0]
       const first: DailyRow | undefined = rows[0]
       const last: DailyRow | undefined = rows.at(-1)
       const ageDays = last?.ageDays ?? daysFrom(f.placed_on, range.to) + f.age_at_placement_days
@@ -305,7 +305,7 @@ function penRows(trade: ReturnType<typeof useTrade>, range: Range, penOk: (id: n
         name: `${penName(catalog, f.pen_id)} · ${kind}`,
         flock: inWithdrawal.has(f.pen_id) ? `${f.code} · withdrawal` : f.code,
         ageWeeks: Math.floor(ageDays / 7) + 1,
-        opening: first?.opening ?? before?.closing ?? f.birds_placed,
+        opening: first?.opening ?? flockBirdsOn(history, f, addDays(range.from, -1)),
         entry: last
           ? {
               died: sum(rows, (r) => r.mortality),

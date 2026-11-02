@@ -106,7 +106,7 @@ export default function FeedStock() {
 
       <InventoryTabs />
 
-      <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 lg:gap-4 xl:grid-cols-5">
         {types.map((f) => (
           <FeedCard key={f.name} feed={f} selected={f.name === feed?.name} onSelect={() => setSelected(f.name)} />
         ))}
