@@ -17,7 +17,7 @@ import { NumberCell, PrimaryCell, Table, TextCell, type Column } from '../compon
 import { pensToday, type PenToday } from '../data/dashboard'
 import { explain } from '../data/explain'
 import { farmSettings } from '../data/farmSettings'
-import { penKind, penName } from '../data/farmViews'
+import { flockKind, penKindIn, penName } from '../data/farmViews'
 import {
   addDays,
   daysFrom,
@@ -166,7 +166,7 @@ export default function Production() {
   const range = rangeFor(period, day)
   const span = daysFrom(range.from, range.to) + 1
   const prev: Range = { from: addDays(range.from, -span), to: addDays(range.from, -1), label: 'previous' }
-  const penOk = (id: number) => mine(id) && (pens === 'All pens' || penKind(catalog, id) === pens)
+  const penOk = (id: number) => mine(id) && (pens === 'All pens' || penKindIn(catalog, history, id, range) === pens)
   const rows = penRows(trade, range, penOk)
   const periodRows = rowsIn(history.daily, range, penOk)
   const prevRows = rowsIn(history.daily, prev, penOk)
@@ -295,7 +295,7 @@ function penRows(trade: ReturnType<typeof useTrade>, range: Range, penOk: (id: n
       const first: DailyRow | undefined = rows[0]
       const last: DailyRow | undefined = rows.at(-1)
       const ageDays = last?.ageDays ?? daysFrom(f.placed_on, range.to) + f.age_at_placement_days
-      const kind = penKind(catalog, f.pen_id)
+      const kind = flockKind(catalog, f)
       const firstName = (n: string) => n.split(' ')[0]
       const recorders = [...new Set(rows.map((r) => firstName(r.recordedBy)))]
       const mort = mortalityPct(rows)

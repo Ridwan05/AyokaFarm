@@ -4,23 +4,27 @@ import { Button } from '../../components/ui/Button'
 import { Field, TextInput } from '../../components/ui/Form'
 import { Modal } from '../../components/ui/Overlay'
 import { useToast } from '../../components/ui/toastContext'
-import { pens } from '../../data/pens'
+import { penNameTaken } from '../../data/farmViews'
 import { useTrade } from '../../data/tradeContext'
 
 type Props = { open: boolean; onClose: () => void }
 
 export function AddPenModal({ open, onClose }: Props) {
   const toast = useToast()
-  const { addPen } = useTrade()
-  const nextId = Math.max(0, ...pens.map((p) => p.id)) + 1
-  const [name, setName] = useState(`Pen ${nextId}`)
+  const { addPen, catalog } = useTrade()
+  // Suggest the next free "Pen N", counting pens taken out of use (names stay unique).
+  const [name, setName] = useState(() => {
+    let n = catalog.allPens.length + 1
+    while (penNameTaken(catalog, `Pen ${n}`)) n++
+    return `Pen ${n}`
+  })
   const [description, setDescription] = useState('')
   const [capacity, setCapacity] = useState('1,500')
   const [submitted, setSubmitted] = useState(false)
 
   const capacityNum = Number(capacity.replace(/,/g, ''))
   const errors = {
-    name: name.trim() ? undefined : 'Give the pen a name',
+    name: !name.trim() ? 'Give the pen a name' : penNameTaken(catalog, name) ? 'Another pen already has this name' : undefined,
     capacity: capacityNum > 0 ? undefined : 'Enter how many birds it holds',
   }
 
@@ -28,7 +32,7 @@ export function AddPenModal({ open, onClose }: Props) {
     e.preventDefault()
     setSubmitted(true)
     if (errors.name || errors.capacity) return
-    if (!(await addPen({ name: name.trim(), capacity: capacityNum, description: description.trim() }))) return
+    if (!(await addPen({ name: name.trim().replace(/\s+/g, ' '), capacity: capacityNum, description: description.trim() }))) return
     toast(`${name} added`)
     onClose()
   }

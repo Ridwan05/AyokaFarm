@@ -1,6 +1,6 @@
 'use client'
 
-import { penName } from '../../data/farmViews'
+import { flockLays, penLaysIn, penName } from '../../data/farmViews'
 import { Egg } from 'lucide-react'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -80,13 +80,13 @@ export default function ProfitLoss() {
   const today = todayISO()
   const range = period(PERIOD_KEY[periodName], today)
   const before = previous(range)
-  const lays = (penId: number) => catalog.pens.find((p) => p.id === penId)?.bird_types?.lays_eggs ?? false
-  const ofType = (m: PenMoney) => (type === 'Layers' ? lays(m.penId) : !lays(m.penId))
+  // By the flocks in each pen during the period, not the one in it now.
+  const ofType = (r: { from: string; to: string }) => (m: PenMoney) => penLaysIn(catalog, history, m.penId, r) === (type === 'Layers')
 
   const build = (r: { from: string; to: string }): Row[] => {
     const spread = spreadOn ? spreadCharges(history, catalog, r, today) : new Map<number, never>()
     return penMoney(history, catalog, r)
-      .filter(ofType)
+      .filter(ofType(r))
       .map((m) => {
         const sp = spread.get(m.penId)
         const moved = sp?.moved ?? 0
@@ -128,7 +128,7 @@ export default function ProfitLoss() {
 
   // Broiler flocks still growing: what they've cost since placement.
   const growing = history.flocks
-    .filter((f) => f.status === 'active' && !lays(f.pen_id))
+    .filter((f) => f.status === 'active' && !flockLays(catalog, f))
     .map((f) => {
       const m = penMoney(history, catalog, { from: f.placed_on, to: today }).find((x) => x.penId === f.pen_id)
       return { pen: f.pen_id, code: f.code, spent: m ? penCost(m) : 0, sold: m?.revenue ?? 0 }

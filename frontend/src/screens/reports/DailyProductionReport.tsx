@@ -1,6 +1,6 @@
 'use client'
 
-import { penName } from '../../data/farmViews'
+import { penLaysIn, penName } from '../../data/farmViews'
 import { Warehouse } from 'lucide-react'
 import { useState } from 'react'
 import { LineChart } from '../../components/charts/LineChart'
@@ -78,12 +78,15 @@ export default function DailyProductionReport() {
   const end = addDays(today, -1)
   const range: Range = rangeName === 'This month' ? period('month', today) : period(rangeName === '7 days' ? '7d' : rangeName === '30 days' ? '30d' : '90d', end)
   const before = previous(range)
-  const lays = (penId: number) => catalog.pens.find((p) => p.id === penId)?.bird_types?.lays_eggs ?? false
+  // By the flocks in each pen during the period, not the one in it now.
+  const lays = (penId: number) => penLaysIn(catalog, history, penId, range)
   const penOk = (penId: number) => pens === 'All pens' || (pens === 'Layers') === lays(penId)
   const entries = rowsIn(history.daily, range, penOk)
   const prevEntries = rowsIn(history.daily, before, penOk)
 
-  const rows: PenRow[] = catalog.pens
+  // Pens in use, plus any taken out of use that had a flock during the period.
+  const rows: PenRow[] = catalog.allPens
+    .filter((p) => p.is_active || history.flocks.some((f) => f.pen_id === p.id && f.placed_on <= range.to && (!f.closed_on || f.closed_on >= range.from)))
     .filter((p) => penOk(p.id))
     .map((p) => {
       const mine = entries.filter((d) => d.penId === p.id)

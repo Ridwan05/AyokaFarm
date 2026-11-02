@@ -146,7 +146,7 @@ export default function MedicationLedgerReport() {
   })
 
   const inPeriod = all.filter((r) => inRange(r.date, range))
-  const rows = inPeriod.filter((r) => med === 'All medications' || r.medication === med).filter((r) => pen === 'All pens' || r.penName === pen)
+  const rows = inPeriod.filter((r) => med === 'All medications' || r.medication === med).filter((r) => pen === 'All pens' || r.pen === Number(pen))
   const used = inPeriod.filter((r) => r.kind === 'Used')
   const usedCost = used.reduce((n, r) => n + r.cost, 0)
   const treatedPens = [...new Set(used.map((r) => r.pen).filter((p): p is number => p !== null))].sort((a, b) => a - b)
@@ -176,7 +176,7 @@ export default function MedicationLedgerReport() {
       <div className="flex flex-wrap items-center gap-3">
         <SegmentedControl label="Range" options={RANGES} value={rangeName} onChange={setRangeName} />
         <Select label="Medication" leadingIcon={Pill} width={200} options={['All medications', ...catalog.medications.map((m) => m.name)]} value={med} onChange={setMed} />
-        <Select label="Pen" leadingIcon={Warehouse} width={170} options={['All pens', ...catalog.pens.map((p) => p.name)]} value={pen} onChange={setPen} />
+        <Select label="Pen" leadingIcon={Warehouse} width={170} options={['All pens', ...catalog.pens.map((p) => String(p.id))]} value={pen} onChange={setPen} format={(v) => (v === 'All pens' ? v : penName(catalog, Number(v)))} />
         <span className="flex-1" />
         <span className="type-body-sm text-fg-tertiary">
           {dayMonth(range.from)} – {dayMonth(range.to)}

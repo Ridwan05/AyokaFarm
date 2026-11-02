@@ -17,6 +17,7 @@ import { useAlertMarks } from '../data/alertMarks'
 import { alertTypes, type AlertMark, type FarmAlert } from '../data/alerts'
 import { deriveAlerts } from '../data/derivedAlerts'
 import { addDays, dayMonth, dm, timeOf, todayISO } from '../data/metrics'
+import { penName } from '../data/farmViews'
 import type { Catalog } from '../data/remote'
 import { useTrade } from '../data/tradeContext'
 import { useCurrentUser } from '../data/sessionContext'
@@ -35,7 +36,7 @@ type ResolvedRow = AlertMark & { id: string; title: string; where: string; raise
  * Mortality · Pen 2 · 28 Oct). Ids are built in derivedAlerts.ts.
  */
 function describeAlert(id: string, catalog: Catalog): { title: string; where: string; raised: string } {
-  const pen = (n: string) => catalog.pens.find((p) => p.id === Number(n))?.name ?? `Pen ${n}`
+  const pen = (n: string) => penName(catalog, Number(n))
   const m = id.match(/^(mortality|feed|missing)-(\d+)-(\d{4}-\d{2}-\d{2})$/)
   if (m) {
     const kind = { mortality: 'Mortality spike', feed: 'Feed off target', missing: 'Entry missing' }[m[1] as 'mortality' | 'feed' | 'missing']
@@ -67,7 +68,8 @@ export default function Alerts() {
   // Acknowledged / resolved marks are shared by everyone.
   const { marks, error: marksError, mark: saveMark } = useAlertMarks(trade.catalog, currentUser.id)
   const [type, setType] = useState(TYPE_FILTERS[0])
-  const penFilters = ['All pens', ...trade.catalog.pens.map((p) => p.name)]
+  // Filter by pen id; the name is only what's shown, so a rename can't break it.
+  const penFilters = ['All pens', ...trade.catalog.pens.map((p) => String(p.id))]
   const [pen, setPen] = useState(penFilters[0])
   const [selectedId, setSelectedId] = useState<string>()
 
@@ -81,13 +83,12 @@ export default function Alerts() {
   const [tab, setTab] = useState(tabs[0])
   const tabKey = tab.split(' · ')[0]
 
-  const penId = trade.catalog.pens.find((p) => p.name === pen)?.id
   const visible = alerts
     .filter((a) =>
       tabKey === 'Open' ? a.status !== 'resolved' : tabKey === 'Acknowledged' ? a.status === 'acknowledged' : tabKey === 'Resolved' ? a.status === 'resolved' : true,
     )
     .filter((a) => type === 'All types' || alertTypes[a.kind as AlertKind] === type)
-    .filter((a) => pen === 'All pens' || a.pen === penId)
+    .filter((a) => pen === 'All pens' || a.pen === Number(pen))
   const selected = visible.find((a) => a.id === selectedId) ?? visible[0]
   const critical = visible.filter((a) => a.severity === 'Critical').length
 
@@ -98,7 +99,7 @@ export default function Alerts() {
     .map(([id, m]) => {
       const live = derived.find((a) => a.id === id)
       const about = live
-        ? { title: live.title, where: live.pen ? (trade.catalog.pens.find((p) => p.id === live.pen)?.name ?? `Pen ${live.pen}`) : alertTypes[live.kind], raised: live.time }
+        ? { title: live.title, where: live.pen ? penName(trade.catalog, live.pen) : alertTypes[live.kind], raised: live.time }
         : describeAlert(id, trade.catalog)
       return { id, ...m, ...about }
     })
@@ -139,7 +140,7 @@ export default function Alerts() {
       <div className="flex flex-wrap items-center gap-3">
         <SegmentedControl label="Alert status" options={tabs} value={tabs.find((t) => t.startsWith(tabKey))!} onChange={setTab} />
         <Select label="Alert type" leadingIcon={ListFilter} width={180} options={TYPE_FILTERS} value={type} onChange={setType} />
-        <Select label="Pen" leadingIcon={Warehouse} width={180} options={penFilters} value={pen} onChange={setPen} />
+        <Select label="Pen" leadingIcon={Warehouse} width={180} options={penFilters} value={pen} onChange={setPen} format={(v) => (v === 'All pens' ? v : penName(trade.catalog, Number(v)))} />
         <span className="flex-1" />
         <p className="type-body-sm whitespace-nowrap text-fg-tertiary">WhatsApp alerts aren’t connected yet</p>
       </div>

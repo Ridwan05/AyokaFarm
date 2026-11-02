@@ -37,7 +37,7 @@ export default function ReceiptPrint() {
           {dmy(saleDate(sale))} {time}
         </Fact>
         <Fact label="Served by">{sale.recordedBy}</Fact>
-        {sale.allocations?.length ? <Fact label="From">{portionsLabel(sale, catalog.pens).replace(/\bP(\d+)/g, 'Pen $1')}</Fact> : null}
+        {sale.allocations?.length ? <Fact label="From">{portionsLabel(sale, catalog, true)}</Fact> : null}
       </div>
       <table className="w-full border-collapse type-body-md">
         <thead>

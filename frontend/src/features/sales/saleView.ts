@@ -1,5 +1,7 @@
 import type { Tone } from '../../components/ui/Badge'
 import { ONE_OFF, type Customer } from '../../data/customers'
+import { penName } from '../../data/farmViews'
+import type { Catalog } from '../../data/remote'
 import { products, saleStatus, type Sale, type SaleStatus } from '../../data/sales'
 
 export const statusBadge: Record<SaleStatus, { tone: Tone; label: string }> = {
@@ -19,10 +21,10 @@ export function customerView(s: Sale, customers: Customer[]) {
 
 export const isNeedsApproval = (s: Sale) => saleStatus(s) === 'needs-approval'
 
-/** "P1 25 · P3 15", or "Auto-split" when the sale isn't split by pen. */
-export function portionsLabel(sale: Sale, pens: { id: number; name: string }[]) {
+/** "P1 25 · P3 15" (pen names in full with `full`), or "Auto-split" when the sale isn't split by pen. */
+export function portionsLabel(sale: Sale, catalog: Pick<Catalog, 'pens' | 'allPens'>, full = false) {
   if (!sale.allocations?.length) return 'Auto-split'
   return sale.allocations
-    .map((a) => `${(pens.find((p) => p.id === a.penId)?.name ?? `Pen ${a.penId}`).replace(/^Pen\s*/i, 'P')} ${a.qty.toLocaleString('en-NG')}`)
+    .map((a) => `${full ? penName(catalog, a.penId) : penName(catalog, a.penId).replace(/^Pen\s*/i, 'P')} ${a.qty.toLocaleString('en-NG')}`)
     .join(' · ')
 }

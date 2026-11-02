@@ -18,7 +18,7 @@ import { FEED_COVER_FULL_DAYS, pensToday, type Alert, type PenToday } from '../d
 import { deriveAlerts } from '../data/derivedAlerts'
 import { explain } from '../data/explain'
 import { farmSettings } from '../data/farmSettings'
-import { alertRow, dateLabels, penKind, penName } from '../data/farmViews'
+import { alertRow, dateLabels, penKindIn, penName } from '../data/farmViews'
 import { feedTypes } from '../data/inventory'
 import {
   addDays,
@@ -71,8 +71,10 @@ export default function Dashboard() {
   const [range, setRange] = useState<RangeLabel>('Today')
   const [pen, setPen] = useState<string>(ALL_PENS)
   const [birds, setBirds] = useState<(typeof BIRD_FILTERS)[number]>('Layers & broilers')
-  const penOptions = [ALL_PENS, ...catalog.pens.map((p) => p.name)]
-  const penOk = (id: number) => (pen === ALL_PENS || penName(catalog, id) === pen) && (birds === 'Layers & broilers' || penKind(catalog, id) === birds)
+  // Filter by pen id; the name is only what's shown, so a rename can't break it.
+  const penOptions = [ALL_PENS, ...catalog.pens.map((p) => String(p.id))]
+  const penLabel = (v: string) => (v === ALL_PENS ? v : penName(catalog, Number(v)))
+  const penOk = (id: number) => (pen === ALL_PENS || String(id) === pen) && (birds === 'Layers & broilers' || penKindIn(catalog, history, id, period(RANGE_KEY[range], todayISO())) === birds)
 
   const today = todayISO()
   const rows = pensToday.filter((p) => penOk(p.id))
@@ -111,7 +113,7 @@ export default function Dashboard() {
 
       <div className="flex flex-wrap items-center gap-3">
         <SegmentedControl label="Date range" options={RANGES} value={range} onChange={setRange} />
-        <Select label="Pen" leadingIcon={Warehouse} options={penOptions} value={pen} onChange={setPen} />
+        <Select label="Pen" leadingIcon={Warehouse} options={penOptions} value={pen} onChange={setPen} format={penLabel} />
         <Select label="Bird type" leadingIcon={Bird} options={BIRD_FILTERS} value={birds} onChange={setBirds} />
         <span className="flex-1" />
         <p className="flex items-center gap-1.5 type-body-sm whitespace-nowrap text-fg-tertiary">
@@ -132,7 +134,7 @@ export default function Dashboard() {
       </div>
 
       <div className="flex flex-col gap-4 lg:flex-row">
-        <FeedChart trade={trade} penOk={penOk} scope={pen !== ALL_PENS ? pen : birds === 'Layers & broilers' ? 'All pens' : `${birds} pens`} />
+        <FeedChart trade={trade} penOk={penOk} scope={pen !== ALL_PENS ? penLabel(pen) : birds === 'Layers & broilers' ? 'All pens' : `${birds} pens`} />
         <Receivables trade={trade} />
       </div>
 

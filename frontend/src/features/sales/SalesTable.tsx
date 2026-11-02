@@ -41,7 +41,7 @@ export function SalesTable({ sales, onOpen, onRecordPayment, onEdit, onVoid }: P
       render: (s) => (
         <span className="flex min-w-0 flex-col">
           <TextCell>{productOf(s).short}</TextCell>
-          <span className="truncate type-body-sm text-fg-tertiary">{portionsLabel(s, catalog.pens)}</span>
+          <span className="truncate type-body-sm text-fg-tertiary">{portionsLabel(s, catalog)}</span>
         </span>
       ),
     },

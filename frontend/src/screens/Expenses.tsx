@@ -52,7 +52,8 @@ export default function Expenses() {
   const penName = (id: number | null) => (id === null ? 'General' : nameOfPen(catalog, id))
   const categories = [...new Set([...catalog.categories.filter((c) => c.is_active).map((c) => c.name), ...expenses.map((e) => e.category)])]
   const categoryFilters = ['All categories', ...categories]
-  const penFilters = ['All pens', 'General', ...catalog.pens.map((p) => p.name)]
+  // Filter by pen id; the name is only what's shown, so a rename can't break it.
+  const penFilters = ['All pens', 'General', ...catalog.pens.map((p) => String(p.id))]
 
   const range = rangeOf(period)
   const before = compareWith(period, range)
@@ -60,7 +61,7 @@ export default function Expenses() {
   const q = query.trim().toLowerCase()
   const rows = inPeriod
     .filter((e) => category === 'All categories' || e.category === category)
-    .filter((e) => pen === 'All pens' || penName(e.pen) === pen)
+    .filter((e) => pen === 'All pens' || (pen === 'General' ? e.pen === null : e.pen === Number(pen)))
     .filter((e) => !q || e.description.toLowerCase().includes(q))
 
   const total = inPeriod.reduce((n, e) => n + e.amount, 0)
@@ -115,7 +116,7 @@ export default function Expenses() {
       <div className="flex flex-wrap items-center gap-3">
         <SegmentedControl label="Period" options={PERIODS} value={period} onChange={setPeriod} />
         <Select label="Category" leadingIcon={ListFilter} width={190} options={categoryFilters} value={category} onChange={setCategory} />
-        <Select label="Pen" leadingIcon={Warehouse} width={170} options={penFilters} value={pen} onChange={setPen} />
+        <Select label="Pen" leadingIcon={Warehouse} width={170} options={penFilters} value={pen} onChange={setPen} format={(v) => (v === 'All pens' || v === 'General' ? v : penName(Number(v)))} />
         <span className="flex-1" />
         <SearchInput label="Search description" placeholder="Search description" width={240} value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>

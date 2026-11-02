@@ -8,6 +8,7 @@ import { farmSettings } from './farmSettings'
 import { addDays, daysFrom, inRange, medicationUnitCost, penMoney, sum, unitCost, type MoneyItem } from './metrics'
 import type { Payroll } from './payroll'
 import { rearingCost, suggestedLayStart } from './rearing'
+import { penLaysIn } from './farmViews'
 import type { Catalog, History } from './remote'
 
 // Financial statements on an accrual basis (BRD reports; template supplied by the owner).
@@ -244,9 +245,9 @@ export function eggValue(history: History, catalog: Catalog, d: string): MoneyIt
     const latest = history.stockDays.filter((s) => s.item === kind && s.date <= d).sort((a, b) => b.date.localeCompare(a.date))[0]
     return { kind, crates: (latest?.closing ?? 0) / farmSettings.eggsPerCrate }
   })
-  const layerPens = new Set(catalog.pens.filter((p) => p.bird_types?.lays_eggs).map((p) => p.id))
   const window = { from: addDays(d, -29), to: d }
-  const m = penMoney(history, catalog, window).filter((x) => layerPens.has(x.penId))
+  // Layer pens by the flocks in them during the window, so a flock closed since still counts.
+  const m = penMoney(history, catalog, window).filter((x) => penLaysIn(catalog, history, x.penId, window))
   const made = sum(m, (x) => x.eggs) / farmSettings.eggsPerCrate
   const perCrate = made ? sum(m, (x) => x.feed + x.medication + x.birds + x.direct + x.overhead) / made : 0
   return crates

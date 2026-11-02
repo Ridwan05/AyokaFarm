@@ -5,6 +5,7 @@ import { Field, TextInput } from '../../components/ui/Form'
 import { Modal } from '../../components/ui/Overlay'
 import { Switch } from '../../components/ui/Switch'
 import { useToast } from '../../components/ui/toastContext'
+import { penNameTaken } from '../../data/farmViews'
 import type { Catalog } from '../../data/remote'
 import { useTrade } from '../../data/tradeContext'
 import { formatNumber } from '../../lib/format'
@@ -14,7 +15,7 @@ type Props = { pen: Catalog['allPens'][number]; onClose: () => void }
 /** Owner only: rename a pen, change its capacity or description, or take it out of use. */
 export function EditPenModal({ pen, onClose }: Props) {
   const toast = useToast()
-  const { updatePen, history } = useTrade()
+  const { updatePen, history, catalog } = useTrade()
   const [name, setName] = useState(pen.name)
   const [capacity, setCapacity] = useState(formatNumber(pen.capacity))
   const [description, setDescription] = useState(pen.description ?? '')
@@ -25,7 +26,7 @@ export function EditPenModal({ pen, onClose }: Props) {
   const flock = history.flocks.find((f) => f.pen_id === pen.id && f.status === 'active')
   const capacityNum = Number(capacity.replace(/,/g, ''))
   const errors = {
-    name: name.trim() ? undefined : 'Give the pen a name',
+    name: !name.trim() ? 'Give the pen a name' : penNameTaken(catalog, name, pen.id) ? 'Another pen already has this name' : undefined,
     capacity: capacityNum > 0 ? undefined : 'Enter how many birds it holds',
     active: !active && flock ? `Close flock ${flock.code} before taking the pen out of use` : undefined,
   }
@@ -35,7 +36,7 @@ export function EditPenModal({ pen, onClose }: Props) {
     setSubmitted(true)
     if (errors.name || errors.capacity || errors.active) return
     setBusy(true)
-    const ok = await updatePen(pen.id, { name: name.trim(), capacity: capacityNum, description: description.trim() || null, is_active: active })
+    const ok = await updatePen(pen.id, { name: name.trim().replace(/\s+/g, ' '), capacity: capacityNum, description: description.trim() || null, is_active: active })
     setBusy(false)
     if (!ok) return
     toast(`${name.trim()} saved`)
