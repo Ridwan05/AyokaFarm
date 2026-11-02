@@ -1,7 +1,7 @@
 'use client'
 
 import { penName as nameOfPen } from '../data/farmViews'
-import { Download, ListFilter, Plus, Warehouse } from 'lucide-react'
+import { CalendarDays, Download, ListFilter, Plus, Warehouse } from 'lucide-react'
 import { useState } from 'react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Button } from '../components/ui/Button'
@@ -11,11 +11,10 @@ import { explainMoney } from '../data/explainMoney'
 import { explain } from '../data/explain'
 import { InfoTip } from '../components/ui/InfoTip'
 import { KeyValueRow } from '../components/ui/KeyValueRow'
-import { SegmentedControl } from '../components/ui/SegmentedControl'
 import { Select } from '../components/ui/Select'
 import { NumberCell, Table, TextCell, type Column } from '../components/ui/Table'
 import type { Expense } from '../data/expenses'
-import { period as periodRange, previous, type Range } from '../data/metrics'
+import { addDays, period as periodRange, previous, type PeriodKey, type Range } from '../data/metrics'
 import { expenseTotal, expensesIn, pctChange, spanLabel } from '../data/moneyKpis'
 import { useTrade } from '../data/tradeContext'
 import { AddExpenseModal } from '../features/expenses/AddExpenseModal'
@@ -27,12 +26,14 @@ import { downloadCsv } from '../lib/export'
 import { formatNaira, formatNumber } from '../lib/format'
 import { Presence } from '../components/ui/Overlay'
 
-const PERIODS = ['This month', 'Last month', 'This year'] as const
+const PERIODS = ['Today', 'This week', 'Last week', 'This month', 'Last month', 'This year'] as const
 type Period = (typeof PERIODS)[number]
+const PERIOD_KEY: Record<Period, PeriodKey> = { Today: 'today', 'This week': 'week', 'Last week': 'last-week', 'This month': 'month', 'Last month': 'last-month', 'This year': 'ytd' }
 
-const rangeOf = (p: Period): Range => periodRange(p === 'This month' ? 'month' : p === 'Last month' ? 'last-month' : 'ytd')
-/** The period compared against: the same days a month (or year) earlier. */
+const rangeOf = (p: Period): Range => periodRange(PERIOD_KEY[p])
+/** The period compared against: the day before, the same weekdays a week earlier, or the same days a month (or year) earlier. */
 function compareWith(p: Period, r: Range): Range {
+  if (p === 'This week') return { from: addDays(r.from, -7), to: addDays(r.to, -7), label: 'last week' }
   if (p !== 'This year') return previous(r)
   const back = (iso: string) => `${Number(iso.slice(0, 4)) - 1}${iso.slice(4)}`
   return { from: back(r.from), to: back(r.to), label: 'last year' }
@@ -114,7 +115,7 @@ export default function Expenses() {
       />
 
       <div className="flex flex-wrap items-center gap-3">
-        <SegmentedControl label="Period" options={PERIODS} value={period} onChange={setPeriod} />
+        <Select label="Period" leadingIcon={CalendarDays} width={170} options={PERIODS} value={period} onChange={setPeriod} />
         <Select label="Category" leadingIcon={ListFilter} width={190} options={categoryFilters} value={category} onChange={setCategory} />
         <Select label="Pen" leadingIcon={Warehouse} width={170} options={penFilters} value={pen} onChange={setPen} format={(v) => (v === 'All pens' || v === 'General' ? v : penName(Number(v)))} />
         <span className="flex-1" />
