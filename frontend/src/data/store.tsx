@@ -251,6 +251,41 @@ export function TradeProvider({ children }: { children: ReactNode }) {
       return true
     },
 
+    async addExpenses(list, receipts) {
+      // One insert, so the day's expenses save together or not at all.
+      const { data: saved, error } = await db
+        .from('expenses')
+        .insert(
+          list.map(
+            (e) =>
+              ({
+                spent_on: e.date,
+                category_id: lookups.categoryId.get(e.category) ?? lookups.categoryId.get('Other')!,
+                description: e.description,
+                amount: e.amount,
+                supplier_id: e.supplierId ? Number(e.supplierId) : null,
+                amount_paid: e.amountPaid ?? e.amount,
+                payment_method: dbMethod(e.method),
+                pen_id: e.pen,
+                receipt_path: null,
+                recorded_by: user.id,
+              }) as TablesInsert<'expenses'>,
+          ),
+        )
+        .select('id, ref')
+      if (error || !saved || saved.length !== list.length) {
+        toast.error(friendly(error?.message ?? 'The expenses weren’t saved'))
+        return false
+      }
+      // Rows come back in insert order; each receipt goes to its own expense.
+      for (const [i, row] of saved.entries()) {
+        const file = receipts[i]
+        if (file) await attachReceipt(row.id, row.ref, file)
+      }
+      await reload()
+      return true
+    },
+
     receiptUrl: async (path) => {
       const { data: link, error } = await db.storage.from(RECEIPTS).createSignedUrl(path, 600)
       if (error) toast.error(receiptError(error.message))

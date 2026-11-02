@@ -62,6 +62,8 @@ export type Trade = {
   expenses: Expense[]
   /** Saves the expense, then uploads its receipt (photo or PDF) when one is given. */
   addExpense: (expense: Expense, receipt?: File | null) => Promise<boolean>
+  /** Saves several expenses together (all or none), then uploads each one's receipt (`receipts[i]`). */
+  addExpenses: (expenses: Expense[], receipts: (File | null)[]) => Promise<boolean>
   /** A short-lived link to view a stored receipt. */
   receiptUrl: (path: string) => Promise<string | null>
   /** Owner (delete permission): void a record with a reason; it leaves every list and total. */
