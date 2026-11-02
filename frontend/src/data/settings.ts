@@ -9,7 +9,10 @@ export type StaffMember = {
   initials: string
   phone: string
   role: Role
+  /** "All pens", or the pen names they work on. */
   pens: string
+  /** The pens a pen attendant works on. */
+  penIds: number[]
   lastActive: string
   whatsapp: boolean
   active: boolean

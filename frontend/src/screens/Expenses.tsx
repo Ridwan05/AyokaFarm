@@ -1,5 +1,6 @@
 'use client'
 
+import { penName as nameOfPen } from '../data/farmViews'
 import { Download, ListFilter, Plus, Warehouse } from 'lucide-react'
 import { useState } from 'react'
 import { PageHeader } from '../components/layout/PageHeader'
@@ -48,7 +49,7 @@ export default function Expenses() {
   // Correct or void the open expense.
   const [action, setAction] = useState<'edit' | 'void' | null>(null)
 
-  const penName = (id: number | null) => (id === null ? 'General' : (catalog.pens.find((p) => p.id === id)?.name ?? `Pen ${id}`))
+  const penName = (id: number | null) => (id === null ? 'General' : nameOfPen(catalog, id))
   const categories = [...new Set([...catalog.categories.filter((c) => c.is_active).map((c) => c.name), ...expenses.map((e) => e.category)])]
   const categoryFilters = ['All categories', ...categories]
   const penFilters = ['All pens', 'General', ...catalog.pens.map((p) => p.name)]

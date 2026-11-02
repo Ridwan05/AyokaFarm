@@ -15,6 +15,8 @@ export type Stat = {
 
 export type Pen = {
   id: number
+  /** The owner can rename a pen; show this, not the number. */
+  name: string
   type: BirdType
   flock: string
   week: number

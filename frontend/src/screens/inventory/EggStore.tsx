@@ -1,5 +1,6 @@
 'use client'
 
+import { penName } from '../../data/farmViews'
 import { Plus, Scale } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
@@ -63,7 +64,7 @@ export default function EggStore() {
   const layingToday = layingRate(rowsOn(history.daily, today))
   const kpis = [
     kpi({ label: 'Sellable now', value: cr(onHand - heldTotal), unit: 'crates', current: onHand - heldTotal, previous: closingOn(addDays(today, -1)), context: 'in store, less held crates', info: 'Eggs collected − sold − broken or counted out, in crates, less the crates held back for pens in withdrawal.', spark: series(days, closingOn).map(crates) }),
-    kpi({ label: 'Held · withdrawal', value: cr(heldTotal), unit: 'crates', current: null, previous: null, goodWhen: 'neither', context: held.length ? held.map((h) => `Pen ${h.penId} to ${dayMonth(h.clearFrom)}`).join(' · ') : 'No pen in withdrawal', info: 'Eggs collected since the last dose in pens still in a medication withdrawal period, in crates. They can’t be sold until the pen is clear.', spark: FLAT }),
+    kpi({ label: 'Held · withdrawal', value: cr(heldTotal), unit: 'crates', current: null, previous: null, goodWhen: 'neither', context: held.length ? held.map((h) => `${penName(catalog, h.penId)} to ${dayMonth(h.clearFrom)}`).join(' · ') : 'No pen in withdrawal', info: 'Eggs collected since the last dose in pens still in a medication withdrawal period, in crates. They can’t be sold until the pen is clear.', spark: FLAT }),
     kpi({ label: 'Collected today', value: cr(collected(today)), unit: 'crates', current: collected(today), previous: collected(addDays(today, -1)), context: layingToday !== null ? `${num(layingToday, 1)}% laying` : 'No entries yet today', info: 'Eggs collected in today’s daily entries ÷ eggs a crate, compared with yesterday.', spark: series(days, collected).map(crates) }),
     kpi({ label: 'Sold this week', value: num(soldWeek.qty), unit: 'crates', current: soldWeek.qty, previous: soldLast.qty, context: soldWeek.qty ? `avg ${naira(soldWeek.amount / soldWeek.qty)} a crate` : 'vs last week', info: 'Crates on approved egg sales since Monday, compared with the same days last week. Average price = money ÷ crates.', spark: series(days, (d) => salesOfItem(history, catalog, 'eggs', { from: d, to: d }).qty) }),
   ]
@@ -128,7 +129,7 @@ export default function EggStore() {
 
       {showHeld &&
         held.map((h) => (
-          <Alert key={h.penId} title={`Pen ${h.penId}’s eggs are held until ${weekdayDayMonth(h.clearFrom)}`} onDismiss={() => setShowHeld(false)}>
+          <Alert key={h.penId} title={`${penName(catalog, h.penId)}’s eggs are held until ${weekdayDayMonth(h.clearFrom)}`} onDismiss={() => setShowHeld(false)}>
             {h.medication} withdrawal ({h.days} days from the last dose on {dayMonth(h.lastDose)}). About {cr(h.eggs)} crates collected since {dayMonth(h.since)} are kept
             apart and can’t be sold; write them off with a reason when the withdrawal ends.{" "}
             <InfoTip label="Eggs held">{explain.eggsHeld()} Crates = eggs this pen collected since the dose ÷ {farmSettings.eggsPerCrate}.</InfoTip>

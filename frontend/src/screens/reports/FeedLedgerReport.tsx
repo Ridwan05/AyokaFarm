@@ -1,5 +1,6 @@
 'use client'
 
+import { penName } from '../../data/farmViews'
 import { Package } from 'lucide-react'
 import { useState } from 'react'
 import { DivergingBars } from '../../components/charts/DivergingBars'
@@ -98,7 +99,7 @@ export default function FeedLedgerReport() {
     ? 'No entries with an expected amount in this range.'
     : Math.abs(outlier.pct) < watchPct
       ? `Every pen is within ±${watchPct}% of its expected feed.`
-      : `Pen ${outlier.pen} is furthest from its band (${formatSignedPct(outlier.pct)}).${Math.abs(outlier.pct) > tol ? ' That is outside the tolerance — check the feeders and the entries.' : ''}`
+      : `${penName(catalog, outlier.pen)} is furthest from its band (${formatSignedPct(outlier.pct)}).${Math.abs(outlier.pct) > tol ? ' That is outside the tolerance — check the feeders and the entries.' : ''}`
   const lowest = all.filter((f) => f.cover !== null).sort((a, b) => a.cover! - b.cover!)[0]
 
   const kpis = [
@@ -150,7 +151,7 @@ export default function FeedLedgerReport() {
             rows={variance.map((v) => {
               const watch = Math.abs(v.pct) >= watchPct
               return {
-                label: `Pen ${v.pen}`,
+                label: penName(catalog, v.pen),
                 value: v.pct,
                 color: watch ? 'var(--ayk-color-chart-2)' : 'var(--ayk-color-chart-1)',
                 display: <span className={`type-numeric-md ${watch ? 'text-fg-warning' : 'text-fg-primary'}`}>{formatSignedPct(v.pct)}</span>,

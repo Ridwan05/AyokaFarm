@@ -1,5 +1,6 @@
 'use client'
 
+import { penName } from '../../data/farmViews'
 import { Egg } from 'lucide-react'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -97,7 +98,7 @@ export default function ProfitLoss() {
         const ages = days.map((d) => Math.floor(d.ageDays / 7))
         return {
           ...m,
-          name: catalog.pens.find((p) => p.id === m.penId)?.name ?? `Pen ${m.penId}`,
+          name: penName(catalog, m.penId),
           flock: flockIds.map((id) => history.flocks.find((f) => f.id === id)?.code).filter(Boolean).join(', '),
           weeks: ages.length ? (Math.min(...ages) === Math.max(...ages) ? `week ${Math.min(...ages)}` : `week ${Math.min(...ages)}–${Math.max(...ages)}`) : '',
           moved,
@@ -309,7 +310,7 @@ export default function ProfitLoss() {
 
       {growing.length > 0 && (
         <Alert title="Broiler flocks are judged per flock, not per month" action={<AlertAction onClick={() => router.push('/pens')}>See pens</AlertAction>}>
-          {growing.map((g) => `Pen ${g.pen} (${g.code}) has cost ${nairaShort(g.spent)} so far${g.sold ? ` and sold ${nairaShort(g.sold)}` : ''}`).join('; ')}. Their margin is clearest once each flock is sold.
+          {growing.map((g) => `${penName(catalog, g.pen)} (${g.code}) has cost ${nairaShort(g.spent)} so far${g.sold ? ` and sold ${nairaShort(g.sold)}` : ''}`).join('; ')}. Their margin is clearest once each flock is sold.
         </Alert>
       )}
     </>

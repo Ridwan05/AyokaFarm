@@ -1,5 +1,6 @@
 'use client'
 
+import { penName } from './farmViews'
 import { RefreshCw } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
@@ -299,7 +300,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
     async addProductionRecord(r) {
       const flock = lookups.activeFlockByPen.get(r.penId)
       if (!flock) {
-        toast.error(`Pen ${r.penId} has no flock to record`)
+        toast.error(`${penName(data.catalog, r.penId)} has no flock to record`)
         return false
       }
       // The entry and its medication lines are saved together, so a dose can't go missing.

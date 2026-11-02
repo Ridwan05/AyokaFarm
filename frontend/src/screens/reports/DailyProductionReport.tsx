@@ -1,5 +1,6 @@
 'use client'
 
+import { penName } from '../../data/farmViews'
 import { Warehouse } from 'lucide-react'
 import { useState } from 'react'
 import { LineChart } from '../../components/charts/LineChart'
@@ -135,7 +136,7 @@ export default function DailyProductionReport() {
   const kpis = [
     kpi({ label: 'Eggs collected', value: formatNumber(Math.round(crates)), unit: 'crates', current: crates, previous: eggsPrev, context: 'vs previous period', info: 'Eggs collected in daily entries over the period ÷ eggs a crate, compared with the period before.', spark: spark((d) => rowsOn(history.daily, d, penOk).reduce((n, x) => n + (x.eggs ?? 0), 0)) }),
     kpi({ label: 'Laying rate', value: num(layingRate(entries) ?? 0, 1), unit: '%', current: layingRate(entries), previous: layingRate(prevEntries), points: true, digits: 1, context: `${layerPens} layer ${layerPens === 1 ? 'pen' : 'pens'}, average`, info: 'Eggs collected ÷ hens at the start of each day, added up over the period, layer pens only.', spark: spark((d) => layingRate(rowsOn(history.daily, d, penOk))) }),
-    kpi({ label: 'Mortality', value: formatNumber(died), unit: 'birds', current: mortalityPct(entries), previous: mortalityPct(prevEntries), points: true, goodWhen: 'down', context: worst.length ? `highest: ${worst.map((w) => `Pen ${w.pen}`).join(' and ')}` : 'no deaths', info: 'Deaths recorded over the period. The change compares deaths ÷ birds at the start of each day with the period before.', spark: spark((d) => rowsOn(history.daily, d, penOk).reduce((n, x) => n + x.mortality, 0)) }),
+    kpi({ label: 'Mortality', value: formatNumber(died), unit: 'birds', current: mortalityPct(entries), previous: mortalityPct(prevEntries), points: true, goodWhen: 'down', context: worst.length ? `highest: ${worst.map((w) => penName(catalog, w.pen)).join(' and ')}` : 'no deaths', info: 'Deaths recorded over the period. The change compares deaths ÷ birds at the start of each day with the period before.', spark: spark((d) => rowsOn(history.daily, d, penOk).reduce((n, x) => n + x.mortality, 0)) }),
     kpi({ label: 'Entries on time', value: formatNumber(recorded - late), unit: `of ${formatNumber(expected)}`, current: null, previous: null, goodWhen: 'neither', context: `${late} late · ${missing} missing`, info: 'Entries saved on the day they were for, out of the days each flock was in its pen during the period.', spark: FLAT }),
   ]
 

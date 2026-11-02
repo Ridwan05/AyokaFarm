@@ -1,3 +1,4 @@
+import { penList, penName } from '../../data/farmViews'
 import { Button } from '../../components/ui/Button'
 import { DetailSection, History } from '../../components/ui/Detail'
 import { KeyValueRow } from '../../components/ui/KeyValueRow'
@@ -30,7 +31,7 @@ export function MedicationDrawer({ medication: m, onClose }: { medication: Medic
     const q = Number(x.quantity)
     return {
       title: `${MOVED[x.movement] ?? x.movement} ${qty(Math.abs(q))}`,
-      detail: [x.pen_id ? `Pen ${x.pen_id}` : null, x.purchase_id ? `Batch ${batchNo.get(x.purchase_id) ?? '—'}` : null].filter(Boolean).join(' · ') || '—',
+      detail: [x.pen_id ? penName(catalog, x.pen_id) : null, x.purchase_id ? `Batch ${batchNo.get(x.purchase_id) ?? '—'}` : null].filter(Boolean).join(' · ') || '—',
       time: dayMonth(x.moved_on),
     }
   })
@@ -53,11 +54,11 @@ export function MedicationDrawer({ medication: m, onClose }: { medication: Medic
         </KeyValueRow>
         <KeyValueRow label="Reorder at">{qty(m.reorderAt)}</KeyValueRow>
         <KeyValueRow label="Withdrawal" calculated={explain.withdrawal()}>
-          {m.withdrawalDays === null ? '—' : `${m.withdrawalDays} days${inForce.length ? ` · ${inForce.map((w) => `Pen ${w.penId} until ${weekdayDayMonth(w.clearFrom)}`).join(', ')}` : ''}`}
+          {m.withdrawalDays === null ? '—' : `${m.withdrawalDays} days${inForce.length ? ` · ${inForce.map((w) => `${penName(catalog, w.penId)} until ${weekdayDayMonth(w.clearFrom)}`).join(', ')}` : ''}`}
         </KeyValueRow>
-        <KeyValueRow label="Last used">{lastUsed ? `${dayMonth(lastUsed.moved_on)} · ${lastUsed.pen_id ? `Pen ${lastUsed.pen_id}` : '—'}` : '—'}</KeyValueRow>
+        <KeyValueRow label="Last used">{lastUsed ? `${dayMonth(lastUsed.moved_on)} · ${lastUsed.pen_id ? penName(catalog, lastUsed.pen_id) : '—'}` : '—'}</KeyValueRow>
         <KeyValueRow label="Status" calculated={explain.medicationStatus()}>
-          {medicationStatus({ ...m, stock, inUseBy: inForce[0]?.penId }).label}
+          {medicationStatus({ ...m, stock, inUseBy: inForce.length ? penList(catalog, inForce.map((w) => w.penId)) : undefined }).label}
         </KeyValueRow>
       </DetailSection>
       <DetailSection title="Batches · first to expire is used first">

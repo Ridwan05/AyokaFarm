@@ -7,6 +7,7 @@ import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { useToast } from '../../components/ui/toastContext'
 import type { Expense, ExpenseCategory } from '../../data/expenses'
 import { todayISO, weekdayDayMonth } from '../../data/metrics'
+import { penName } from '../../data/farmViews'
 import { pens } from '../../data/pens'
 import type { PaymentMethod } from '../../data/sales'
 import { useCurrentUser } from '../../data/sessionContext'
@@ -37,6 +38,7 @@ export function AddExpenseModal({ onClose, expense }: { onClose: () => void; exp
   const lastMethod = history.expenses.find((x) => x.recorded_by === currentUser.id)?.payment_method
   const [scope, setScope] = useState<(typeof SCOPES)[number]>(expense ? (expense.pen === null ? 'Whole farm' : 'One pen') : 'One pen')
   const [pen, setPen] = useState(String(expense?.pen ?? penOptions[0]?.id ?? ''))
+  const penLabel = penName(catalog, Number(pen))
   const [category, setCategory] = useState<ExpenseCategory>(expense?.category ?? ((categories[0] ?? 'Other') as ExpenseCategory))
   const [amount, setAmount] = useState(expense ? formatNumber(expense.amount) : '')
   const [paid, setPaid] = useState(expense ? formatNumber(expense.amountPaid ?? expense.amount) : '')
@@ -129,13 +131,13 @@ export function AddExpenseModal({ onClose, expense }: { onClose: () => void; exp
       <form id="add-expense" onSubmit={submit} className="flex flex-col gap-5">
         {!ownPensOnly && <SegmentedControl fullWidth label="Charged to" options={SCOPES} value={scope} onChange={setScope} />}
         {scope === 'One pen' ? (
-          <Field label="Pen" hint={ownPensOnly ? `Charged to Pen ${pen} — you can add expenses for your own pens` : `Charged to Pen ${pen} only`}>
+          <Field label="Pen" hint={ownPensOnly ? `Charged to ${penLabel} — you can add expenses for your own pens` : `Charged to ${penLabel} only`}>
             {(id) => (
               <SelectInput
                 id={id}
                 value={pen}
                 onChange={(e) => setPen(e.target.value)}
-                options={penOptions.map((p) => ({ value: String(p.id), label: `Pen ${p.id} · ${p.type}` }))}
+                options={penOptions.map((p) => ({ value: String(p.id), label: `${p.name} · ${p.type}` }))}
               />
             )}
           </Field>

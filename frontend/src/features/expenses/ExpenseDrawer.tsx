@@ -5,6 +5,7 @@ import { explainMoney } from '../../data/explainMoney'
 import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { Drawer } from '../../components/ui/Overlay'
 import type { Expense } from '../../data/expenses'
+import { penName } from '../../data/farmViews'
 import { pens } from '../../data/pens'
 import { suppliers } from '../../data/suppliers'
 import { useCurrentUser } from '../../data/sessionContext'
@@ -17,7 +18,7 @@ const naira = (n: number) => `₦${formatNumber(n)}`
 
 export function ExpenseDrawer({ expense: e, onClose, onEdit, onVoid }: { expense: Expense; onClose: () => void; onEdit?: () => void; onVoid?: () => void }) {
   const user = useCurrentUser()
-  const { history, receiptUrl } = useTrade()
+  const { history, catalog, receiptUrl } = useTrade()
   const row = history.expenses.find((x) => x.ref === e.id)
   const mayEdit = Boolean(onEdit) && canEditRecord(user, 'expenses', row)
   const mayVoid = Boolean(onVoid) && canVoidRecord(user, 'expenses')
@@ -76,7 +77,7 @@ export function ExpenseDrawer({ expense: e, onClose, onEdit, onVoid }: { expense
 
       {e.pen !== null ? (
         <DetailSection title="Charged to one pen">
-          <KeyValueRow label={`Pen ${e.pen}`} calculated={explainMoney.wholeToPen()}>
+          <KeyValueRow label={penName(catalog, e.pen)} calculated={explainMoney.wholeToPen()}>
             {naira(e.amount)} · all of it
           </KeyValueRow>
           <KeyValueRow label="Other pens" calculated={explainMoney.wholeToPen()}>
@@ -86,7 +87,7 @@ export function ExpenseDrawer({ expense: e, onClose, onEdit, onVoid }: { expense
       ) : (
         <DetailSection title="Shared by birds in each pen">
           {byPen.map((p) => (
-            <KeyValueRow key={p.id} label={`Pen ${p.id}`} calculated={explainMoney.splitByBirds()}>
+            <KeyValueRow key={p.id} label={p.name} calculated={explainMoney.splitByBirds()}>
               {naira(Math.round((e.amount * p.liveBirds) / totalBirds))}
             </KeyValueRow>
           ))}

@@ -37,7 +37,8 @@ export type Medication = {
   unit: 'g' | 'vials' | 'kg'
   /** null for products with no withdrawal (disinfectants) */
   withdrawalDays: number | null
-  inUseBy?: number
+  /** Pen name(s) in a withdrawal period after this medication. */
+  inUseBy?: string
 }
 
 export const medications: Medication[] = []
@@ -46,7 +47,7 @@ export const medications: Medication[] = []
 export const NEAR_REORDER_FACTOR = 1.25
 
 export function medicationStatus(m: Medication): { tone: Tone; label: string } {
-  if (m.inUseBy) return { tone: 'info', label: `In use · Pen ${m.inUseBy}` }
+  if (m.inUseBy) return { tone: 'info', label: `In use · ${m.inUseBy}` }
   if (m.stock <= m.reorderAt) return { tone: 'warning', label: 'Reorder' }
   if (m.stock <= m.reorderAt * NEAR_REORDER_FACTOR) return { tone: 'neutral', label: 'Near reorder' }
   return { tone: 'success', label: 'OK' }

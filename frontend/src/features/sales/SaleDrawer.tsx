@@ -1,3 +1,4 @@
+import { penName as nameOfPen } from '../../data/farmViews'
 import { useState } from 'react'
 import { Button } from '../../components/ui/Button'
 import { DetailSection, History } from '../../components/ui/Detail'
@@ -47,7 +48,7 @@ export function SaleDrawer({ sale, onClose, onRecordPayment, onEdit, onVoid }: P
   const balance = customer ? customerBalance(customer.id) : 0
   const portions = sale.allocations ?? []
   const birds = product.kind === 'Birds'
-  const penName = (id: number) => trade.catalog.pens.find((p) => p.id === id)?.name ?? `Pen ${id}`
+  const penName = (id: number) => nameOfPen(trade.catalog, id)
   // Same rule as the database: managers, sales editors, or whoever recorded it within the edit window.
   const mayEdit =
     canApprove(currentUser.role) ||

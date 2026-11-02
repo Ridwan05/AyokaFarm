@@ -22,10 +22,9 @@ import { createClient } from '../../lib/supabase/client'
 import { SettingsHeader } from './SettingsHeader'
 
 /** "Pens 3, 4, 5" → [3, 4, 5] */
-const penIds = (text: string) => (text.match(/\d+/g) ?? []).map(Number)
 /** Built-in roles by their label; custom roles by their id until the roles list loads. */
 const roleName = (role: string) => roleLabels[role as StaffMember['role']] ?? role.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase())
-const penText = (ids: number[]) => (ids.length === 0 ? 'no pens' : ids.length === 1 ? `Pen ${ids[0]}` : `Pens ${ids.join(', ')}`)
+const penText = (ids: number[]) => (ids.length === 0 ? 'no pens' : ids.map((id) => farmPens.find((p) => p.id === id)?.name ?? `Pen ${id}`).join(', '))
 
 export default function Staff() {
   const toast = useToast()
@@ -205,7 +204,7 @@ function AddStaffModal({ onClose }: { onClose: () => void }) {
               {farmPens.map((p) => (
                 <Checkbox
                   key={p.id}
-                  label={`Pen ${p.id} · ${p.type}`}
+                  label={`${p.name} · ${p.type}`}
                   checked={pens.has(p.id)}
                   onChange={(on) => setPens((s) => (on ? new Set(s).add(p.id) : new Set([...s].filter((x) => x !== p.id))))}
                 />
@@ -222,7 +221,7 @@ function AddStaffModal({ onClose }: { onClose: () => void }) {
 function AssignPensModal({ person, onClose }: { person: StaffMember; onClose: () => void }) {
   const toast = useToast()
   const { reload } = useTrade()
-  const [selected, setSelected] = useState(() => new Set(penIds(person.pens)))
+  const [selected, setSelected] = useState(() => new Set(person.penIds))
   const [busy, setBusy] = useState(false)
   const toggle = (id: number, on: boolean) =>
     setSelected((s) => {
@@ -236,7 +235,7 @@ function AssignPensModal({ person, onClose }: { person: StaffMember; onClose: ()
   const save = async () => {
     setBusy(true)
     const db = createClient()
-    const before = new Set(penIds(person.pens))
+    const before = new Set(person.penIds)
     const add = [...selected].filter((id) => !before.has(id))
     const remove = [...before].filter((id) => !selected.has(id))
     const results = await Promise.all([
@@ -270,7 +269,7 @@ function AssignPensModal({ person, onClose }: { person: StaffMember; onClose: ()
     >
       <div className="grid grid-cols-2 gap-3">
         {[...farmPens].sort((a, b) => a.id - b.id).map((p) => (
-          <Checkbox key={p.id} label={`Pen ${p.id} · ${p.type}`} checked={selected.has(p.id)} onChange={(on) => toggle(p.id, on)} />
+          <Checkbox key={p.id} label={`${p.name} · ${p.type}`} checked={selected.has(p.id)} onChange={(on) => toggle(p.id, on)} />
         ))}
       </div>
     </Modal>

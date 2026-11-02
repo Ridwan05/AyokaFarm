@@ -1,5 +1,6 @@
 'use client'
 
+import { penName } from '../../data/farmViews'
 import { Plus, Scale } from 'lucide-react'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
@@ -40,7 +41,7 @@ type BatchRow = {
   reorderAt: number
   unit: string
   withdrawalDays: number | null
-  inUseBy: number[]
+  inUseBy: string[]
 }
 
 const qty = (n: number, unit: string) => `${formatNumber(n)} ${unit}`
@@ -48,7 +49,7 @@ const qty = (n: number, unit: string) => `${formatNumber(n)} ${unit}`
 function status(r: BatchRow, today: string): { tone: Tone; label: string } {
   if (r.expiry && r.expiry < today) return { tone: 'danger', label: 'Expired' }
   if (r.expiry && daysFrom(today, r.expiry) <= farmSettings.expiryWarningDays) return { tone: 'warning', label: `Expires ${dayMonth(r.expiry)}` }
-  if (r.inUseBy.length) return { tone: 'info', label: `In use · Pen ${r.inUseBy.join(', ')}` }
+  if (r.inUseBy.length) return { tone: 'info', label: `In use · ${r.inUseBy.join(', ')}` }
   if (r.total <= r.reorderAt) return { tone: 'warning', label: 'Reorder' }
   if (r.total <= r.reorderAt * NEAR_REORDER_FACTOR) return { tone: 'neutral', label: 'Near reorder' }
   return { tone: 'success', label: 'OK' }
@@ -80,7 +81,7 @@ export default function MedicationStock() {
         reorderAt: Number(m.reorder_level),
         unit: unitOf(m.stock_unit),
         withdrawalDays: m.withdrawal_days,
-        inUseBy: inForce.filter((w) => w.medication === m.name).map((w) => w.penId),
+        inUseBy: inForce.filter((w) => w.medication === m.name).map((w) => penName(catalog, w.penId)),
       }
       const list: BatchRow[] = batches.map((b) => ({ ...base, key: `${m.id}-${b.purchaseId}`, batch: b.batchNo ?? '—', expiry: b.expiry, stock: b.onHand }))
       if (opening > 0 || !list.length) list.push({ ...base, key: `${m.id}-opening`, batch: opening > 0 ? 'Opening stock' : '—', expiry: null, stock: Math.max(0, opening) })
@@ -99,7 +100,7 @@ export default function MedicationStock() {
   const kpis = [
     kpi({ label: 'Medications', value: String(inStock.length), unit: 'in stock', current: null, previous: null, goodWhen: 'neither', context: toReorder.length ? `${toReorder.length} at or below reorder` : 'none at reorder level', info: 'Medications with stock on hand above zero (opening stock + batches received − doses given ± counts).', spark: FLAT }),
     kpi({ label: `Expiring in ${farmSettings.expiryWarningDays} days`, value: String(expiring.length), unit: 'batches', current: null, previous: null, goodWhen: 'neither', context: nextExpiry ? `next on ${dayMonth(nextExpiry.expiry!)} ${nextExpiry.expiry!.slice(0, 4)}` : 'no batch dates', info: `Batches with stock left whose expiry date is within ${farmSettings.expiryWarningDays} days (set in Settings).`, spark: FLAT }),
-    kpi({ label: 'Withdrawals in force', value: String(inForce.length), unit: inForce.length === 1 ? 'pen' : 'pens', current: null, previous: null, goodWhen: 'neither', context: inForce.length ? inForce.map((w) => `Pen ${w.penId} to ${dayMonth(w.clearFrom)}`).join(' · ') : 'all pens clear', info: 'Pens where the last dose + the medication’s withdrawal days hasn’t passed yet, so eggs and birds can’t be sold.', spark: FLAT }),
+    kpi({ label: 'Withdrawals in force', value: String(inForce.length), unit: inForce.length === 1 ? 'pen' : 'pens', current: null, previous: null, goodWhen: 'neither', context: inForce.length ? inForce.map((w) => `${penName(catalog, w.penId)} to ${dayMonth(w.clearFrom)}`).join(' · ') : 'all pens clear', info: 'Pens where the last dose + the medication’s withdrawal days hasn’t passed yet, so eggs and birds can’t be sold.', spark: FLAT }),
     kpi({ label: 'Spent this month', ...nairaKpi(spentNow), current: spentNow, previous: spent(lastMonth), goodWhen: 'down', context: `vs ${monthName(lastMonth.from)}`, info: 'Total of medication purchases dated this month, compared with the same days last month.', spark: FLAT }),
   ]
 
@@ -179,11 +180,11 @@ export default function MedicationStock() {
         inForce.map((w) => (
           <Alert
             key={w.penId}
-            title={`Pen ${w.penId} — no egg or bird sales until ${weekdayDayMonth(w.clearFrom)}`}
-            action={<AlertAction onClick={() => router.push(`/pens/${w.penId}`)}>View Pen {w.penId}</AlertAction>}
+            title={`${penName(catalog, w.penId)} — no egg or bird sales until ${weekdayDayMonth(w.clearFrom)}`}
+            action={<AlertAction onClick={() => router.push(`/pens/${w.penId}`)}>View {penName(catalog, w.penId)}</AlertAction>}
             onDismiss={() => setShowWithdrawal(false)}
           >
-            {w.medication} last given {dayMonth(w.lastDose)} with a {w.days}-day withdrawal. Eggs from Pen {w.penId} are kept apart until then.
+            {w.medication} last given {dayMonth(w.lastDose)} with a {w.days}-day withdrawal. Eggs from {penName(catalog, w.penId)} are kept apart until then.
           </Alert>
         ))}
 

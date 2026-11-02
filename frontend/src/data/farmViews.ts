@@ -5,8 +5,15 @@ import type { Catalog } from './remote'
 
 // Small helpers shared by the dashboard, production and pen screens.
 
-/** Pen display name from the catalog, e.g. "Pen 2". */
-export const penName = (catalog: Catalog, penId: number) => catalog.pens.find((p) => p.id === penId)?.name ?? `Pen ${penId}`
+/** Pen display name from the catalog, e.g. "Pen 2". Always use this, never `Pen ${id}`: the owner can rename pens. */
+export const penName = (catalog: Pick<Catalog, 'pens' | 'allPens'>, penId: number) =>
+  (catalog.pens.find((p) => p.id === penId) ?? catalog.allPens.find((p) => p.id === penId))?.name ?? `Pen ${penId}`
+
+/** "Pen 1" / "Pens 1, 2 and 3" by name. */
+export function penList(catalog: Pick<Catalog, 'pens' | 'allPens'>, penIds: number[]) {
+  const names = penIds.map((id) => penName(catalog, id))
+  return names.length <= 1 ? (names[0] ?? '') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`
+}
 
 /** "Layers" / "Broilers" for a pen. */
 export const penKind = (catalog: Catalog, penId: number) => (catalog.pens.find((p) => p.id === penId)?.bird_types?.lays_eggs ? 'Layers' : 'Broilers')

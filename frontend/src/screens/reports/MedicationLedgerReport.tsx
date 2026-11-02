@@ -1,5 +1,6 @@
 'use client'
 
+import { penList, penName } from '../../data/farmViews'
 import { Pill, Warehouse } from 'lucide-react'
 import { useState } from 'react'
 import { Badge, type Tone } from '../../components/ui/Badge'
@@ -31,6 +32,7 @@ type Row = {
   medication: string
   batch: string
   pen: number | null
+  penName: string | null
   kind: Kind
   /** Signed quantity */
   qty: number
@@ -48,7 +50,7 @@ const columns: Column<Row>[] = [
   { key: 'date', header: 'Date', width: 72, render: (r) => <TextCell>{dm(r.date)}</TextCell> },
   { key: 'med', header: 'Medication', render: (r) => <TextCell tone="primary">{r.medication}</TextCell> },
   { key: 'batch', header: 'Batch', width: 110, render: (r) => <TextCell mono>{r.batch}</TextCell> },
-  { key: 'pen', header: 'Pen', width: 72, render: (r) => <TextCell>{r.pen ? `Pen ${r.pen}` : '—'}</TextCell> },
+  { key: 'pen', header: 'Pen', width: 110, render: (r) => <TextCell>{r.penName ?? '—'}</TextCell> },
   {
     key: 'kind',
     header: 'Movement',
@@ -132,6 +134,7 @@ export default function MedicationLedgerReport() {
       medication: m?.name ?? '—',
       batch: x.purchase_id ? (batchNo.get(x.purchase_id) ?? purchaseBatch.get(x.purchase_id) ?? '—') : 'Opening',
       pen: x.pen_id,
+      penName: x.pen_id ? penName(catalog, x.pen_id) : null,
       kind,
       qty: q,
       unit: unitOf(medicationId),
@@ -143,7 +146,7 @@ export default function MedicationLedgerReport() {
   })
 
   const inPeriod = all.filter((r) => inRange(r.date, range))
-  const rows = inPeriod.filter((r) => med === 'All medications' || r.medication === med).filter((r) => pen === 'All pens' || r.pen === Number(pen.split(' ')[1]))
+  const rows = inPeriod.filter((r) => med === 'All medications' || r.medication === med).filter((r) => pen === 'All pens' || r.penName === pen)
   const used = inPeriod.filter((r) => r.kind === 'Used')
   const usedCost = used.reduce((n, r) => n + r.cost, 0)
   const treatedPens = [...new Set(used.map((r) => r.pen).filter((p): p is number => p !== null))].sort((a, b) => a - b)
@@ -152,20 +155,19 @@ export default function MedicationLedgerReport() {
 
   const costByPen = catalog.pens.map((p) => ({ pen: p.id, cost: used.filter((r) => r.pen === p.id).reduce((n, r) => n + r.cost, 0) })).sort((a, b) => b.cost - a.cost)
   const maxCost = Math.max(...costByPen.map((c) => c.cost), 1)
-  const list = (pens: number[]) => (pens.length <= 1 ? `Pen ${pens[0]}` : `Pens ${pens.slice(0, -1).join(', ')} and ${pens[pens.length - 1]}`)
 
   const kpis = [
     kpi({ label: 'Medication used', ...nairaKpi(usedCost), current: null, previous: null, goodWhen: 'neither', context: 'added to pen costs', info: 'Each dose given in the period × the cost a unit of its batch (purchase price ÷ units bought).', spark: FLAT }),
-    kpi({ label: 'Treatments', value: String(used.length), unit: 'given', current: null, previous: null, goodWhen: 'neither', context: treatedPens.length ? list(treatedPens) : 'none in this range', info: 'Medication lines saved in daily entries during the period.', spark: FLAT }),
+    kpi({ label: 'Treatments', value: String(used.length), unit: 'given', current: null, previous: null, goodWhen: 'neither', context: treatedPens.length ? penList(catalog, treatedPens) : 'none in this range', info: 'Medication lines saved in daily entries during the period.', spark: FLAT }),
     kpi({ label: 'Written off', value: String(writtenOff.length), unit: writtenOff.length === 1 ? 'adjustment' : 'adjustments', current: null, previous: null, goodWhen: 'neither', context: writtenOff.length ? naira(writtenOff.reduce((n, r) => n + r.cost, 0)) : 'nothing written off', info: 'Stock adjustments that took medication out of stock (counts, breakage, expiry) in the period.', spark: FLAT }),
-    kpi({ label: 'Withdrawals in force', value: String(inForce.length), unit: inForce.length === 1 ? 'pen' : 'pens', current: null, previous: null, goodWhen: 'neither', context: inForce.length ? inForce.map((w) => `Pen ${w.penId} to ${dayMonth(w.clearFrom)}`).join(' · ') : 'all pens clear', info: 'Pens where the last dose + the medication’s withdrawal days hasn’t passed yet.', spark: FLAT }),
+    kpi({ label: 'Withdrawals in force', value: String(inForce.length), unit: inForce.length === 1 ? 'pen' : 'pens', current: null, previous: null, goodWhen: 'neither', context: inForce.length ? inForce.map((w) => `${penName(catalog, w.penId)} to ${dayMonth(w.clearFrom)}`).join(' · ') : 'all pens clear', info: 'Pens where the last dose + the medication’s withdrawal days hasn’t passed yet.', spark: FLAT }),
   ]
 
   const exportRows = () =>
     downloadCsv(
       `medication-ledger-${range.from}-to-${range.to}`,
       ['Date', 'Medication', 'Batch', 'Pen', 'Movement', 'Quantity', 'Unit', 'Batch balance', 'Value (₦)', 'Withdrawal / note', 'By'],
-      rows.map((r) => [r.date, r.medication, r.batch, r.pen, r.kind, r.qty, r.unit, r.balance, Math.round(r.cost), r.note, r.by]),
+      rows.map((r) => [r.date, r.medication, r.batch, r.penName ?? '', r.kind, r.qty, r.unit, r.balance, Math.round(r.cost), r.note, r.by]),
     )
 
   return (
@@ -174,7 +176,7 @@ export default function MedicationLedgerReport() {
       <div className="flex flex-wrap items-center gap-3">
         <SegmentedControl label="Range" options={RANGES} value={rangeName} onChange={setRangeName} />
         <Select label="Medication" leadingIcon={Pill} width={200} options={['All medications', ...catalog.medications.map((m) => m.name)]} value={med} onChange={setMed} />
-        <Select label="Pen" leadingIcon={Warehouse} width={170} options={['All pens', ...catalog.pens.map((p) => `Pen ${p.id}`)]} value={pen} onChange={setPen} />
+        <Select label="Pen" leadingIcon={Warehouse} width={170} options={['All pens', ...catalog.pens.map((p) => p.name)]} value={pen} onChange={setPen} />
         <span className="flex-1" />
         <span className="type-body-sm text-fg-tertiary">
           {dayMonth(range.from)} – {dayMonth(range.to)}
@@ -198,7 +200,7 @@ export default function MedicationLedgerReport() {
           <ul className="flex flex-col">
             {costByPen.map((c) => (
               <li key={c.pen} className="flex h-9 items-center gap-4">
-                <span className="w-[52px] shrink-0 type-label-md text-fg-primary">Pen {c.pen}</span>
+                <span className="w-[96px] shrink-0 truncate type-label-md text-fg-primary">{penName(catalog, c.pen)}</span>
                 <span className="h-2.5 flex-1 rounded-xs bg-subtle">
                   <span className="block h-2.5 rounded-xs bg-chart-1" style={{ width: `${(c.cost / maxCost) * 82}%` }} />
                 </span>
@@ -218,7 +220,7 @@ export default function MedicationLedgerReport() {
                 <div className="flex items-start gap-2 pt-1">
                   <div className="flex flex-1 flex-col">
                     <span className="type-label-md text-fg-primary">
-                      Pen {w.penId} · {w.medication}
+                      {penName(catalog, w.penId)} · {w.medication}
                     </span>
                     <span className="type-body-sm text-fg-tertiary">
                       Last dose {weekdayDayMonth(w.lastDose)} · {w.days}-day withdrawal

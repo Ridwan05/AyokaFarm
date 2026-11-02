@@ -1,5 +1,6 @@
 'use client'
 
+import { penName as nameOfPen } from '../../data/farmViews'
 import { CalendarDays, Download, History, ListFilter, Users } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Tone } from '../../components/ui/Badge'
@@ -100,7 +101,7 @@ export default function AuditLog() {
   }
 
   const describe = useMemo(() => {
-    const penName = (id: Json | undefined) => catalog.pens.find((p) => p.id === Number(id))?.name ?? `Pen ${show(id)}`
+    const penName = (id: Json | undefined) => (id === undefined || id === null ? `Pen ${show(id)}` : nameOfPen(catalog, Number(id)))
     const name = (table: string, d: Record<string, Json>) => {
       switch (table) {
         case 'sales':
@@ -134,7 +135,7 @@ export default function AuditLog() {
         case 'flocks':
           return `Flock ${show(d.code)}`
         case 'pens':
-          return `Pen ${show(d.name)}`
+          return `Pen · ${show(d.name)}`
         default:
           return `${label(table.replace(/s$/, '')).replace(/^./, (c) => c.toUpperCase())} ${show(d.name ?? d.ref ?? '')}`.trim()
       }

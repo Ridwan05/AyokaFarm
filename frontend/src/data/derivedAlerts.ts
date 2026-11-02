@@ -1,3 +1,4 @@
+import { penName as nameOfPen } from './farmViews'
 import type { FarmAlert } from './alerts'
 import { farmSettings } from './farmSettings'
 import { feedTypes } from './inventory'
@@ -14,7 +15,7 @@ function managers(trade: Trade) {
     .map((p) => ({ name: p.full_name, channel: 'In the app', state: 'Shown here' }))
 }
 
-const penName = (trade: Trade, penId: number) => trade.catalog.pens.find((p) => p.id === penId)?.name ?? `Pen ${penId}`
+const penName = (trade: Trade, penId: number) => nameOfPen(trade.catalog, penId)
 
 export function deriveAlerts(trade: Trade, today = todayISO()): FarmAlert[] {
   const { history, catalog } = trade

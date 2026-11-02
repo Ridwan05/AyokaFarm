@@ -1,3 +1,4 @@
+import { penName } from './farmViews'
 import { farmSettings } from './farmSettings'
 import type { FeedType } from './inventory'
 import { addDays, bagsPerDay, datesBetween, inRange, lastPurchaseOf, staffWithRole, todayISO, withdrawals } from './metrics'
@@ -52,7 +53,7 @@ export function feedSource(history: History, catalog: Catalog, feedTypeId: numbe
     parts.push(`Delivery · ${catalog.suppliers.find((s) => s.id === p.supplier_id)?.name ?? 'supplier'} · ${p.ref}`)
   }
   const entries = history.daily.filter((d) => d.feedTypeId === feedTypeId && d.date === date && d.feedBags > 0)
-  if (entries.length) parts.push(entries.length === 1 ? `Pen ${entries[0].penId} entry` : `${entries.length} pen entries`)
+  if (entries.length) parts.push(entries.length === 1 ? `${penName(catalog, entries[0].penId)} entry` : `${entries.length} pen entries`)
   for (const a of history.adjustments.filter((x) => x.item === 'feed' && x.feed_type_id === feedTypeId && x.adjusted_on === date)) {
     const reason = a.is_opening ? 'Opening stock' : (catalog.reasons.find((r) => r.id === a.reason_id)?.name ?? 'Count')
     parts.push([reason, a.note].filter(Boolean).join(': '))

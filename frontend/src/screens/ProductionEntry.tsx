@@ -1,5 +1,6 @@
 'use client'
 
+import { penName } from '../data/farmViews'
 import { Check, Minus, Plus, Trash2 } from 'lucide-react'
 import { useParams, useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useEffect, useRef, useState } from 'react'
@@ -174,6 +175,7 @@ function EntryScreen() {
   const set = <K extends keyof Draft>(key: K, value: Draft[K]) => setDraft((d) => ({ ...d, [key]: value }))
   const setMed = (i: number, patch: Partial<Draft['meds'][number]>) => set('meds', draft.meds.map((m, j) => (j === i ? { ...m, ...patch } : m)))
   const layers = ctx.type === 'Layers'
+  const name = penName(catalog, penId)
   const today = todayISO()
   const backTo = editing ? `/pens/${penId}` : isAttendant(user.role) ? '/' : `/pens/${penId}`
 
@@ -263,11 +265,11 @@ function EntryScreen() {
     setSaved(true)
     const who = managerNames(catalog)
     if (overMortality) {
-      toast.warning(`Pen ${penId}: ${died} died (${mortalityPct.toFixed(1)}%)`, {
+      toast.warning(`${name}: ${died} died (${mortalityPct.toFixed(1)}%)`, {
         description: `Above the ${farmSettings.mortalityAlertPct}% alert level. It shows in Alerts${who ? ` for ${who}` : ''}.`,
       })
     } else {
-      toast.success(editing ? `Pen ${penId} entry for ${weekdayDayMonth(editing.row.date)} corrected` : `Pen ${penId} recorded for today`)
+      toast.success(editing ? `${name} entry for ${weekdayDayMonth(editing.row.date)} corrected` : `${name} recorded for today`)
     }
     window.setTimeout(() => router.push(backTo), 700)
   }
@@ -275,7 +277,7 @@ function EntryScreen() {
   const header = (
     <PageHeader
       backTo={backTo}
-      eyebrow={[`Pen ${penId} · ${ctx.type}`, editing ? weekdayDayMonth(editing.row.date) : formatShortDate(farm.today)]}
+      eyebrow={[`${name} · ${ctx.type}`, editing ? weekdayDayMonth(editing.row.date) : formatShortDate(farm.today)]}
       title={editing ? `Correct entry · ${weekdayDayMonth(editing.row.date)}` : 'Today’s entry'}
       description={`Flock ${ctx.pen.flock} · ${ctx.pen.breed} · age ${formatAge(ctx.ageDays)}`}
     />
@@ -288,7 +290,7 @@ function EntryScreen() {
     return (
       <>
         {header}
-        <Alert tone="success" title={`Pen ${penId} is already recorded for today (${recordedAt})`}>
+        <Alert tone="success" title={`${name} is already recorded for today (${recordedAt})`}>
           There’s one entry per pen per day.{' '}
           {mayCorrect ? 'You can still correct it today.' : `To correct it, ask ${managerNames(catalog) || 'the farm manager'}.`}
         </Alert>

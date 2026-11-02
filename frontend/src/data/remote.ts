@@ -386,6 +386,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
     const pct = (v: number | null | undefined) => (v === null || v === undefined ? null : `${Number(v) > 0 ? '+' : Number(v) < 0 ? '−' : ''}${Math.abs(Number(v)).toFixed(1)}%`)
     const pen: Pen = {
       id: p.id,
+      name: p.name,
       type,
       flock: flock?.code ?? '—',
       week,
@@ -448,6 +449,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
     })
 
   // ── Staff ──
+  const penLabel = new Map(allPenRows.map((p) => [p.id, p.name]))
   const pensByProfile = new Map<string, number[]>()
   for (const sp of staffPenRows) pensByProfile.set(sp.profile_id, [...(pensByProfile.get(sp.profile_id) ?? []), sp.pen_id])
   fill(
@@ -461,7 +463,8 @@ export async function loadRemote(db: DB): Promise<Remote> {
         initials: initialsOf(p.full_name),
         phone: p.phone ? displayPhone(p.phone.replace(/\D/g, '')) : '—',
         role,
-        pens: ['owner', 'farm-manager', 'pen-attendant-all'].includes(role) ? 'All pens' : role === 'pen-attendant' ? (ids.length === 0 ? '—' : ids.length === 1 ? `Pen ${ids[0]}` : `Pens ${ids.join(', ')}`) : '—',
+        pens: ['owner', 'farm-manager', 'pen-attendant-all'].includes(role) ? 'All pens' : role === 'pen-attendant' ? (ids.map((id) => penLabel.get(id) ?? `Pen ${id}`).join(', ') || '—') : '—',
+        penIds: role === 'pen-attendant' ? ids : [],
         lastActive: p.last_active_at ? `${dm(p.last_active_at.slice(0, 10))} ${hm(p.last_active_at)}` : '—',
         whatsapp: p.whatsapp_opt_in,
         active: p.is_active && Boolean(p.role_id),
