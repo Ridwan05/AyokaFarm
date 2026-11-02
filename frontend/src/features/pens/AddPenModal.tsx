@@ -21,6 +21,7 @@ export function AddPenModal({ open, onClose }: Props) {
   const [description, setDescription] = useState('')
   const [capacity, setCapacity] = useState('1,500')
   const [submitted, setSubmitted] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   const capacityNum = Number(capacity.replace(/,/g, ''))
   const errors = {
@@ -30,9 +31,12 @@ export function AddPenModal({ open, onClose }: Props) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (saving) return
     setSubmitted(true)
     if (errors.name || errors.capacity) return
-    if (!(await addPen({ name: name.trim().replace(/\s+/g, ' '), capacity: capacityNum, description: description.trim() }))) return
+    setSaving(true)
+    const ok = await addPen({ name: name.trim().replace(/\s+/g, ' '), capacity: capacityNum, description: description.trim() }).finally(() => setSaving(false))
+    if (!ok) return
     toast(`${name} added`)
     onClose()
   }
@@ -48,8 +52,8 @@ export function AddPenModal({ open, onClose }: Props) {
           <Button size="lg" className="flex-1" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="lg" variant="primary" className="flex-1" type="submit" form="add-pen">
-            Add pen
+          <Button size="lg" variant="primary" className="flex-1" type="submit" form="add-pen" disabled={saving}>
+            {saving ? 'Saving…' : 'Add pen'}
           </Button>
         </>
       }

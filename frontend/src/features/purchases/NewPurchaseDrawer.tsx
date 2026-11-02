@@ -61,6 +61,8 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
   const [date, setDate] = useState(todayISO())
   const [method, setMethod] = useState<(typeof METHODS)[number]>('Transfer')
   const [submitted, setSubmitted] = useState(false)
+  // A second tap while saving would record the purchase twice.
+  const [saving, setSaving] = useState(false)
   // Medication is bought in packs but stocked in g, vials…: how much of the stock unit is in one pack.
   const [perPack, setPerPack] = useState('')
   const packUnits = num(perPack)
@@ -99,6 +101,7 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (saving) return
     setSubmitted(true)
     if (errors.birdType || errors.qty || errors.price || errors.paid || errors.perPack || errors.date) return
     const prefix = refPrefix[kind]
@@ -111,7 +114,9 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
       bird: kind === 'Birds' ? { birdTypeId, breed: breed.trim() || null, ageDays: Math.round(weeks * 7) } : undefined,
       history: [{ title: 'Purchase recorded', detail: `By ${me}${paidNow ? ` · paid ₦${formatNumber(paidNow)}` : ''}`, time: dayMonth(date) }],
     }
-    if (!(await addPurchase(purchase))) return
+    setSaving(true)
+    const ok = await addPurchase(purchase).finally(() => setSaving(false))
+    if (!ok) return
     toast(`Purchase saved · ₦${formatNumber(totalOf(purchase))}`)
     onClose()
   }
@@ -127,8 +132,8 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
           <Button size="lg" className="flex-1" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="lg" variant="primary" className="flex-1" type="submit" form="new-purchase">
-            Save purchase
+          <Button size="lg" variant="primary" className="flex-1" type="submit" form="new-purchase" disabled={saving}>
+            {saving ? 'Saving…' : 'Save purchase'}
           </Button>
         </>
       }

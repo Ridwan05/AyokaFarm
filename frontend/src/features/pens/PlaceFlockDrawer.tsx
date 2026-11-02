@@ -51,6 +51,7 @@ export function PlaceFlockDrawer({ open, onClose }: Props) {
   const [code, setCode] = useState('')
   const [date, setDate] = useState(farmTodayISO())
   const [submitted, setSubmitted] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   const choices = batchChoices(catalog, birdTypeId)
   const pen = empty.find((p) => String(p.id) === penId)
@@ -95,8 +96,10 @@ export function PlaceFlockDrawer({ open, onClose }: Props) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (saving) return
     setSubmitted(true)
     if (errors.pen || errors.sources || errors.code || !date) return
+    setSaving(true)
     const saved = await placeFlock({
       code: code.trim(),
       penId: pen!.id,
@@ -105,7 +108,7 @@ export function PlaceFlockDrawer({ open, onClose }: Props) {
       placedOn: date,
       ageAtPlacementDays: ageDays,
       sources: toBirdSources(rows),
-    })
+    }).finally(() => setSaving(false))
     if (!saved) return
     toast(`Flock ${code.trim()} placed in ${pen!.name}`)
     onClose()
@@ -124,8 +127,8 @@ export function PlaceFlockDrawer({ open, onClose }: Props) {
           <Button size="lg" className="flex-1" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="lg" variant="primary" className="flex-1" type="submit" form="place-flock" disabled={noStock}>
-            Place flock
+          <Button size="lg" variant="primary" className="flex-1" type="submit" form="place-flock" disabled={noStock || saving}>
+            {saving ? 'Saving…' : 'Place flock'}
           </Button>
         </>
       }

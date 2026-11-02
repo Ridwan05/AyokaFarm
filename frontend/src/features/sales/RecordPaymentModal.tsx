@@ -21,15 +21,20 @@ export function RecordPaymentModal({ sale, onClose }: { sale: Sale; onClose: () 
   const [amount, setAmount] = useState(formatNumber(left))
   const [method, setMethod] = useState<(typeof METHODS)[number]>('Transfer')
   const [error, setError] = useState<string>()
+  // A second tap while saving would record the payment twice.
+  const [saving, setSaving] = useState(false)
   const { name, customer } = customerView(sale, customers)
   const value = Number(amount.replace(/,/g, '')) || 0
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (saving) return
     if (value <= 0) return setError('Enter the amount received')
     if (value > left) return setError(`Only ₦${formatNumber(left)} is left on this sale`)
     const m: PaymentMethod = method === 'POS' ? 'POS' : method === 'Cash' ? 'cash' : 'transfer'
-    if (!(await recordSalePayment(sale.receipt, value, m))) return
+    setSaving(true)
+    const ok = await recordSalePayment(sale.receipt, value, m).finally(() => setSaving(false))
+    if (!ok) return
     toast(`₦${formatNumber(value)} recorded on ${sale.receipt}`)
     onClose()
   }
@@ -45,8 +50,8 @@ export function RecordPaymentModal({ sale, onClose }: { sale: Sale; onClose: () 
           <Button size="lg" className="flex-1" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="lg" variant="primary" className="flex-1" type="submit" form="record-payment">
-            Save payment
+          <Button size="lg" variant="primary" className="flex-1" type="submit" form="record-payment" disabled={saving}>
+            {saving ? 'Saving…' : 'Save payment'}
           </Button>
         </>
       }

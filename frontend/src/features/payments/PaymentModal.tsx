@@ -48,6 +48,8 @@ export function PaymentModal({ direction: initialDirection = 'in', partyId, onCl
   const online = useOnline()
   // P-E16: a payment saved while offline waits here and saves itself when the connection is back.
   const [queued, setQueued] = useState<NewPayment | null>(null)
+  // A second tap while saving would record the payment twice.
+  const [saving, setSaving] = useState(false)
 
   const value = num(amount)
   const allocation = allocate(bills, value)
@@ -70,7 +72,8 @@ export function PaymentModal({ direction: initialDirection = 'in', partyId, onCl
   }
 
   const save = async (p: NewPayment) => {
-    const cleared = await trade.recordPayment(p)
+    setSaving(true)
+    const cleared = await trade.recordPayment(p).finally(() => setSaving(false))
     // On failure the store has already shown why; keep the form open.
     if (cleared === null) return
     toast(`₦${formatNumber(p.amount)} saved · ${cleared}`)
@@ -85,6 +88,7 @@ export function PaymentModal({ direction: initialDirection = 'in', partyId, onCl
 
   const submit = (e: FormEvent) => {
     e.preventDefault()
+    if (saving) return
     if (value <= 0) return setError('Enter the amount')
     const m: PaymentMethod = method === 'POS' ? 'POS' : method === 'Cash' ? 'cash' : 'transfer'
     const payment: NewPayment = { direction, partyId: party, amount: value, method: m, reference: reference.trim() || null, date }
@@ -118,8 +122,8 @@ export function PaymentModal({ direction: initialDirection = 'in', partyId, onCl
           <Button size="lg" className="flex-1" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="lg" variant="primary" className="flex-1" type="submit" form="payment" disabled={!!queued}>
-            {queued ? 'Saving when online…' : isIn ? 'Save payment' : `Save payment · ₦${formatNumber(value)}`}
+          <Button size="lg" variant="primary" className="flex-1" type="submit" form="payment" disabled={!!queued || saving}>
+            {queued ? 'Saving when online…' : saving ? 'Saving…' : isIn ? 'Save payment' : `Save payment · ₦${formatNumber(value)}`}
           </Button>
         </>
       }
