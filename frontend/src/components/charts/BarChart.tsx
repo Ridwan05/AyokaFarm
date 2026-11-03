@@ -12,9 +12,12 @@ type BarChartProps = {
 
 /** Daily bar chart with an optional dashed threshold line. */
 export function BarChart({ values, yTicks, xLabels, colorFor, threshold, labelLast, height = 180 }: BarChartProps) {
-  const max = Math.max(...yTicks)
+  // The axis always reaches the tallest bar, even if the ticks stop short of it.
+  const max = Math.max(...yTicks, ...values) || 1
   const y = (v: number) => (1 - v / max) * height
   const last = values.length - 1
+  // Labels that would rise above the chart sit just under their line or inside the bar top instead.
+  const thresholdTop = threshold ? (y(threshold.value) < 24 ? y(threshold.value) + 4 : y(threshold.value) - 22) : 0
 
   return (
     <div className="flex w-full">
@@ -30,11 +33,12 @@ export function BarChart({ values, yTicks, xLabels, colorFor, threshold, labelLa
           {yTicks.map((t) => (
             <div key={t} className="absolute right-0 left-0 h-px bg-chart-grid" style={{ top: y(t) }} />
           ))}
-          <div className="absolute inset-0 flex items-end justify-between px-6">
+          {/* Bars shrink to fit narrow screens instead of pushing past the card. */}
+          <div className="absolute inset-0 flex items-end justify-between gap-px px-1 sm:px-6">
             {values.map((v, i) => (
-              <div key={i} className="relative flex w-3 justify-center" style={{ height: '100%' }}>
+              <div key={i} className="relative flex h-full max-w-3 min-w-0 flex-1 justify-center">
                 <div
-                  className="absolute bottom-0 w-3 rounded-t-[3px]"
+                  className="absolute bottom-0 w-full rounded-t-[3px]"
                   style={
                     v === 0
                       ? { height: 2, background: 'var(--ayk-color-border-default)', borderRadius: 0 }
@@ -44,8 +48,9 @@ export function BarChart({ values, yTicks, xLabels, colorFor, threshold, labelLa
                 />
                 {labelLast && i === last && (
                   <span
-                    className="absolute type-label-md"
-                    style={{ bottom: (v / max) * height + 2, color: labelLast.color }}
+                    className="absolute right-0 type-label-md whitespace-nowrap"
+                    // No room above a bar that reaches the top: the number sits beside it instead.
+                    style={(v / max) * height + 20 > height ? { top: 0, right: 'calc(100% + 4px)', color: labelLast.color } : { bottom: (v / max) * height + 2, color: labelLast.color }}
                   >
                     {v}
                   </span>
@@ -61,7 +66,7 @@ export function BarChart({ values, yTicks, xLabels, colorFor, threshold, labelLa
               />
               <span
                 className="absolute left-2 type-label-sm text-fg-danger"
-                style={{ top: y(threshold.value) - 22 }}
+                style={{ top: thresholdTop }}
               >
                 {threshold.label}
               </span>

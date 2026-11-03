@@ -1,3 +1,5 @@
+import { niceTicks } from '../../data/metrics'
+
 type Series = {
   label: string
   /** null = no data that day; the line breaks there instead of dropping to zero. */
@@ -39,9 +41,14 @@ function runs(values: (number | null)[]): [number, number][][] {
  * non-scaling strokes; axis labels are HTML so text never distorts.
  */
 export function LineChart({ series, band, yTicks, formatY, xLabels, height = 200 }: LineChartProps) {
-  const yMin = Math.min(...yTicks)
-  const yMax = Math.max(...yTicks)
-  const y = (v: number) => (1 - (v - yMin) / (yMax - yMin)) * height
+  // The scale covers every plotted value, even one the ticks stop short of, so no line leaves the chart.
+  const plotted = [...series.flatMap((s) => s.values), ...(band ? [...band.lower, ...band.upper] : [])].filter((v): v is number => v !== null && Number.isFinite(v))
+  const lo = Math.min(...yTicks, ...plotted)
+  const hi = Math.max(...yTicks, ...plotted)
+  const ticks = lo < Math.min(...yTicks) || hi > Math.max(...yTicks) ? niceTicks(lo, hi, yTicks.length) : yTicks
+  const yMin = Math.min(...ticks)
+  const yMax = Math.max(...ticks)
+  const y = (v: number) => (1 - (v - yMin) / (yMax - yMin || 1)) * height
   const n = Math.max(...series.map((s) => s.values.length))
   const x = (i: number) => (n > 1 ? (i / (n - 1)) * W : W / 2)
   const pt = ([i, v]: [number, number]) => `${x(i).toFixed(2)},${y(v).toFixed(2)}`
@@ -70,7 +77,7 @@ export function LineChart({ series, band, yTicks, formatY, xLabels, height = 200
   return (
     <div className="flex w-full gap-0">
       <div className="relative w-[52px] shrink-0" style={{ height }}>
-        {yTicks.map((t) => (
+        {ticks.map((t) => (
           <span
             key={t}
             className="absolute left-0 -translate-y-1/2 type-body-sm whitespace-nowrap text-fg-tertiary"
@@ -82,7 +89,7 @@ export function LineChart({ series, band, yTicks, formatY, xLabels, height = 200
       </div>
       <div className="relative min-w-0 flex-1">
         <div className="relative" style={{ height }}>
-          {yTicks.map((t) => (
+          {ticks.map((t) => (
             <div key={t} className="absolute right-0 left-0 h-px bg-chart-grid" style={{ top: y(t) }} />
           ))}
           <svg
