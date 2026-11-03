@@ -1,6 +1,7 @@
 type Series = {
   label: string
-  values: number[]
+  /** null = no data that day; the line breaks there instead of dropping to zero. */
+  values: (number | null)[]
   color: string
   dashed?: boolean
   /** Mark the latest point with a dot. */
@@ -10,7 +11,7 @@ type Series = {
 type LineChartProps = {
   series: Series[]
   /** Optional shaded band, e.g. a ±10% tolerance around the expected line. */
-  band?: { lower: number[]; upper: number[]; color: string }
+  band?: { lower: (number | null)[]; upper: (number | null)[]; color: string }
   yTicks: number[]
   formatY: (v: number) => string
   xLabels: string[]
@@ -18,6 +19,20 @@ type LineChartProps = {
 }
 
 const W = 600
+
+/** Runs of consecutive days that have a value, as [index, value] pairs. */
+function runs(values: (number | null)[]): [number, number][][] {
+  const out: [number, number][][] = []
+  let run: [number, number][] = []
+  values.forEach((v, i) => {
+    if (v === null) {
+      if (run.length) out.push(run)
+      run = []
+    } else run.push([i, v])
+  })
+  if (run.length) out.push(run)
+  return out
+}
 
 /**
  * Responsive line chart: lines are drawn in a stretched SVG with
@@ -27,19 +42,30 @@ export function LineChart({ series, band, yTicks, formatY, xLabels, height = 200
   const yMin = Math.min(...yTicks)
   const yMax = Math.max(...yTicks)
   const y = (v: number) => (1 - (v - yMin) / (yMax - yMin)) * height
-  const x = (i: number, n: number) => (i / (n - 1)) * W
-  const path = (values: number[]) =>
-    values.map((v, i) => `${i ? 'L' : 'M'}${x(i, values.length).toFixed(2)},${y(v).toFixed(2)}`).join('')
+  const n = Math.max(...series.map((s) => s.values.length))
+  const x = (i: number) => (n > 1 ? (i / (n - 1)) * W : W / 2)
+  const pt = ([i, v]: [number, number]) => `${x(i).toFixed(2)},${y(v).toFixed(2)}`
+  const path = (values: (number | null)[]) =>
+    runs(values)
+      .map((r) => r.map((p, k) => `${k ? 'L' : 'M'}${pt(p)}`).join(''))
+      .join('')
+  // A day with no neighbours draws no line, so it gets a dot instead.
+  const lonely = (values: (number | null)[]) => runs(values).filter((r) => r.length === 1).map((r) => r[0])
 
   const bandPath = band
-    ? path(band.upper) +
-      band.lower
-        .map((v, i) => [i, v] as const)
-        .reverse()
-        .map(([i, v]) => `L${x(i, band.lower.length).toFixed(2)},${y(v).toFixed(2)}`)
-        .join('') +
-      'Z'
+    ? runs(band.upper.map((u, i) => (u === null || band.lower[i] === null ? null : u)))
+        .filter((r) => r.length > 1)
+        .map((r) => r.map((p, k) => `${k ? 'L' : 'M'}${pt(p)}`).join('') + [...r].reverse().map(([i]) => `L${pt([i, band.lower[i]!])}`).join('') + 'Z')
+        .join('')
     : undefined
+
+  const dot = (s: Series, [i, v]: [number, number], key: string | number) => (
+    <span
+      key={key}
+      className="absolute size-2 -translate-x-1/2 -translate-y-1/2 rounded-full"
+      style={{ left: `${((x(i) / W) * 100).toFixed(2)}%`, top: Number(y(v).toFixed(2)), backgroundColor: s.color }}
+    />
+  )
 
   return (
     <div className="flex w-full gap-0">
@@ -81,15 +107,11 @@ export function LineChart({ series, band, yTicks, formatY, xLabels, height = 200
               />
             ))}
           </svg>
-          {series
-            .filter((s) => s.endDot)
-            .map((s) => (
-              <span
-                key={s.label}
-                className="absolute right-0 size-2 translate-x-1/2 -translate-y-1/2 rounded-full"
-                style={{ top: y(s.values[s.values.length - 1]), background: s.color }}
-              />
-            ))}
+          {series.map((s) => {
+            const last = runs(s.values).at(-1)?.at(-1)
+            const solo = lonely(s.values).filter((p) => !(s.endDot && p === last))
+            return [...solo.map((p) => dot(s, p, `${s.label}-${p[0]}`)), s.endDot && last ? dot(s, last, `${s.label}-end`) : null]
+          })}
         </div>
         <div className="mt-2.5 flex justify-between">
           {xLabels.map((l) => (

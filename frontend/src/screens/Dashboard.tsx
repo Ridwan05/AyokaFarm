@@ -290,12 +290,14 @@ function FeedChart({ trade, penOk, scope }: { trade: Trade; penOk: (id: number) 
   const end = has.lastIndexOf(true)
   const dates = end - start >= 1 ? all.slice(start, end + 1) : all
   const daily = dates.map((d) => rowsOn(history.daily, d, penOk))
-  const actual = daily.map((rows) => sum(rows, (r) => r.feedKg))
-  const expected = daily.map((rows) => sum(rows, (r) => r.expectedKg ?? 0))
+  // A day nobody recorded is a gap in the line, not 0 kg.
+  const actual = daily.map((rows) => (rows.length ? sum(rows, (r) => r.feedKg) : null))
+  const expected = daily.map((rows) => (rows.some((r) => r.expectedKg) ? sum(rows, (r) => r.expectedKg ?? 0) : null))
   const tol = farmSettings.feedVariancePct / 100
-  const lower = expected.map((e) => e * (1 - tol))
-  const upper = expected.map((e) => e * (1 + tol))
-  const hasData = actual.some((v) => v > 0)
+  const lower = expected.map((e) => (e === null ? null : e * (1 - tol)))
+  const upper = expected.map((e) => (e === null ? null : e * (1 + tol)))
+  const plotted = [...actual, ...lower, ...upper].filter((v) => v !== null)
+  const hasData = actual.some((v) => v !== null && v > 0)
 
   // The latest day with entries, and the pen furthest from its expected feed that day.
   const lastIdx = daily.findLastIndex((rows) => rows.length > 0)
@@ -329,7 +331,7 @@ function FeedChart({ trade, penOk, scope }: { trade: Trade; penOk: (id: number) 
               { label: 'Actual', values: actual, color: 'var(--ayk-color-chart-1)', endDot: true },
             ]}
             band={{ lower, upper, color: 'var(--ayk-color-bg-brand-subtle)' }}
-            yTicks={niceTicks(Math.min(...lower.filter((v) => v > 0), ...actual.filter((v) => v > 0)), Math.max(...upper, ...actual))}
+            yTicks={niceTicks(Math.min(...plotted), Math.max(...plotted))}
             formatY={(v) => `${formatNumber(v)} kg`}
             xLabels={dateLabels(dates)}
           />
