@@ -49,6 +49,8 @@ export default function Lists() {
     | { kind: 'medication'; item: Medication | null }
     | null
   >(null)
+  // A second tap while saving would write twice; one flag covers the hide/show and statement-line changes.
+  const [saving, setSaving] = useState(false)
 
   // Latest price each product sold at.
   const lastSale = new Map<number, Tables<'sales'>>()
@@ -71,18 +73,30 @@ export default function Lists() {
   const db = createClient()
 
   async function toggle(table: 'products' | 'expense_categories' | 'adjustment_reasons' | 'medications', id: number, name: string, active: boolean) {
-    const { error } = await db.from(table).update({ is_active: active }).eq('id', id)
-    if (error) return toast.error(why(error.message))
-    toast.success(active ? `${name} is back on new forms` : `${name} hidden from new forms`, { description: active ? undefined : 'Old records keep it.' })
-    await reload()
+    if (saving) return
+    setSaving(true)
+    try {
+      const { error } = await db.from(table).update({ is_active: active }).eq('id', id)
+      if (error) return toast.error(why(error.message))
+      toast.success(active ? `${name} is back on new forms` : `${name} hidden from new forms`, { description: active ? undefined : 'Old records keep it.' })
+      await reload()
+    } finally {
+      setSaving(false)
+    }
   }
 
   /** Where an expense category goes on the Income Statement. */
   async function setStatementLine(id: number, name: string, line: StatementLine) {
-    const { error } = await db.from('expense_categories').update({ statement_line: line }).eq('id', id)
-    if (error) return toast.error(why(error.message))
-    toast.success(`${name} now goes under ${STATEMENT_LINES[line]}`)
-    await reload()
+    if (saving) return
+    setSaving(true)
+    try {
+      const { error } = await db.from('expense_categories').update({ statement_line: line }).eq('id', id)
+      if (error) return toast.error(why(error.message))
+      toast.success(`${name} now goes under ${STATEMENT_LINES[line]}`)
+      await reload()
+    } finally {
+      setSaving(false)
+    }
   }
   const lineOf = (id: number) => ((catalog.categories.find((c) => c.id === id) as { statement_line?: string } | undefined)?.statement_line ?? 'misc') as StatementLine
 
@@ -165,7 +179,9 @@ export default function Lists() {
                         <RowMenu
                           items={[
                             { label: 'Change minimum', onSelect: () => setEditing({ kind: 'product', item: p }) },
-                            p.is_active ? { label: 'Hide from new sales', danger: true, onSelect: () => void toggle('products', p.id, p.name, false) } : { label: 'Show on new sales', onSelect: () => void toggle('products', p.id, p.name, true) },
+                            p.is_active
+                              ? { label: 'Hide from new sales', danger: true, disabled: saving, onSelect: () => void toggle('products', p.id, p.name, false) }
+                              : { label: 'Show on new sales', disabled: saving, onSelect: () => void toggle('products', p.id, p.name, true) },
                           ]}
                         />
                       )
@@ -197,6 +213,7 @@ export default function Lists() {
                           size="md"
                           className="w-[170px] shrink-0 sm:w-[220px]"
                           value={lineOf(item.id)}
+                          disabled={saving}
                           onChange={(e) => void setStatementLine(item.id, item.name, e.target.value as StatementLine)}
                           options={Object.entries(STATEMENT_LINES).map(([value, label]) => ({ value, label }))}
                         />
@@ -214,8 +231,8 @@ export default function Lists() {
                                 : setEditing({ kind: 'name', list: selected as NameListId, item }),
                           },
                           item.is_active
-                            ? { label: 'Hide from new forms', danger: true, onSelect: () => void toggle(selected === 'medications' ? 'medications' : NAME_TABLES[selected as NameListId], item.id, item.name, false) }
-                            : { label: 'Show on new forms', onSelect: () => void toggle(selected === 'medications' ? 'medications' : NAME_TABLES[selected as NameListId], item.id, item.name, true) },
+                            ? { label: 'Hide from new forms', danger: true, disabled: saving, onSelect: () => void toggle(selected === 'medications' ? 'medications' : NAME_TABLES[selected as NameListId], item.id, item.name, false) }
+                            : { label: 'Show on new forms', disabled: saving, onSelect: () => void toggle(selected === 'medications' ? 'medications' : NAME_TABLES[selected as NameListId], item.id, item.name, true) },
                         ]}
                       />
                     )}
@@ -283,18 +300,23 @@ function NameModal({
   onSaved: () => Promise<void>
 }) {
   const [name, setName] = useState(item?.name ?? '')
+  // A second tap while saving would add the item twice.
   const [busy, setBusy] = useState(false)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
+    if (busy) return
     const n = name.trim()
     if (!n) return toast.error('Enter a name')
     if (taken.some((t) => t.toLowerCase() === n.toLowerCase() && t !== item?.name)) return toast.error('That name is already on the list')
     setBusy(true)
     const db = createClient()
-    const { error } = item ? await db.from(table).update({ name: n }).eq('id', item.id) : await db.from(table).insert({ name: n })
-    setBusy(false)
-    if (error) return toast.error(why(error.message))
+    try {
+      const { error } = item ? await db.from(table).update({ name: n }).eq('id', item.id) : await db.from(table).insert({ name: n })
+      if (error) return toast.error(why(error.message))
+    } finally {
+      setBusy(false)
+    }
     toast.success(item ? `Renamed to ${n}` : `${n} added`, { description: item ? 'Old records show the new name too.' : undefined })
     onClose()
     await onSaved()
@@ -315,27 +337,29 @@ function ProductModal({ product, onClose, onSaved }: { product: Product | null; 
   const [kind, setKind] = useState<(typeof PRODUCT_KINDS)[number]['value']>(product?.kind ?? 'eggs')
   const [unit, setUnit] = useState(product?.unit ?? 'crate')
   const [min, setMin] = useState(product?.min_price === null || product?.min_price === undefined ? '' : String(Number(product.min_price)))
+  // A second tap while saving would add the product twice.
   const [busy, setBusy] = useState(false)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
+    if (busy) return
     const price = min.trim() ? Number(min) : null
     if (price !== null && !(price >= 0)) return toast.error('Enter the minimum price in naira, or leave it blank for no minimum')
+    if (!product && (!name.trim() || !unit.trim())) return toast.error('Enter the product name and unit')
     const db = createClient()
     setBusy(true)
     let error
-    if (product) {
-      ;({ error } = await db.from('products').update({ min_price: price }).eq('id', product.id))
-    } else {
-      if (!name.trim() || !unit.trim()) {
-        setBusy(false)
-        return toast.error('Enter the product name and unit')
+    try {
+      if (product) {
+        ;({ error } = await db.from('products').update({ min_price: price }).eq('id', product.id))
+      } else {
+        // Whole eggs come out of the egg store by the crate; other products aren't stock-tracked.
+        const eggs = kind === 'eggs'
+        ;({ error } = await db.from('products').insert({ name: name.trim(), kind, unit: unit.trim(), min_price: price, stock_item: eggs ? 'eggs' : null, stock_units_per_unit: eggs ? (settings?.eggs_per_crate ?? 30) : null }))
       }
-      // Whole eggs come out of the egg store by the crate; other products aren't stock-tracked.
-      const eggs = kind === 'eggs'
-      ;({ error } = await db.from('products').insert({ name: name.trim(), kind, unit: unit.trim(), min_price: price, stock_item: eggs ? 'eggs' : null, stock_units_per_unit: eggs ? (settings?.eggs_per_crate ?? 30) : null }))
+    } finally {
+      setBusy(false)
     }
-    setBusy(false)
     if (error) return toast.error(why(error.message))
     toast.success(product ? `${product.name}: minimum ${price === null ? 'removed' : formatNaira(price)}` : `${name.trim()} added`)
     onClose()
@@ -374,10 +398,12 @@ function MedicationModal({ medication, onClose, onSaved }: { medication: Medicat
   const [unit, setUnit] = useState(medication?.stock_unit ?? 'g')
   const [withdrawal, setWithdrawal] = useState(String(medication?.withdrawal_days ?? 0))
   const [reorder, setReorder] = useState(String(medication ? Number(medication.reorder_level) : 0))
+  // A second tap while saving would add the medication twice.
   const [busy, setBusy] = useState(false)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
+    if (busy) return
     if (!name.trim() || !unit.trim()) return toast.error('Enter the name and the unit it’s counted in')
     const days = Number(withdrawal)
     if (!Number.isInteger(days) || days < 0) return toast.error('Withdrawal must be whole days (0 if none)')
@@ -385,9 +411,12 @@ function MedicationModal({ medication, onClose, onSaved }: { medication: Medicat
     setBusy(true)
     const row = { name: name.trim(), category, stock_unit: unit.trim(), withdrawal_days: category === 'disinfectant' ? null : days, reorder_level: Number(reorder) }
     const db = createClient()
-    const { error } = medication ? await db.from('medications').update(row).eq('id', medication.id) : await db.from('medications').insert(row)
-    setBusy(false)
-    if (error) return toast.error(why(error.message))
+    try {
+      const { error } = medication ? await db.from('medications').update(row).eq('id', medication.id) : await db.from('medications').insert(row)
+      if (error) return toast.error(why(error.message))
+    } finally {
+      setBusy(false)
+    }
     toast.success(medication ? `${row.name} updated` : `${row.name} added`)
     onClose()
     await onSaved()

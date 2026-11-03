@@ -35,6 +35,8 @@ export default function FixedAssets() {
   const { data, loaded, error, reload, save } = useFinance()
   const [editing, setEditing] = useState<FixedAsset | 'new' | null>(null)
   const [disposing, setDisposing] = useState<FixedAsset | null>(null)
+  // Reopening the menu while a delete is saving would send it twice.
+  const [saving, setSaving] = useState(false)
   const today = todayISO()
   const canAdd = can(user, 'finance', 'add')
   const canEdit = can(user, 'finance', 'edit')
@@ -89,8 +91,10 @@ export default function FixedAssets() {
     )
 
   const remove = async (a: FixedAsset) => {
-    if (!window.confirm(`Delete ${a.name}? Use Dispose instead if it was sold or scrapped.`)) return
-    if (await save((db) => db.from('fixed_assets').delete().eq('id', a.id))) toast(`${a.name} deleted`)
+    if (saving || !window.confirm(`Delete ${a.name}? Use Dispose instead if it was sold or scrapped.`)) return
+    setSaving(true)
+    const ok = await save((db) => db.from('fixed_assets').delete().eq('id', a.id)).finally(() => setSaving(false))
+    if (ok) toast(`${a.name} deleted`)
   }
 
   return (
@@ -136,7 +140,7 @@ export default function FixedAssets() {
                           items={[
                             { label: 'Edit…', onSelect: () => setEditing(r.asset) },
                             ...(r.status !== 'Disposed' ? [{ label: 'Dispose of…', onSelect: () => setDisposing(r.asset) }] : []),
-                            ...(canDelete ? [{ label: 'Delete', danger: true, onSelect: () => void remove(r.asset) }] : []),
+                            ...(canDelete ? [{ label: 'Delete', danger: true, disabled: saving, onSelect: () => void remove(r.asset) }] : []),
                           ]}
                         />
                       )

@@ -133,6 +133,7 @@ function Overview({ penId }: { penId: number }) {
   const toast = useToast()
   const [unit, setUnit] = useState<'Birds' | '% of flock'>('Birds')
   const [overlay, setOverlay] = useState<'lay' | 'close' | 'edit-flock' | 'add-birds' | null>(null)
+  // A second tap while saving would save the start of lay twice.
   const [saving, setSaving] = useState(false)
   const facts = flockFacts(history, catalog, penId)!
   const flock = facts.flock
@@ -150,11 +151,15 @@ function Overview({ penId }: { penId: number }) {
   const birdsCost = placements.reduce((n, p) => n + p.birds * Number(p.cost_per_bird ?? 0), 0)
 
   const markSuggested = async () => {
-    if (!suggested) return
+    if (saving || !suggested) return
     setSaving(true)
-    const ok = await saveFlock(flock.id, { laying_started_on: suggested })
-    if (ok) await reload()
-    setSaving(false)
+    let ok = false
+    try {
+      ok = await saveFlock(flock.id, { laying_started_on: suggested })
+      if (ok) await reload()
+    } finally {
+      setSaving(false)
+    }
     if (ok) toast(`${flock.code} laying since ${weekdayDm(suggested)}`)
   }
   const { rows } = penFlock(history, penId)

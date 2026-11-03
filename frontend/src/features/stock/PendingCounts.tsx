@@ -21,6 +21,7 @@ export function PendingCounts({ only }: { only?: Only }) {
   const user = useCurrentUser()
   const toast = useToast()
   const { history, catalog, decideCount } = useTrade()
+  // The count being decided; every button waits, so a second tap can't decide twice.
   const [busy, setBusy] = useState<number | null>(null)
   if (!canApprove(user.role)) return null
 
@@ -38,9 +39,9 @@ export function PendingCounts({ only }: { only?: Only }) {
   }
 
   const decide = async (id: number, approve: boolean, name: string) => {
+    if (busy !== null) return
     setBusy(id)
-    const ok = await decideCount(id, approve)
-    setBusy(null)
+    const ok = await decideCount(id, approve).finally(() => setBusy(null))
     if (ok) toast(approve ? `${name} count applied to stock` : `${name} count rejected — stock unchanged`)
   }
 
@@ -71,10 +72,10 @@ export function PendingCounts({ only }: { only?: Only }) {
                 </span>
               </span>
               <span className="flex gap-2">
-                <Button size="sm" disabled={busy === a.id} onClick={() => void decide(a.id, false, name)}>
+                <Button size="sm" disabled={busy !== null} onClick={() => void decide(a.id, false, name)}>
                   Reject
                 </Button>
-                <Button size="sm" variant="primary" disabled={busy === a.id} onClick={() => void decide(a.id, true, name)}>
+                <Button size="sm" variant="primary" disabled={busy !== null} onClick={() => void decide(a.id, true, name)}>
                   Approve
                 </Button>
               </span>

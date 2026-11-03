@@ -87,6 +87,8 @@ export default function WeeklyCount() {
   const unitText = (i: Item, n: number) => `${formatNumber(Math.abs(n))} ${i.unit === 'bags' && Math.abs(n) === 1 ? 'bag' : i.unit === 'crates' && Math.abs(n) === 1 ? 'crate' : i.unit}`
 
   const send = async () => {
+    // A second tap while saving would save the count twice.
+    if (saving) return
     // Every counted line is saved, matching ones too, so the farm knows when stock was last checked.
     // Small differences change stock now; bigger ones wait for a manager.
     const toEggs = (i: Item, n: number) => (i.stockItem ? Math.round(n * farmSettings.eggsPerCrate) : n)
@@ -104,8 +106,7 @@ export default function WeeklyCount() {
       }
     })
     setSaving(true)
-    const ok = await addStockMoves(moves)
-    setSaving(false)
+    const ok = await addStockMoves(moves).finally(() => setSaving(false))
     if (!ok) return
     setSentAt(nowHM())
     toast(bigger.length ? `Count saved · ${bigger.length} ${bigger.length === 1 ? 'difference waits' : 'differences wait'} for ${manager}` : 'Count saved')

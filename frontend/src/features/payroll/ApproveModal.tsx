@@ -22,9 +22,10 @@ export function ApproveModal({ runId, period, staff, totals, save, onClose }: Pr
   const [busy, setBusy] = useState(false)
 
   const approve = async () => {
+    // A second tap while approving would post the month twice.
+    if (busy) return
     setBusy(true)
-    const ok = await save((db) => db.rpc('approve_payroll', { run_id: runId }))
-    setBusy(false)
+    const ok = await save((db) => db.rpc('approve_payroll', { run_id: runId })).finally(() => setBusy(false))
     if (!ok) return
     toast(`${monthLabel(period)} approved and posted to Expenses`)
     onClose()

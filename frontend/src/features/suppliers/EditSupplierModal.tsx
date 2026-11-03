@@ -40,36 +40,41 @@ export function EditSupplierModal({ supplierId, onClose }: { supplierId: string;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    // A second tap while saving would send the update twice.
+    if (saving) return
     setSubmitted(true)
     if (!row || errors.name) return
     setSaving(true)
     const openingChanged = owner && openingValue !== Number(row.opening_balance)
-    const { data, error } = await createClient()
-      .from('suppliers')
-      .update({
-        name: name.trim(),
-        short_name: short.trim() || null,
-        phone: phone.trim() || null,
-        address: address.trim() || null,
-        supplies,
-        payment_terms_days: Number(terms),
-        is_active: active,
-        ...(owner
-          ? {
-              opening_balance: openingValue,
-              opening_balance_source: source.trim() || null,
-              ...(openingChanged ? { opening_balance_checked: false } : {}),
-            }
-          : {}),
-      })
-      .eq('id', row.id)
-      .select('id')
-    setSaving(false)
-    if (error) return void errorToast.error(friendlyError(error.message))
-    if (!data?.length) return void errorToast.error(REFUSED)
-    await trade.reload()
-    toast(`${name.trim()} saved`)
-    onClose()
+    try {
+      const { data, error } = await createClient()
+        .from('suppliers')
+        .update({
+          name: name.trim(),
+          short_name: short.trim() || null,
+          phone: phone.trim() || null,
+          address: address.trim() || null,
+          supplies,
+          payment_terms_days: Number(terms),
+          is_active: active,
+          ...(owner
+            ? {
+                opening_balance: openingValue,
+                opening_balance_source: source.trim() || null,
+                ...(openingChanged ? { opening_balance_checked: false } : {}),
+              }
+            : {}),
+        })
+        .eq('id', row.id)
+        .select('id')
+      if (error) return void errorToast.error(friendlyError(error.message))
+      if (!data?.length) return void errorToast.error(REFUSED)
+      await trade.reload()
+      toast(`${name.trim()} saved`)
+      onClose()
+    } finally {
+      setSaving(false)
+    }
   }
 
   const termOptions = TERMS.some((t) => t.value === terms) ? TERMS : [...TERMS, { value: terms, label: `${terms} days after delivery` }]

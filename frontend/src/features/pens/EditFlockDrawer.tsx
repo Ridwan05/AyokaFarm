@@ -26,6 +26,7 @@ export function EditFlockDrawer({ flock, onClose }: Props) {
   const [birdTypeId, setBirdTypeId] = useState(flock.bird_type_id)
   const [rows, setRows] = useState<SourceRow[]>(startRows)
   const [submitted, setSubmitted] = useState(false)
+  // A second tap while saving would save the flock twice.
   const [busy, setBusy] = useState(false)
 
   // Birds now placed from a batch are available again while editing.
@@ -38,6 +39,7 @@ export function EditFlockDrawer({ flock, onClose }: Props) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (busy) return
     setSubmitted(true)
     if (errors.code || errors.age || problem) return
     const patch: FlockPatch = {}
@@ -49,10 +51,13 @@ export function EditFlockDrawer({ flock, onClose }: Props) {
     if (birdTypeId !== flock.bird_type_id) patch.bird_type_id = birdTypeId
     setBusy(true)
     let ok = true
-    if (Object.keys(patch).length) ok = await updateFlock(flock.id, patch)
-    // Birds are replaced after the details, so a new bird type or date applies to them.
-    if (ok && sourcesChanged) ok = await setFlockSources(flock.id, toBirdSources(rows))
-    setBusy(false)
+    try {
+      if (Object.keys(patch).length) ok = await updateFlock(flock.id, patch)
+      // Birds are replaced after the details, so a new bird type or date applies to them.
+      if (ok && sourcesChanged) ok = await setFlockSources(flock.id, toBirdSources(rows))
+    } finally {
+      setBusy(false)
+    }
     if (!ok) return
     toast(`Flock ${code.trim()} saved`)
     onClose()

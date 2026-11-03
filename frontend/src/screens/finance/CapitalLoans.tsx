@@ -33,6 +33,8 @@ export default function CapitalLoans() {
   const { history } = useTrade()
   const { data, loaded, error, reload, save } = useFinance()
   const [editing, setEditing] = useState<FinanceEntry | 'new' | null>(null)
+  // Reopening the menu while a delete is saving would send it twice.
+  const [saving, setSaving] = useState(false)
   const goLive = openingDate(history)
   const today = todayISO()
   const canAdd = can(user, 'finance', 'add')
@@ -101,8 +103,10 @@ export default function CapitalLoans() {
     )
 
   const remove = async (e: FinanceEntry) => {
-    if (!window.confirm(`Delete ${e.ref}?`)) return
-    if (await save((db) => db.from('finance_entries').delete().eq('id', e.id))) toast(`${e.ref} deleted`)
+    if (saving || !window.confirm(`Delete ${e.ref}?`)) return
+    setSaving(true)
+    const ok = await save((db) => db.from('finance_entries').delete().eq('id', e.id)).finally(() => setSaving(false))
+    if (ok) toast(`${e.ref} deleted`)
   }
 
   return (
@@ -140,7 +144,7 @@ export default function CapitalLoans() {
                   onRowClick={canEdit ? (e) => setEditing(e) : undefined}
                   rowActions={
                     canEdit
-                      ? (e) => <RowMenu items={[{ label: 'Edit…', onSelect: () => setEditing(e) }, ...(canDelete ? [{ label: 'Delete', danger: true, onSelect: () => void remove(e) }] : [])]} />
+                      ? (e) => <RowMenu items={[{ label: 'Edit…', onSelect: () => setEditing(e) }, ...(canDelete ? [{ label: 'Delete', danger: true, disabled: saving, onSelect: () => void remove(e) }] : [])]} />
                       : undefined
                   }
                 />

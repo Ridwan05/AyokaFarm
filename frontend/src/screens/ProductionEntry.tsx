@@ -120,6 +120,8 @@ function EntryScreen() {
   const [draft, setDraft] = useState<Draft>(blank)
   const [restored, setRestored] = useState(false)
   const [saved, setSaved] = useState(false)
+  // A second tap while saving would record the entry twice.
+  const [saving, setSaving] = useState(false)
   // Set by a Save tap with fields missing: empty fields then show their message.
   const [tried, setTried] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
@@ -246,7 +248,7 @@ function EntryScreen() {
     draft.meds.every((m, i) => num(m.qty) !== null && !medError(i))
 
   async function save() {
-    if (!ctx) return
+    if (!ctx || saving) return
     if (!valid) {
       // Mark what's missing, then take the attendant to the first one (after the messages render).
       setTried(true)
@@ -277,7 +279,8 @@ function EntryScreen() {
       recordedBy: user.name.split(' ')[0],
       notes: draft.notes.trim() || undefined,
     }
-    if (!(await (editing ? updateProductionRecord(editing.row.id, record) : addProductionRecord(record)))) return
+    setSaving(true)
+    if (!(await (editing ? updateProductionRecord(editing.row.id, record) : addProductionRecord(record)).finally(() => setSaving(false)))) return
     if (!editing && !past) saveDraft(penId, null)
     setSaved(true)
     const who = managerNames(catalog)
@@ -530,10 +533,10 @@ function EntryScreen() {
           <Button size="lg" className="flex-1 lg:flex-none" onClick={() => router.push(backTo)}>
             Cancel
           </Button>
-          <Button type="submit" variant="primary" size="lg" className="flex-[2] lg:flex-none" disabled={saved}>
+          <Button type="submit" variant="primary" size="lg" className="flex-[2] lg:flex-none" disabled={saved || saving}>
             {/* Crossfade the label with a little blur so the state change reads as one motion. */}
             <span className="grid place-items-center">
-              <span className={cn('col-start-1 row-start-1 transition-[opacity,filter] duration-200 ease-out', saved && 'opacity-0 blur-[2px]')}>{editing ? 'Save correction' : 'Save entry'}</span>
+              <span className={cn('col-start-1 row-start-1 transition-[opacity,filter] duration-200 ease-out', saved && 'opacity-0 blur-[2px]')}>{saving ? 'Saving…' : editing ? 'Save correction' : 'Save entry'}</span>
               <span className={cn('col-start-1 row-start-1 flex items-center gap-1.5 transition-[opacity,filter] duration-200 ease-out', !saved && 'opacity-0 blur-[2px]')} aria-hidden={!saved}>
                 <Check size={20} strokeWidth={2} /> Saved
               </span>

@@ -58,6 +58,8 @@ export function LoanDrawer({ employee, save, onClose }: Props) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    // A second tap while saving would record the loan twice.
+    if (saving) return
     setSubmitted(true)
     if (errors.amount || errors.repay || errors.month) return
     setSaving(true)
@@ -75,8 +77,7 @@ export function LoanDrawer({ employee, save, onClose }: Props) {
         status: owner ? 'active' : 'pending',
         // ref (ADV-/LN-0001) is set by a database trigger.
       } as TablesInsert<'employee_loans'>),
-    )
-    setSaving(false)
+    ).finally(() => setSaving(false))
     if (!ok) return
     toast(owner ? `${kind} of ${formatNaira(total)} recorded for ${employee.full_name}` : `${kind} request sent to the owner`)
     onClose()

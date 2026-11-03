@@ -64,6 +64,7 @@ export default function FeedTargets() {
   const [values, setValues] = useState(() => thresholdValues(settings))
   const savedValues = thresholdValues(settings)
   const dirty = THRESHOLDS.some((t) => values[t.key] !== savedValues[t.key])
+  // A second tap while saving would write twice; one flag covers thresholds, bands and feed types.
   const [saving, setSaving] = useState(false)
   const [band, setBand] = useState<Band | 'new' | null>(null)
   const [feedType, setFeedType] = useState<FeedType | 'new' | null>(null)
@@ -77,6 +78,7 @@ export default function FeedTargets() {
   })
 
   async function saveThresholds() {
+    if (saving) return
     const patch: TablesUpdate<'farm_settings'> = {}
     for (const t of THRESHOLDS) {
       const v = values[t.key].trim()
@@ -91,31 +93,46 @@ export default function FeedTargets() {
     }
     if (patch.eggs_per_crate !== undefined && patch.eggs_per_crate < 1) return toast.error('Eggs in a crate: enter 1 or more')
     setSaving(true)
-    const { error } = await db.from('farm_settings').update(patch).eq('id', true)
-    // Egg products sell by the crate but take eggs out of stock, so they follow the crate size too.
-    const crateChanged = !error && patch.eggs_per_crate !== undefined && patch.eggs_per_crate !== Number(settings?.eggs_per_crate ?? 30)
-    const crateError = crateChanged
-      ? (await db.from('products').update({ stock_units_per_unit: patch.eggs_per_crate }).in('stock_item', ['eggs', 'cracked_eggs'])).error
-      : null
-    setSaving(false)
-    if (error) return toast.error(why(error.message))
-    if (crateError) toast.error(`Thresholds saved, but egg products still use the old crate size: ${why(crateError.message)}`)
-    toast.success('Alert thresholds saved')
-    await reload()
+    try {
+      const { error } = await db.from('farm_settings').update(patch).eq('id', true)
+      // Egg products sell by the crate but take eggs out of stock, so they follow the crate size too.
+      const crateChanged = !error && patch.eggs_per_crate !== undefined && patch.eggs_per_crate !== Number(settings?.eggs_per_crate ?? 30)
+      const crateError = crateChanged
+        ? (await db.from('products').update({ stock_units_per_unit: patch.eggs_per_crate }).in('stock_item', ['eggs', 'cracked_eggs'])).error
+        : null
+      if (error) return toast.error(why(error.message))
+      if (crateError) toast.error(`Thresholds saved, but egg products still use the old crate size: ${why(crateError.message)}`)
+      toast.success('Alert thresholds saved')
+      await reload()
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function removeBand(b: Band) {
-    const { error } = await db.from('feed_targets').delete().eq('id', b.id)
-    if (error) return toast.error(why(error.message))
-    toast.success(`Band from week ${b.week_from} removed`)
-    await reload()
+    if (saving) return
+    setSaving(true)
+    try {
+      const { error } = await db.from('feed_targets').delete().eq('id', b.id)
+      if (error) return toast.error(why(error.message))
+      toast.success(`Band from week ${b.week_from} removed`)
+      await reload()
+    } finally {
+      setSaving(false)
+    }
   }
 
   async function setActive(f: FeedType, active: boolean) {
-    const { error } = await db.from('feed_types').update({ is_active: active }).eq('id', f.id)
-    if (error) return toast.error(why(error.message))
-    toast.success(`${f.name} ${active ? 'is active again' : 'is hidden from new entries and purchases'}`)
-    await reload()
+    if (saving) return
+    setSaving(true)
+    try {
+      const { error } = await db.from('feed_types').update({ is_active: active }).eq('id', f.id)
+      if (error) return toast.error(why(error.message))
+      toast.success(`${f.name} ${active ? 'is active again' : 'is hidden from new entries and purchases'}`)
+      await reload()
+    } finally {
+      setSaving(false)
+    }
   }
 
   const typeColumns: Column<FeedTypeRow>[] = [
@@ -179,7 +196,7 @@ export default function FeedTargets() {
                         <RowMenu
                           items={[
                             { label: 'Edit band', onSelect: () => setBand(b) },
-                            { label: 'Remove band', danger: true, onSelect: () => void removeBand(b) },
+                            { label: 'Remove band', danger: true, disabled: saving, onSelect: () => void removeBand(b) },
                           ]}
                         />
                       )}
@@ -243,7 +260,9 @@ export default function FeedTargets() {
                     items={
                       [
                         { label: 'Edit', onSelect: () => setFeedType(f) },
-                        f.is_active ? { label: 'Deactivate', danger: true, onSelect: () => void setActive(f, false) } : { label: 'Activate', onSelect: () => void setActive(f, true) },
+                        f.is_active
+                          ? { label: 'Deactivate', danger: true, disabled: saving, onSelect: () => void setActive(f, false) }
+                          : { label: 'Activate', disabled: saving, onSelect: () => void setActive(f, true) },
                       ] satisfies MenuItem[]
                     }
                   />
@@ -294,10 +313,12 @@ function BandModal({
   const [to, setTo] = useState(band?.week_to ? String(band.week_to) : '')
   const [grams, setGrams] = useState(band ? String(Number(band.grams_per_bird_day)) : '')
   const [feed, setFeed] = useState(String(band?.recommended_feed_type_id ?? last?.recommended_feed_type_id ?? feedTypes.find((f) => f.is_active)?.id ?? ''))
+  // A second tap while saving would add the band twice.
   const [busy, setBusy] = useState(false)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
+    if (busy) return
     const f = Number(from)
     const t = to.trim() ? Number(to) : null
     const g = Number(grams)
@@ -310,9 +331,12 @@ function BandModal({
     setBusy(true)
     const row = { bird_type_id: group.birdTypeId, breed: group.breed, week_from: f, week_to: t, grams_per_bird_day: g, recommended_feed_type_id: feed ? Number(feed) : null }
     const db = createClient()
-    const { error } = band ? await db.from('feed_targets').update(row).eq('id', band.id) : await db.from('feed_targets').insert(row)
-    setBusy(false)
-    if (error) return toast.error(why(error.message))
+    try {
+      const { error } = band ? await db.from('feed_targets').update(row).eq('id', band.id) : await db.from('feed_targets').insert(row)
+      if (error) return toast.error(why(error.message))
+    } finally {
+      setBusy(false)
+    }
     toast.success(band ? 'Band updated' : 'Band added')
     onClose()
     await onSaved()
@@ -353,10 +377,12 @@ function FeedTypeModal({ feedType, all, onClose, onSaved }: { feedType: FeedType
   const [name, setName] = useState(feedType?.name ?? '')
   const [bagKg, setBagKg] = useState(String(feedType ? Number(feedType.bag_kg) : 25))
   const [reorder, setReorder] = useState(String(feedType?.reorder_level_bags ?? ''))
+  // A second tap while saving would add the feed type twice.
   const [busy, setBusy] = useState(false)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
+    if (busy) return
     const n = name.trim()
     if (!n) return toast.error('Enter the feed’s name')
     if (all.some((f) => f.id !== feedType?.id && f.name.toLowerCase() === n.toLowerCase())) return toast.error('There’s already a feed type with that name')
@@ -365,9 +391,12 @@ function FeedTypeModal({ feedType, all, onClose, onSaved }: { feedType: FeedType
     setBusy(true)
     const row = { name: n, bag_kg: Number(bagKg), reorder_level_bags: Number(reorder) }
     const db = createClient()
-    const { error } = feedType ? await db.from('feed_types').update(row).eq('id', feedType.id) : await db.from('feed_types').insert(row)
-    setBusy(false)
-    if (error) return toast.error(why(error.message))
+    try {
+      const { error } = feedType ? await db.from('feed_types').update(row).eq('id', feedType.id) : await db.from('feed_types').insert(row)
+      if (error) return toast.error(why(error.message))
+    } finally {
+      setBusy(false)
+    }
     toast.success(feedType ? `${n} updated` : `${n} added`)
     onClose()
     await onSaved()

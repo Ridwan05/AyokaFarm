@@ -55,14 +55,15 @@ export function SaleDrawer({ sale, onClose, onRecordPayment, onEdit, onVoid }: P
     can(currentUser, 'sales', 'edit') ||
     (can(currentUser, 'sales', 'add') && sale.recordedBy === currentUser.name.split(' ')[0] && daysFrom(saleDate(sale), todayISO()) <= farmSettings.editWindowDays)
   const [editing, setEditing] = useState<PortionRow[] | null>(null)
+  // One flag for every write here: a second tap while saving would run it twice.
   const [saving, setSaving] = useState(false)
   const choices = penChoices(trade, sale.productId, sale.receipt)
   const problem = editing && (birds || editing.length) ? portionError(editing, choices, sale.qty, product.unit) : ''
 
   const savePortions = async (rows: PortionRow[]) => {
+    if (saving) return
     setSaving(true)
-    const ok = await setSaleAllocations(sale.receipt, parsePortions(rows))
-    setSaving(false)
+    const ok = await setSaleAllocations(sale.receipt, parsePortions(rows)).finally(() => setSaving(false))
     if (!ok) return
     toast(rows.length ? `Pens saved for ${sale.receipt}` : `${sale.receipt} set to auto-split`)
     setEditing(null)
@@ -77,8 +78,11 @@ export function SaleDrawer({ sale, onClose, onRecordPayment, onEdit, onVoid }: P
       <Button
         size="lg"
         className="flex-1"
+        disabled={saving}
         onClick={async () => {
-          if (!(await rejectSale(sale.receipt))) return
+          if (saving) return
+          setSaving(true)
+          if (!(await rejectSale(sale.receipt).finally(() => setSaving(false)))) return
           toast(`${sale.receipt} rejected`)
           onClose()
         }}
@@ -89,8 +93,11 @@ export function SaleDrawer({ sale, onClose, onRecordPayment, onEdit, onVoid }: P
         size="lg"
         variant="primary"
         className="flex-1"
+        disabled={saving}
         onClick={async () => {
-          if (!(await approveSale(sale.receipt, approver))) return
+          if (saving) return
+          setSaving(true)
+          if (!(await approveSale(sale.receipt, approver).finally(() => setSaving(false)))) return
           toast(`${sale.receipt} approved`)
           onClose()
         }}

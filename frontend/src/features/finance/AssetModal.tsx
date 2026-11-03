@@ -41,6 +41,8 @@ export function AssetModal({ asset, save, onClose }: Props) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    // A second tap while saving would add the asset twice.
+    if (saving) return
     setSubmitted(true)
     if (Object.values(errors).some(Boolean)) return
     setSaving(true)
@@ -54,8 +56,7 @@ export function AssetModal({ asset, save, onClose }: Props) {
       paid_from: paid === 'Cash' ? 'cash' : paid === 'Bank' ? 'bank' : null,
       notes: notes.trim() || null,
     }
-    const ok = await save((db) => (asset ? db.from('fixed_assets').update(row).eq('id', asset.id) : db.from('fixed_assets').insert(row)))
-    setSaving(false)
+    const ok = await save((db) => (asset ? db.from('fixed_assets').update(row).eq('id', asset.id) : db.from('fixed_assets').insert(row))).finally(() => setSaving(false))
     if (!ok) return
     toast(asset ? `${row.name} saved` : `${row.name} added`)
     onClose()
@@ -143,15 +144,14 @@ export function DisposeModal({ asset, save, onClose }: { asset: FixedAsset; save
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    if (tooEarly) return
+    if (saving || tooEarly) return
     setSaving(true)
     const ok = await save((db) =>
       db
         .from('fixed_assets')
         .update({ disposed_on: date, disposal_amount: num(amount), disposal_account: num(amount) > 0 ? account.toLowerCase() : null })
         .eq('id', asset.id),
-    )
-    setSaving(false)
+    ).finally(() => setSaving(false))
     if (!ok) return
     toast(`${asset.name} disposed of`)
     onClose()

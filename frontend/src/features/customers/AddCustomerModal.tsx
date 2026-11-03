@@ -36,29 +36,34 @@ export function AddCustomerModal({ onClose }: { onClose: () => void }) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    // A second tap while saving would add the customer twice.
+    if (saving) return
     // One-off buyers don't get a record: their name goes on the sale itself.
     if (!regular) return onClose()
     setSubmitted(true)
     if (errors.name || errors.phone) return
     const trimmed = name.trim()
     setSaving(true)
-    const { error } = await createClient()
-      .from('customers')
-      .insert({
-        name: trimmed,
-        short_name: trimmed.split(' ').slice(0, 2).join(' '),
-        phone: phone.trim(),
-        area: area.trim() || null,
-        buys: buysKinds(buys),
-        whatsapp_opt_in: consent === CONSENT[0],
-        opening_balance: openingValue,
-        opening_balance_source: openingValue ? source.trim() || 'Entered when the customer was added' : null,
-      })
-    setSaving(false)
-    if (error) return void errorToast.error(friendlyError(error.message))
-    await trade.reload()
-    toast(`${trimmed} added`)
-    onClose()
+    try {
+      const { error } = await createClient()
+        .from('customers')
+        .insert({
+          name: trimmed,
+          short_name: trimmed.split(' ').slice(0, 2).join(' '),
+          phone: phone.trim(),
+          area: area.trim() || null,
+          buys: buysKinds(buys),
+          whatsapp_opt_in: consent === CONSENT[0],
+          opening_balance: openingValue,
+          opening_balance_source: openingValue ? source.trim() || 'Entered when the customer was added' : null,
+        })
+      if (error) return void errorToast.error(friendlyError(error.message))
+      await trade.reload()
+      toast(`${trimmed} added`)
+      onClose()
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (

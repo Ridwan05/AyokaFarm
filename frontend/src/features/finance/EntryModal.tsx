@@ -53,6 +53,8 @@ export function EntryModal({ entry, defaults, lenders, save, onClose, since }: P
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    // A second tap while saving would record the entry twice.
+    if (saving) return
     setSubmitted(true)
     if (Object.values(errors).some(Boolean)) return
     setSaving(true)
@@ -65,8 +67,7 @@ export function EntryModal({ entry, defaults, lenders, save, onClose, since }: P
       loan_term: isLoan(kind) ? (term === 'Longer' ? 'long' : 'short') : null,
       notes: notes.trim() || null,
     }
-    const ok = await save((db) => (entry ? db.from('finance_entries').update(row).eq('id', entry.id) : db.from('finance_entries').insert(row)))
-    setSaving(false)
+    const ok = await save((db) => (entry ? db.from('finance_entries').update(row).eq('id', entry.id) : db.from('finance_entries').insert(row))).finally(() => setSaving(false))
     if (!ok) return
     toast(entry ? `${entry.ref} saved` : `${KIND_LABEL[kind]} recorded`)
     onClose()

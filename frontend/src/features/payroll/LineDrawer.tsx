@@ -49,10 +49,11 @@ export function LineDrawer({ line, employee, period, items, save, onClose }: Pro
   const workedError = monthly && workedNum > days ? `${monthLabel(period)} has ${days} days` : undefined
   const changedPay = Math.abs(units - Number(line.units)) > 0.00005 || num(rate) !== Number(line.rate)
 
+  // One change at a time: a second tap while saving would apply it twice.
   const run = async (what: () => Promise<boolean>, done: string) => {
+    if (busy) return false
     setBusy(true)
-    const ok = await what()
-    setBusy(false)
+    const ok = await what().finally(() => setBusy(false))
     if (ok) toast(done)
     return ok
   }

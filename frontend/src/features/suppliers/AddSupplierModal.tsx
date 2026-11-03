@@ -28,28 +28,33 @@ export function AddSupplierModal({ onClose }: { onClose: () => void }) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    // A second tap while saving would add the supplier twice.
+    if (saving) return
     setSubmitted(true)
     if (errors.name) return
     const trimmed = name.trim()
     setSaving(true)
-    const { error } = await createClient()
-      .from('suppliers')
-      .insert({
-        name: trimmed,
-        short_name: trimmed.split(' ')[0],
-        // The full number: it's how staff reach the supplier.
-        phone: phone.trim() || null,
-        address: address.trim() || null,
-        supplies: [supplierKind(kind)],
-        payment_terms_days: Number(terms),
-        opening_balance: openingValue,
-        opening_balance_source: openingValue ? source.trim() || 'Entered when the supplier was added' : null,
-      })
-    setSaving(false)
-    if (error) return void errorToast.error(friendlyError(error.message))
-    await trade.reload()
-    toast(`${trimmed} added`)
-    onClose()
+    try {
+      const { error } = await createClient()
+        .from('suppliers')
+        .insert({
+          name: trimmed,
+          short_name: trimmed.split(' ')[0],
+          // The full number: it's how staff reach the supplier.
+          phone: phone.trim() || null,
+          address: address.trim() || null,
+          supplies: [supplierKind(kind)],
+          payment_terms_days: Number(terms),
+          opening_balance: openingValue,
+          opening_balance_source: openingValue ? source.trim() || 'Entered when the supplier was added' : null,
+        })
+      if (error) return void errorToast.error(friendlyError(error.message))
+      await trade.reload()
+      toast(`${trimmed} added`)
+      onClose()
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (

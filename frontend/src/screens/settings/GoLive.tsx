@@ -36,6 +36,8 @@ export default function GoLive() {
   const [side, setSide] = useState('Customers')
   const [editing, setEditing] = useState<Party | null>(null)
   const [addingStock, setAddingStock] = useState(false)
+  // A second tap while saving would confirm the balance twice.
+  const [saving, setSaving] = useState(false)
 
   const goLive = settings?.go_live_date ?? null
   const asAt = goLive ? weekdayDayMonth(goLive) + ' ' + goLive.slice(0, 4) : 'go-live day'
@@ -73,11 +75,17 @@ export default function GoLive() {
   const allSteps = [...steps, { title: 'Review', detail: doneCount === steps.length ? 'Everything is in place' : 'Check totals', done: doneCount === steps.length }]
 
   async function confirm(p: Party) {
-    const db = createClient()
-    const { error } = p.kind === 'customer' ? await db.from('customers').update({ opening_balance_checked: true }).eq('id', p.id) : await db.from('suppliers').update({ opening_balance_checked: true }).eq('id', p.id)
-    if (error) return toast.error(why(error.message))
-    toast.success(`${p.name}’s opening balance confirmed`)
-    await reload()
+    if (saving) return
+    setSaving(true)
+    try {
+      const db = createClient()
+      const { error } = p.kind === 'customer' ? await db.from('customers').update({ opening_balance_checked: true }).eq('id', p.id) : await db.from('suppliers').update({ opening_balance_checked: true }).eq('id', p.id)
+      if (error) return toast.error(why(error.message))
+      toast.success(`${p.name}’s opening balance confirmed`)
+      await reload()
+    } finally {
+      setSaving(false)
+    }
   }
 
   const columns: Column<Party>[] = [
@@ -94,7 +102,7 @@ export default function GoLive() {
             {r.opening === 0 ? 'Nothing owed' : 'Checked'}
           </Badge>
         ) : editable || can(user, 'parties', 'edit') ? (
-          <button type="button" onClick={() => void confirm(r)} className="cursor-pointer">
+          <button type="button" disabled={saving} onClick={() => void confirm(r)} className="cursor-pointer">
             <Badge dot tone="warning">
               Confirm
             </Badge>
@@ -261,19 +269,24 @@ export default function GoLive() {
 function OpeningBalanceModal({ party, onClose, onSaved }: { party: Party; onClose: () => void; onSaved: () => Promise<void> }) {
   const [amount, setAmount] = useState(String(party.opening))
   const [source, setSource] = useState(party.source ?? '')
+  // A second tap while saving would save the balance twice.
   const [busy, setBusy] = useState(false)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
+    if (busy) return
     const n = Number(amount.replace(/,/g, ''))
     if (!Number.isFinite(n)) return toast.error('Enter the amount in naira (0 if nothing was owed)')
     setBusy(true)
     // Changing the amount means it needs checking again.
     const patch = { opening_balance: n, opening_balance_source: source.trim() || null, opening_balance_checked: n === party.opening && party.checked }
     const db = createClient()
-    const { error } = party.kind === 'customer' ? await db.from('customers').update(patch).eq('id', party.id) : await db.from('suppliers').update(patch).eq('id', party.id)
-    setBusy(false)
-    if (error) return toast.error(why(error.message))
+    try {
+      const { error } = party.kind === 'customer' ? await db.from('customers').update(patch).eq('id', party.id) : await db.from('suppliers').update(patch).eq('id', party.id)
+      if (error) return toast.error(why(error.message))
+    } finally {
+      setBusy(false)
+    }
     toast.success(`${party.name}: opening balance ${formatNaira(n)}`, { description: n !== 0 && !patch.opening_balance_checked ? 'Confirm it once it’s checked against the books.' : undefined })
     onClose()
     await onSaved()
@@ -324,29 +337,35 @@ function OpeningStockModal({ goLive, onClose, onSaved }: { goLive: string | null
   const [item, setItem] = useState(options[0]?.value ?? '')
   const [qty, setQty] = useState('')
   const [on, setOn] = useState(goLive ?? '')
+  // A second tap while saving would add the opening stock twice.
   const [busy, setBusy] = useState(false)
 
   async function submit(e: FormEvent) {
     e.preventDefault()
+    if (busy) return
+    if (!item) return toast.error('Choose what you’re counting')
     const n = Number(qty)
     if (!(n > 0)) return toast.error('Enter how many are in the store')
     const [kind, id] = item.split(':') as [StockItem, string]
     setBusy(true)
-    const { error } = await createClient()
-      .from('stock_adjustments')
-      .insert({
-        item: kind,
-        feed_type_id: kind === 'feed' ? Number(id) : null,
-        medication_id: kind === 'medication' ? Number(id) : null,
-        is_opening: true,
-        counted_quantity: n,
-        quantity_change: n,
-        note: 'Opening stock',
-        recorded_by: user.id,
-        ...(on ? { adjusted_on: on } : {}),
-      })
-    setBusy(false)
-    if (error) return toast.error(why(error.message))
+    try {
+      const { error } = await createClient()
+        .from('stock_adjustments')
+        .insert({
+          item: kind,
+          feed_type_id: kind === 'feed' ? Number(id) : null,
+          medication_id: kind === 'medication' ? Number(id) : null,
+          is_opening: true,
+          counted_quantity: n,
+          quantity_change: n,
+          note: 'Opening stock',
+          recorded_by: user.id,
+          ...(on ? { adjusted_on: on } : {}),
+        })
+      if (error) return toast.error(why(error.message))
+    } finally {
+      setBusy(false)
+    }
     toast.success('Opening stock added')
     onClose()
     await onSaved()

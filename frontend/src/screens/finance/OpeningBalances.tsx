@@ -144,10 +144,15 @@ function CashCard({ cash, bank, day, canEdit, save, onSaved }: { cash?: Entry; b
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    // A second tap while saving would insert the opening entries twice.
+    if (saving) return
     setSaving(true)
-    const ok = (await saveOne('cash', cash, cashText)) && (await saveOne('bank', bank, bankText))
-    setSaving(false)
-    if (ok) onSaved()
+    try {
+      const ok = (await saveOne('cash', cash, cashText)) && (await saveOne('bank', bank, bankText))
+      if (ok) onSaved()
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (

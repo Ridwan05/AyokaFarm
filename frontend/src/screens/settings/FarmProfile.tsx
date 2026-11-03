@@ -54,7 +54,9 @@ export default function FarmProfile() {
   const goLive = settings?.go_live_date ? `${dayMonth(settings.go_live_date)} ${settings.go_live_date.slice(0, 4)}` : 'Not set'
   const fyEnd = MONTHS[(Number(form.financial_year_start_month) + 10) % 12]
 
+  // A second tap while saving would save the profile twice.
   async function save() {
+    if (saving) return
     if (!form.farm_name.trim()) return toast.error('Enter the farm’s name')
     const limit = form.whatsapp_monthly_limit.trim()
     if (limit && !(Number(limit) >= 0)) return toast.error('The WhatsApp limit must be a number')
@@ -62,28 +64,31 @@ export default function FarmProfile() {
     if (!(weeks > 0)) return toast.error('The laying period must be at least 1 week')
     setSaving(true)
     const blank = (v: string) => v.trim() || null
-    const { error } = await createClient()
-      .from('farm_settings')
-      .update({
-        farm_name: form.farm_name.trim(),
-        trading_as: blank(form.trading_as),
-        address: blank(form.address),
-        phone: blank(form.phone),
-        email: blank(form.email),
-        currency: form.currency,
-        financial_year_start_month: Number(form.financial_year_start_month),
-        time_zone: form.time_zone,
-        receipt_footer: blank(form.receipt_footer),
-        whatsapp_sender: blank(form.whatsapp_sender),
-        whatsapp_monthly_limit: limit ? Math.round(Number(limit)) : null,
-        spread_rearing_cost: form.spread_rearing_cost,
-        layer_laying_weeks: weeks,
-      })
-      .eq('id', true)
-    setSaving(false)
-    if (error) return toast.error(/row-level security|permission/i.test(error.message) ? 'Only the owner can change the farm profile.' : error.message)
-    toast.success('Farm profile saved')
-    await reload()
+    try {
+      const { error } = await createClient()
+        .from('farm_settings')
+        .update({
+          farm_name: form.farm_name.trim(),
+          trading_as: blank(form.trading_as),
+          address: blank(form.address),
+          phone: blank(form.phone),
+          email: blank(form.email),
+          currency: form.currency,
+          financial_year_start_month: Number(form.financial_year_start_month),
+          time_zone: form.time_zone,
+          receipt_footer: blank(form.receipt_footer),
+          whatsapp_sender: blank(form.whatsapp_sender),
+          whatsapp_monthly_limit: limit ? Math.round(Number(limit)) : null,
+          spread_rearing_cost: form.spread_rearing_cost,
+          layer_laying_weeks: weeks,
+        })
+        .eq('id', true)
+      if (error) return toast.error(/row-level security|permission/i.test(error.message) ? 'Only the owner can change the farm profile.' : error.message)
+      toast.success('Farm profile saved')
+      await reload()
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (

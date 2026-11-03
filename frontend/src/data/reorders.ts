@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { once } from '../lib/once'
 import { createClient } from '../lib/supabase/client'
 import type { Database } from '../lib/supabase/database.types'
 
@@ -39,7 +40,7 @@ export function useReorderRequests() {
   }, [reload])
 
   /** Mark a request ordered or dismissed. Resolves to an error message, or null when it saved. */
-  const decide = useCallback(
+  const decideNow = useCallback(
     async (id: number, status: 'ordered' | 'dismissed'): Promise<string | null> => {
       const { data, error: e } = await db.from('reorder_requests').update({ status }).eq('id', id).select('id')
       if (e) return friendly(e.message)
@@ -51,11 +52,14 @@ export function useReorderRequests() {
     [db, reload],
   )
 
+  // A double tap shares the first save (lib/once).
+  const decide = useMemo(() => once('reorder-decide', decideNow), [decideNow])
+
   return { open, error, reload, decide }
 }
 
 /** Save a new request. Resolves to an error message, or null when it saved. */
-export async function askToReorder(request: NewRequest): Promise<string | null> {
+export const askToReorder = once('reorder-ask', async (request: NewRequest): Promise<string | null> => {
   const { error } = await createClient().from('reorder_requests').insert(request)
   return error ? friendly(error.message) : null
-}
+})

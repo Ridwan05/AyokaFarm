@@ -29,18 +29,18 @@ export function AskReorderModal({ onClose }: { onClose: () => void }) {
   const [note, setNote] = useState(
     suggestion?.supplier ? `Same as last time from ${suggestion.supplier}?${suggestion.lastDate ? ` Last bought on ${dayMonth(suggestion.lastDate)}.` : ''}` : '',
   )
+  // A second tap while saving would send the request twice.
   const [saving, setSaving] = useState(false)
   const feed = inUse.find((f) => f.name === item)
   const bagsNum = Number(bags) || 0
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    if (bagsNum <= 0) return
+    if (saving || bagsNum <= 0) return
     const feedTypeId = catalog.feedTypes.find((f) => f.name === item)?.id
     if (!feedTypeId) return toast('That feed isn’t in the list any more')
     setSaving(true)
-    const problem = await askToReorder({ item: 'feed', feed_type_id: feedTypeId, quantity: bagsNum, unit: 'bags', needed_by: needed, note: note.trim() || null })
-    setSaving(false)
+    const problem = await askToReorder({ item: 'feed', feed_type_id: feedTypeId, quantity: bagsNum, unit: 'bags', needed_by: needed, note: note.trim() || null }).finally(() => setSaving(false))
     if (problem) return toast(problem)
     toast(`Request sent to ${manager} and ${owner}: ${bagsNum} bags of ${item} by ${dayMonth(needed)}`)
     onClose()

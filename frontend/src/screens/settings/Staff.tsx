@@ -21,7 +21,6 @@ import { useTrade } from '../../data/tradeContext'
 import { createClient } from '../../lib/supabase/client'
 import { SettingsHeader } from './SettingsHeader'
 
-/** "Pens 3, 4, 5" → [3, 4, 5] */
 /** Built-in roles by their label; custom roles by their id until the roles list loads. */
 const roleName = (role: string) => roleLabels[role as StaffMember['role']] ?? role.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase())
 const penText = (ids: number[]) => (ids.length === 0 ? 'no pens' : ids.map((id) => farmPens.find((p) => p.id === id)?.name ?? `Pen ${id}`).join(', '))
@@ -37,6 +36,8 @@ export default function Staff() {
   const [assigning, setAssigning] = useState<StaffMember | null>(null)
   const [resetting, setResetting] = useState<StaffMember | null>(null)
   const [changingRole, setChangingRole] = useState<StaffMember | null>(null)
+  // A second tap while saving would deactivate or reactivate twice.
+  const [saving, setSaving] = useState(false)
   // `staff` is loaded from Supabase and refreshed after every change.
   const active = staff.filter((p) => p.active)
   const inactive = staff.filter((p) => !p.active)
@@ -47,7 +48,9 @@ export default function Staff() {
   const rows = (key === 'Active' ? active : key === 'Deactivated' ? inactive : staff).filter((p) => !q || p.name.toLowerCase().includes(q))
 
   const setActive = async (p: StaffMember, value: boolean) => {
-    const result = await setStaffActive(p.id, value)
+    if (saving) return
+    setSaving(true)
+    const result = await setStaffActive(p.id, value).finally(() => setSaving(false))
     if (!result.ok) return void sonner.error(result.error)
     await reload()
     toast(value ? `${p.name} reactivated` : `${p.name} deactivated and signed out`)
@@ -109,8 +112,8 @@ export default function Staff() {
                 ...(isOwner
                   ? [
                       p.active
-                        ? { label: 'Deactivate…', danger: true, disabled: p.id === myId, onSelect: () => void setActive(p, false) }
-                        : { label: 'Reactivate', onSelect: () => void setActive(p, true) },
+                        ? { label: 'Deactivate…', danger: true, disabled: p.id === myId || saving, onSelect: () => void setActive(p, false) }
+                        : { label: 'Reactivate', disabled: saving, onSelect: () => void setActive(p, true) },
                     ]
                   : []),
               ]}
@@ -140,6 +143,7 @@ function AddStaffModal({ onClose }: { onClose: () => void }) {
   const [pens, setPens] = useState<Set<number>>(new Set())
   const [whatsapp, setWhatsapp] = useState(true)
   const [submitted, setSubmitted] = useState(false)
+  // A second tap while saving would add the person twice.
   const [busy, setBusy] = useState(false)
   const errors = {
     name: name.trim() ? undefined : 'Enter their name',
@@ -149,11 +153,11 @@ function AddStaffModal({ onClose }: { onClose: () => void }) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (busy) return
     setSubmitted(true)
     if (errors.name || errors.phone || errors.password) return
     setBusy(true)
-    const result = await addStaff({ name, phone, role: roleToDb(role), password, whatsapp, pens: [...pens] })
-    setBusy(false)
+    const result = await addStaff({ name, phone, role: roleToDb(role), password, whatsapp, pens: [...pens] }).finally(() => setBusy(false))
     if (!result.ok) return void sonner.error(result.error)
     await reload()
     toast(`${name.trim()} can now sign in with their phone number`)
@@ -222,6 +226,7 @@ function AssignPensModal({ person, onClose }: { person: StaffMember; onClose: ()
   const toast = useToast()
   const { reload } = useTrade()
   const [selected, setSelected] = useState(() => new Set(person.penIds))
+  // A second tap while saving would insert the same pens twice.
   const [busy, setBusy] = useState(false)
   const toggle = (id: number, on: boolean) =>
     setSelected((s) => {
@@ -233,6 +238,7 @@ function AssignPensModal({ person, onClose }: { person: StaffMember; onClose: ()
 
   // Row-level security lets the owner and farm manager change pen assignments directly.
   const save = async () => {
+    if (busy) return
     setBusy(true)
     const db = createClient()
     const before = new Set(person.penIds)
@@ -241,8 +247,7 @@ function AssignPensModal({ person, onClose }: { person: StaffMember; onClose: ()
     const results = await Promise.all([
       add.length ? db.from('staff_pens').insert(add.map((pen_id) => ({ profile_id: person.id, pen_id }))) : null,
       remove.length ? db.from('staff_pens').delete().eq('profile_id', person.id).in('pen_id', remove) : null,
-    ])
-    setBusy(false)
+    ]).finally(() => setBusy(false))
     const error = results.find((r) => r?.error)?.error
     if (error) return void sonner.error(error.message)
     await reload()
@@ -262,7 +267,7 @@ function AssignPensModal({ person, onClose }: { person: StaffMember; onClose: ()
             Cancel
           </Button>
           <Button size="lg" variant="primary" className="flex-1" disabled={busy} onClick={() => void save()}>
-            Save pens
+            {busy ? 'Saving…' : 'Save pens'}
           </Button>
         </>
       }
@@ -279,13 +284,14 @@ function AssignPensModal({ person, onClose }: { person: StaffMember; onClose: ()
 function ResetPasswordModal({ person, onClose }: { person: StaffMember; onClose: () => void }) {
   const toast = useToast()
   const [password, setPassword] = useState('')
+  // A second tap while saving would reset the password twice.
   const [busy, setBusy] = useState(false)
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (busy) return
     if (password.length < 8) return void sonner.error('The new password needs at least 8 characters')
     setBusy(true)
-    const result = await resetStaffPassword(person.id, password)
-    setBusy(false)
+    const result = await resetStaffPassword(person.id, password).finally(() => setBusy(false))
     if (!result.ok) return void sonner.error(result.error)
     toast(`New password set for ${person.name.split(' ')[0]} — give it to them in person`)
     onClose()
@@ -302,7 +308,7 @@ function ResetPasswordModal({ person, onClose }: { person: StaffMember; onClose:
             Cancel
           </Button>
           <Button size="lg" variant="primary" className="flex-1" type="submit" form="reset-password" disabled={busy}>
-            Set new password
+            {busy ? 'Saving…' : 'Set new password'}
           </Button>
         </>
       }
@@ -320,6 +326,7 @@ function ChangeRoleModal({ person, onClose }: { person: StaffMember; onClose: ()
   const { reload } = useTrade()
   const [roles, setRoles] = useState<{ id: string; name: string; description: string }[] | null>(null)
   const [role, setRole] = useState(roleToDb(person.role))
+  // A second tap while saving would change the role twice.
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
@@ -341,10 +348,10 @@ function ChangeRoleModal({ person, onClose }: { person: StaffMember; onClose: ()
   const chosen = roles?.find((r) => r.id === role)
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (busy) return
     if (role === roleToDb(person.role)) return onClose()
     setBusy(true)
-    const result = await changeStaffRole(person.id, role)
-    setBusy(false)
+    const result = await changeStaffRole(person.id, role).finally(() => setBusy(false))
     if (!result.ok) return void sonner.error(result.error)
     await reload()
     sonner.success(`${person.name.split(' ')[0]} is now ${chosen?.name ?? role}`, { description: 'It applies the next time they open the app.' })

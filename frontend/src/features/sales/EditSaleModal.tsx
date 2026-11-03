@@ -27,6 +27,7 @@ export function EditSaleModal({ sale, onClose }: { sale: Sale; onClose: () => vo
   const [date, setDate] = useState(row?.sold_on ?? sale.iso ?? todayISO())
   const [notes, setNotes] = useState(row?.notes ?? '')
   const [submitted, setSubmitted] = useState(false)
+  // A second tap while saving would save the sale twice.
   const [saving, setSaving] = useState(false)
   const errors = {
     price: num(price) > 0 ? undefined : 'Enter a price',
@@ -38,6 +39,7 @@ export function EditSaleModal({ sale, onClose }: { sale: Sale; onClose: () => vo
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (saving) return
     setSubmitted(true)
     if (errors.price || errors.date || errors.paid) return
     setSaving(true)
@@ -46,8 +48,7 @@ export function EditSaleModal({ sale, onClose }: { sale: Sale; onClose: () => vo
       unit_price: num(price),
       sold_on: date,
       notes: notes.trim() || null,
-    })
-    setSaving(false)
+    }).finally(() => setSaving(false))
     if (!ok) return
     toast(belowMin && !sale.pendingApproval ? `${sale.receipt} saved · below the minimum, so it waits for approval` : `${sale.receipt} saved`)
     onClose()

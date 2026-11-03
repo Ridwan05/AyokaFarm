@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { once } from '../lib/once'
 import { createClient } from '../lib/supabase/client'
 import type { AlertMark } from './alerts'
 import type { Catalog } from './remote'
@@ -34,7 +35,7 @@ export function useAlertMarks(catalog: Catalog, userId: string) {
   }, [reload])
 
   /** Save a mark for everyone. Resolves to an error message, or null when it saved. */
-  const mark = useCallback(
+  const markNow = useCallback(
     async (alertId: string, status: AlertMark['status'], note?: string): Promise<string | null> => {
       const { data, error: e } = await db
         .from('alert_marks')
@@ -48,6 +49,9 @@ export function useAlertMarks(catalog: Catalog, userId: string) {
     },
     [db, reload, userId],
   )
+
+  // A double tap shares the first save (lib/once).
+  const mark = useMemo(() => once('alert-mark', markNow), [markNow])
 
   return { marks, loaded, error, mark }
 }

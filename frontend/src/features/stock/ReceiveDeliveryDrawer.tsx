@@ -30,6 +30,8 @@ export function ReceiveDeliveryDrawer({ onClose }: { onClose: () => void }) {
   const [note, setNote] = useState('')
   const [sentBack, setSentBack] = useState('0')
   const [submitted, setSubmitted] = useState(false)
+  // A second tap while saving would receive the delivery twice.
+  const [saving, setSaving] = useState(false)
   // Medication: the batch printed on the pack, so doses come out first-expiry-first-out.
   const [batchNo, setBatchNo] = useState('')
   const [expiry, setExpiry] = useState('')
@@ -56,10 +58,12 @@ export function ReceiveDeliveryDrawer({ onClose }: { onClose: () => void }) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (saving) return
     setSubmitted(true)
     if (!order || errors.delivered || errors.sentBack || errors.note || errors.batchNo || errors.expiry) return
     const batch = kind === 'Medication' ? { batchNo: batchNo.trim(), expiry } : undefined
-    if (!(await receiveDelivery(order.ref, num(delivered), num(sentBack), note.trim(), user.name.split(' ')[0], batch))) return
+    setSaving(true)
+    if (!(await receiveDelivery(order.ref, num(delivered), num(sentBack), note.trim(), user.name.split(' ')[0], batch).finally(() => setSaving(false)))) return
     toast(`${order.ref} received · ${formatNumber(intoStore)} ${order.stockUnit} into the store`)
     onClose()
   }
@@ -75,8 +79,8 @@ export function ReceiveDeliveryDrawer({ onClose }: { onClose: () => void }) {
           <Button size="lg" className="flex-1" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="lg" variant="primary" className="flex-1" type="submit" form="receive" disabled={!order}>
-            Save delivery
+          <Button size="lg" variant="primary" className="flex-1" type="submit" form="receive" disabled={!order || saving}>
+            {saving ? 'Saving…' : 'Save delivery'}
           </Button>
         </>
       }

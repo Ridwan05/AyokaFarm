@@ -16,17 +16,23 @@ type Save = ReturnType<typeof usePayroll>['save']
 export function LoanActions({ loan, balance, save }: { loan: Loan; balance?: LoanBalance; save: Save }) {
   const toast = useToast()
   const [changing, setChanging] = useState(false)
+  // Reopening the menu while a change is saving would send it twice.
+  const [saving, setSaving] = useState(false)
   const set = async (status: Loan['status'], done: string) => {
-    if (await save((db) => db.from('employee_loans').update({ status }).eq('id', loan.id))) toast(done)
+    if (saving) return
+    setSaving(true)
+    const ok = await save((db) => db.from('employee_loans').update({ status }).eq('id', loan.id)).finally(() => setSaving(false))
+    if (ok) toast(done)
   }
   const repaid = Number(balance?.repaid ?? 0)
   const items: MenuItem[] = []
-  if (loan.status === 'pending') items.push({ label: 'Approve', onSelect: () => void set('active', `${loan.ref} approved`) })
+  if (loan.status === 'pending') items.push({ label: 'Approve', disabled: saving, onSelect: () => void set('active', `${loan.ref} approved`) })
   if (loan.status === 'pending' || loan.status === 'active') {
     items.push({ label: 'Change repayment…', onSelect: () => setChanging(true) })
     items.push({
       label: repaid > 0 ? 'Stop (write off the rest)' : 'Cancel',
       danger: true,
+      disabled: saving,
       onSelect: () => void set('cancelled', `${loan.ref} ${repaid > 0 ? 'stopped' : 'cancelled'}`),
     })
   }
@@ -52,10 +58,9 @@ function ChangeRepaymentModal({ loan, balance, save, onClose }: { loan: Loan; ba
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    if (error) return
+    if (saving || error) return
     setSaving(true)
-    const ok = await save((db) => db.from('employee_loans').update({ monthly_repayment: perMonth, first_month: `${first}-01` }).eq('id', loan.id))
-    setSaving(false)
+    const ok = await save((db) => db.from('employee_loans').update({ monthly_repayment: perMonth, first_month: `${first}-01` }).eq('id', loan.id)).finally(() => setSaving(false))
     if (!ok) return
     toast(`${loan.ref} repayment changed`)
     onClose()

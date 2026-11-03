@@ -137,31 +137,30 @@ export default function Roles() {
       return next
     })
 
+  // A second tap while saving would save the role twice.
   async function save() {
+    if (saving) return
     setSaving(true)
-    const db = createClient()
-    if (changedModules.length) {
-      const { error } = await db.from('role_permissions').upsert(
-        changedModules.map((m) => {
-          const p = role.permissions[m.id]
-          return { role_id: role.id, module: m.id, can_view: p.view, can_add: p.add, can_edit: p.edit, can_delete: p.delete, scope_note: p.scope.trim() || (isHidden(p) ? 'Hidden' : '') }
-        }),
-        { onConflict: 'role_id,module' },
-      )
-      if (error) {
-        setSaving(false)
-        return toast.error(/row-level security|permission/i.test(error.message) ? 'Only the owner can change permissions.' : error.message)
+    try {
+      const db = createClient()
+      if (changedModules.length) {
+        const { error } = await db.from('role_permissions').upsert(
+          changedModules.map((m) => {
+            const p = role.permissions[m.id]
+            return { role_id: role.id, module: m.id, can_view: p.view, can_add: p.add, can_edit: p.edit, can_delete: p.delete, scope_note: p.scope.trim() || (isHidden(p) ? 'Hidden' : '') }
+          }),
+          { onConflict: 'role_id,module' },
+        )
+        if (error) return toast.error(/row-level security|permission/i.test(error.message) ? 'Only the owner can change permissions.' : error.message)
       }
-    }
-    if (windowChanged) {
-      const { error } = await db.from('farm_settings').update({ edit_window_days: Number(editWindow) }).eq('id', true)
-      if (error) {
-        setSaving(false)
-        return toast.error(error.message)
+      if (windowChanged) {
+        const { error } = await db.from('farm_settings').update({ edit_window_days: Number(editWindow) }).eq('id', true)
+        if (error) return toast.error(error.message)
+        await reload()
       }
-      await reload()
+    } finally {
+      setSaving(false)
     }
-    setSaving(false)
     toast.success(`${role.name} saved`, { description: 'Applies the next time each person opens the app.' })
     await refresh()
   }
@@ -320,6 +319,7 @@ function NewRoleModal({ roles, onClose, onCreated }: { roles: RoleRow[]; onClose
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [copyFrom, setCopyFrom] = useState(roles.find((r) => r.id === 'pen_attendant')?.id ?? roles[0].id)
+  // A second tap while saving would try to create the role twice.
   const [busy, setBusy] = useState(false)
   const id = name
     .trim()
@@ -330,26 +330,27 @@ function NewRoleModal({ roles, onClose, onCreated }: { roles: RoleRow[]; onClose
 
   async function submit(e: FormEvent) {
     e.preventDefault()
+    if (busy) return
     if (!id) return toast.error('Give the role a name')
     if (roles.some((r) => r.id === id || r.name.toLowerCase() === name.trim().toLowerCase())) return toast.error('A role with that name already exists')
     setBusy(true)
     const db = createClient()
     const source = roles.find((r) => r.id === copyFrom)!
-    const { error } = await db.from('roles').insert({ id, name: name.trim(), description: description.trim() || `Based on ${source.name}.` })
-    if (!error) {
-      const { error: permsError } = await db.from('role_permissions').insert(
-        modules.map((m) => {
-          const p = source.permissions[m.id]
-          return { role_id: id, module: m.id, can_view: p.view, can_add: p.add, can_edit: p.edit, can_delete: p.delete, scope_note: p.scope }
-        }),
-      )
-      if (permsError) {
-        setBusy(false)
-        return toast.error(permsError.message)
+    try {
+      const { error } = await db.from('roles').insert({ id, name: name.trim(), description: description.trim() || `Based on ${source.name}.` })
+      if (!error) {
+        const { error: permsError } = await db.from('role_permissions').insert(
+          modules.map((m) => {
+            const p = source.permissions[m.id]
+            return { role_id: id, module: m.id, can_view: p.view, can_add: p.add, can_edit: p.edit, can_delete: p.delete, scope_note: p.scope }
+          }),
+        )
+        if (permsError) return toast.error(permsError.message)
       }
+      if (error) return toast.error(/row-level security|permission/i.test(error.message) ? 'Only the owner can add roles.' : error.message)
+    } finally {
+      setBusy(false)
     }
-    setBusy(false)
-    if (error) return toast.error(/row-level security|permission/i.test(error.message) ? 'Only the owner can add roles.' : error.message)
     toast.success(`${name.trim()} created`, { description: `Copied from ${source.name}. Adjust its permissions, then give it to someone in Staff.` })
     onCreated(id)
   }

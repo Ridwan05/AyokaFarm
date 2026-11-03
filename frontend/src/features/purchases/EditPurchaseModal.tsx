@@ -30,6 +30,7 @@ export function EditPurchaseModal({ purchase: p, onClose }: { purchase: Purchase
   const [paid, setPaid] = useState(p.paidAtPurchase ? formatNumber(p.paidAtPurchase) : '')
   const [method, setMethod] = useState<(typeof METHODS)[number]>(p.method ? LABEL[p.method] : 'Transfer')
   const [submitted, setSubmitted] = useState(false)
+  // A second tap while saving would save the purchase twice.
   const [saving, setSaving] = useState(false)
   const total = num(qty) * num(price)
   const paidNow = num(paid)
@@ -42,6 +43,7 @@ export function EditPurchaseModal({ purchase: p, onClose }: { purchase: Purchase
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (saving) return
     setSubmitted(true)
     if (Object.values(errors).some(Boolean)) return
     setSaving(true)
@@ -50,8 +52,7 @@ export function EditPurchaseModal({ purchase: p, onClose }: { purchase: Purchase
       unit_price: num(price),
       amount_paid: paidNow,
       payment_method: paidNow > 0 ? DB[method] : null,
-    })
-    setSaving(false)
+    }).finally(() => setSaving(false))
     if (!ok) return
     toast(`${p.ref} saved`)
     onClose()

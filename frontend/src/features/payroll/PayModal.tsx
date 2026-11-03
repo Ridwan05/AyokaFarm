@@ -30,12 +30,13 @@ export function PayModal({ lineIds, total, save, onClose }: Props) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    // A second tap while saving would record the payment twice.
+    if (busy) return
     if (!date || date > todayISO()) return
     setBusy(true)
     const ok = await save((db) =>
       db.rpc('pay_payroll_lines', { line_ids: lineIds, paid_on: date, method: DB_METHOD[method], reference: reference.trim() || undefined }),
-    )
-    setBusy(false)
+    ).finally(() => setBusy(false))
     if (!ok) return
     toast(`${lineIds.length} ${lineIds.length === 1 ? 'payslip' : 'payslips'} marked paid`)
     onClose()

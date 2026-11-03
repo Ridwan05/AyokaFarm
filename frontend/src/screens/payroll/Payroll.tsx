@@ -88,10 +88,11 @@ export default function Payroll() {
       ]
     : []
 
+  // A second tap while preparing would run prepare_payroll twice.
   const prepare = async () => {
+    if (busy) return
     setBusy(true)
-    const ok = await save((db) => db.rpc('prepare_payroll', { period }))
-    setBusy(false)
+    const ok = await save((db) => db.rpc('prepare_payroll', { period })).finally(() => setBusy(false))
     if (ok) toast(run ? 'Added anyone new and this month’s repayments' : `${monthLabel(period)} prepared`)
   }
 
@@ -187,7 +188,7 @@ export default function Payroll() {
         <span className="flex-1" />
         {run && !approved && canPrepare && (
           <Button leadingIcon={RefreshCw} disabled={busy} onClick={() => void prepare()}>
-            Refresh
+            {busy ? 'Preparing…' : 'Refresh'}
           </Button>
         )}
         {run && !approved && owner && (

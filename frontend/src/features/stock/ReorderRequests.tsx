@@ -1,4 +1,5 @@
 import { Check, Plus, X } from 'lucide-react'
+import { useState } from 'react'
 import { Button } from '../../components/ui/Button'
 import { Card, CardHeader } from '../../components/ui/Card'
 import { useToast } from '../../components/ui/toastContext'
@@ -19,6 +20,8 @@ export function ReorderRequests({ canDecide, onRecordPurchase }: Props) {
   const toast = useToast()
   const { catalog } = useTrade()
   const { open, error, decide } = useReorderRequests()
+  // A second tap while saving would settle a request twice.
+  const [saving, setSaving] = useState(false)
   if (error) return <p className="type-body-sm text-fg-warning">{error}</p>
   if (!open.length) return null
 
@@ -26,7 +29,9 @@ export function ReorderRequests({ canDecide, onRecordPurchase }: Props) {
     r.feed_type_id ? (catalog.feedTypes.find((f) => f.id === r.feed_type_id)?.name ?? 'Feed') : (catalog.medications.find((m) => m.id === r.medication_id)?.name ?? 'Medication')
   const who = (id: string) => catalog.profiles.find((p) => p.id === id)?.full_name.split(' ')[0] ?? 'Someone'
   const settle = async (id: number, status: 'ordered' | 'dismissed') => {
-    const problem = await decide(id, status)
+    if (saving) return
+    setSaving(true)
+    const problem = await decide(id, status).finally(() => setSaving(false))
     toast(problem ?? (status === 'ordered' ? 'Marked as ordered' : 'Request dismissed'))
   }
 
@@ -57,10 +62,10 @@ export function ReorderRequests({ canDecide, onRecordPurchase }: Props) {
                     Record purchase
                   </Button>
                 )}
-                <Button size="sm" variant="primary" leadingIcon={Check} onClick={() => void settle(r.id, 'ordered')}>
+                <Button size="sm" variant="primary" leadingIcon={Check} disabled={saving} onClick={() => void settle(r.id, 'ordered')}>
                   Mark ordered
                 </Button>
-                <Button size="sm" variant="ghost" leadingIcon={X} onClick={() => void settle(r.id, 'dismissed')}>
+                <Button size="sm" variant="ghost" leadingIcon={X} disabled={saving} onClick={() => void settle(r.id, 'dismissed')}>
                   Dismiss
                 </Button>
               </span>

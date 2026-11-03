@@ -36,38 +36,43 @@ export function EditCustomerModal({ customerId, onClose }: { customerId: string;
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    // A second tap while saving would send the update twice.
+    if (saving) return
     setSubmitted(true)
     if (!row || errors.name) return
     setSaving(true)
     const openingChanged = owner && openingValue !== Number(row.opening_balance)
-    const { data, error } = await createClient()
-      .from('customers')
-      .update({
-        name: name.trim(),
-        short_name: short.trim() || null,
-        phone: phone.trim() || null,
-        area: area.trim() || null,
-        address: address.trim() || null,
-        buys: buysKinds(buys),
-        whatsapp_opt_in: whatsapp,
-        is_active: active,
-        ...(owner
-          ? {
-              opening_balance: openingValue,
-              opening_balance_source: source.trim() || null,
-              // A changed opening balance needs checking again (Go-live step).
-              ...(openingChanged ? { opening_balance_checked: false } : {}),
-            }
-          : {}),
-      })
-      .eq('id', row.id)
-      .select('id')
-    setSaving(false)
-    if (error) return void errorToast.error(friendlyError(error.message))
-    if (!data?.length) return void errorToast.error(REFUSED)
-    await trade.reload()
-    toast(`${name.trim()} saved`)
-    onClose()
+    try {
+      const { data, error } = await createClient()
+        .from('customers')
+        .update({
+          name: name.trim(),
+          short_name: short.trim() || null,
+          phone: phone.trim() || null,
+          area: area.trim() || null,
+          address: address.trim() || null,
+          buys: buysKinds(buys),
+          whatsapp_opt_in: whatsapp,
+          is_active: active,
+          ...(owner
+            ? {
+                opening_balance: openingValue,
+                opening_balance_source: source.trim() || null,
+                // A changed opening balance needs checking again (Go-live step).
+                ...(openingChanged ? { opening_balance_checked: false } : {}),
+              }
+            : {}),
+        })
+        .eq('id', row.id)
+        .select('id')
+      if (error) return void errorToast.error(friendlyError(error.message))
+      if (!data?.length) return void errorToast.error(REFUSED)
+      await trade.reload()
+      toast(`${name.trim()} saved`)
+      onClose()
+    } finally {
+      setSaving(false)
+    }
   }
 
   return (

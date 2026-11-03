@@ -19,15 +19,21 @@ export function LayStartModal({ flock, suggested, onClose }: Props) {
   const today = farmTodayISO()
   const saved = flock.laying_started_on ?? null
   const [date, setDate] = useState(saved ?? suggested ?? today)
+  // A second tap while saving would save the start of lay twice.
   const [busy, setBusy] = useState(false)
   const latest = flock.closed_on ?? today
   const error = !date ? 'Pick a date' : date < flock.placed_on ? 'That’s before the flock was placed' : date > latest ? (flock.closed_on ? 'That’s after the flock was closed' : 'That’s in the future') : undefined
 
   const save = async (value: string | null) => {
+    if (busy) return
     setBusy(true)
-    const ok = await saveFlock(flock.id, { laying_started_on: value })
-    if (ok) await reload()
-    setBusy(false)
+    let ok = false
+    try {
+      ok = await saveFlock(flock.id, { laying_started_on: value })
+      if (ok) await reload()
+    } finally {
+      setBusy(false)
+    }
     if (!ok) return
     toast(value ? `${flock.code} laying since ${weekdayDayMonth(value)}` : `Start of lay cleared for ${flock.code}`)
     onClose()

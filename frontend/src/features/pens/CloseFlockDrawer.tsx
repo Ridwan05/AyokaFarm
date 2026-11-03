@@ -28,6 +28,7 @@ export function CloseFlockDrawer({ flock, onClose }: Props) {
   const [date, setDate] = useState(today < lastEntry ? lastEntry : today)
   const [reason, setReason] = useState<string>('sold_out')
   const [note, setNote] = useState('')
+  // A second tap while saving would close the flock twice.
   const [busy, setBusy] = useState(false)
   const birds = birdsOnRecord(history, flock)
   const pen = penName(catalog, flock.pen_id)
@@ -35,11 +36,15 @@ export function CloseFlockDrawer({ flock, onClose }: Props) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
-    if (error) return
+    if (busy || error) return
     setBusy(true)
-    const ok = await saveFlock(flock.id, { status: 'closed', closed_on: date, close_reason: reason, close_note: note.trim() || null })
-    if (ok) await reload()
-    setBusy(false)
+    let ok = false
+    try {
+      ok = await saveFlock(flock.id, { status: 'closed', closed_on: date, close_reason: reason, close_note: note.trim() || null })
+      if (ok) await reload()
+    } finally {
+      setBusy(false)
+    }
     if (!ok) return
     toast(`${pen} is empty and ready for a new flock`)
     onClose()

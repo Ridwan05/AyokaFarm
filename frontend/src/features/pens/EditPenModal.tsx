@@ -21,6 +21,7 @@ export function EditPenModal({ pen, onClose }: Props) {
   const [description, setDescription] = useState(pen.description ?? '')
   const [active, setActive] = useState(pen.is_active)
   const [submitted, setSubmitted] = useState(false)
+  // A second tap while saving would save the pen twice.
   const [busy, setBusy] = useState(false)
 
   const flock = history.flocks.find((f) => f.pen_id === pen.id && f.status === 'active')
@@ -33,11 +34,11 @@ export function EditPenModal({ pen, onClose }: Props) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (busy) return
     setSubmitted(true)
     if (errors.name || errors.capacity || errors.active) return
     setBusy(true)
-    const ok = await updatePen(pen.id, { name: name.trim().replace(/\s+/g, ' '), capacity: capacityNum, description: description.trim() || null, is_active: active })
-    setBusy(false)
+    const ok = await updatePen(pen.id, { name: name.trim().replace(/\s+/g, ' '), capacity: capacityNum, description: description.trim() || null, is_active: active }).finally(() => setBusy(false))
     if (!ok) return
     toast(`${name.trim()} saved`)
     onClose()

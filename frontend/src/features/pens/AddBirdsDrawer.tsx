@@ -27,6 +27,7 @@ export function AddBirdsDrawer({ flock, onClose }: Props) {
   const [date, setDate] = useState(today)
   const [rows, setRows] = useState<SourceRow[]>(choices[0] ? [{ kind: 'stock', purchaseId: choices[0].purchaseId, birds: '' }] : [])
   const [submitted, setSubmitted] = useState(false)
+  // A second tap while saving would add the birds twice.
   const [busy, setBusy] = useState(false)
 
   const totals = sourceTotals(rows, choices)
@@ -36,11 +37,11 @@ export function AddBirdsDrawer({ flock, onClose }: Props) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (busy) return
     setSubmitted(true)
     if (problem || dateError) return
     setBusy(true)
-    const ok = await addBirdsToFlock(flock.id, date, toBirdSources(rows))
-    setBusy(false)
+    const ok = await addBirdsToFlock(flock.id, date, toBirdSources(rows)).finally(() => setBusy(false))
     if (!ok) return
     toast(`${formatNumber(totals.birds)} birds added to ${flock.code}`)
     onClose()

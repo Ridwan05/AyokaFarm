@@ -23,6 +23,7 @@ export function EditPaymentModal({ payment, partyName, onClose }: { payment: Pay
   const [method, setMethod] = useState<(typeof METHODS)[number]>(LABEL[payment.method])
   const [reference, setReference] = useState(payment.reference ?? '')
   const [submitted, setSubmitted] = useState(false)
+  // A second tap while saving would save the payment twice.
   const [saving, setSaving] = useState(false)
   const value = num(amount)
   const errors = {
@@ -32,11 +33,11 @@ export function EditPaymentModal({ payment, partyName, onClose }: { payment: Pay
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (saving) return
     setSubmitted(true)
     if (errors.amount || errors.date) return
     setSaving(true)
-    const ok = await updatePayment(payment.ref, { amount: value, paid_on: date, method: DB[method], reference: reference.trim() || null })
-    setSaving(false)
+    const ok = await updatePayment(payment.ref, { amount: value, paid_on: date, method: DB[method], reference: reference.trim() || null }).finally(() => setSaving(false))
     if (!ok) return
     toast(`${payment.ref} saved`)
     onClose()

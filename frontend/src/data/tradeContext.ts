@@ -1,5 +1,6 @@
 import type { Catalog, History } from './remote'
 import { createContext, useContext } from 'react'
+import { onceEach } from '../lib/once'
 import type { Customer } from './customers'
 import type { Delivery, Order, StockMove } from './deliveries'
 import type { Bill, StatementLine } from './ledger'
@@ -119,8 +120,16 @@ export type NewFlock = { code: string; penId: number; birdTypeId: number; breed:
 
 export const TradeContext = createContext<Trade | null>(null)
 
+// The store's actions with the double-tap safety net (lib/once), made once per store value.
+const guarded = new WeakMap<Trade, Trade>()
+
 export function useTrade() {
   const ctx = useContext(TradeContext)
   if (!ctx) throw new Error('useTrade must be used inside TradeProvider')
-  return ctx
+  let trade = guarded.get(ctx)
+  if (!trade) {
+    trade = onceEach(ctx)
+    guarded.set(ctx, trade)
+  }
+  return trade
 }

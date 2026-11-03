@@ -185,14 +185,21 @@ export default function Alerts() {
 
 type DetailProps = {
   alert: DisplayAlert
-  onAcknowledge: (a: FarmAlert) => void
-  onResolve: (a: FarmAlert, note: string) => void
+  onAcknowledge: (a: FarmAlert) => Promise<void>
+  onResolve: (a: FarmAlert, note: string) => Promise<void>
 }
 
 function AlertDetail({ alert, onAcknowledge, onResolve }: DetailProps) {
   const router = useRouter()
   const [note, setNote] = useState('')
   const [noteError, setNoteError] = useState<string>()
+  // A second tap while saving would mark the alert twice.
+  const [saving, setSaving] = useState(false)
+  const run = (save: () => Promise<void>) => {
+    if (saving) return
+    setSaving(true)
+    void save().finally(() => setSaving(false))
+  }
   const severityTone = alert.severity === 'Critical' ? 'danger' : alert.severity === 'Warning' ? 'warning' : 'info'
 
   return (
@@ -253,10 +260,10 @@ function AlertDetail({ alert, onAcknowledge, onResolve }: DetailProps) {
                 variant="primary"
                 leadingIcon={Check}
                 className="flex-1"
-                disabled={alert.status === 'acknowledged'}
-                onClick={() => onAcknowledge(alert)}
+                disabled={alert.status === 'acknowledged' || saving}
+                onClick={() => run(() => onAcknowledge(alert))}
               >
-                {alert.status === 'acknowledged' ? 'Acknowledged' : 'Acknowledge'}
+                {alert.status === 'acknowledged' ? 'Acknowledged' : saving ? 'Saving…' : 'Acknowledge'}
               </Button>
               <Button className="flex-1" onClick={() => router.push(alert.link.to)}>
                 {alert.link.label}
@@ -265,9 +272,10 @@ function AlertDetail({ alert, onAcknowledge, onResolve }: DetailProps) {
             <Button
               variant="ghost"
               leadingIcon={CircleCheck}
-              onClick={() => (note.trim() ? onResolve(alert, note.trim()) : setNoteError('Add a note to resolve this alert'))}
+              disabled={saving}
+              onClick={() => (note.trim() ? run(() => onResolve(alert, note.trim())) : setNoteError('Add a note to resolve this alert'))}
             >
-              Resolve with note
+              {saving ? 'Saving…' : 'Resolve with note'}
             </Button>
           </>
         )}

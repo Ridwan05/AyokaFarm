@@ -14,17 +14,18 @@ export function DeleteEntryModal({ row, onClose }: { row: DailyRow; onClose: () 
   const toast = useToast()
   const [reason, setReason] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  // A second tap while saving would delete the entry twice.
   const [saving, setSaving] = useState(false)
   const pen = penName(catalog, row.penId)
   const error = reason.trim().length < 3 ? 'Say why it’s being deleted' : undefined
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (saving) return
     setSubmitted(true)
     if (error) return
     setSaving(true)
-    const ok = await deleteProductionRecord(row.id, reason.trim())
-    setSaving(false)
+    const ok = await deleteProductionRecord(row.id, reason.trim()).finally(() => setSaving(false))
     if (!ok) return
     toast(`${pen} entry for ${weekdayDayMonth(row.date)} deleted`)
     onClose()

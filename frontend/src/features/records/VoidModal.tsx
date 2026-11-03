@@ -19,16 +19,17 @@ export function VoidModal({ kind, refId, label, onClose, onVoided }: { kind: Mon
   const toast = useToast()
   const [reason, setReason] = useState('')
   const [submitted, setSubmitted] = useState(false)
+  // A second tap while saving would void the record twice.
   const [saving, setSaving] = useState(false)
   const error = reason.trim().length < 3 ? 'Say why it’s being voided' : undefined
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (saving) return
     setSubmitted(true)
     if (error) return
     setSaving(true)
-    const ok = await voidRecord(kind, refId, reason)
-    setSaving(false)
+    const ok = await voidRecord(kind, refId, reason).finally(() => setSaving(false))
     if (!ok) return
     toast(`${refId} voided`)
     onVoided?.()

@@ -55,6 +55,8 @@ export function EmployeeModal({ employee, employees, save, onClose }: Props) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    // A second tap while saving would add the employee twice.
+    if (saving) return
     setSubmitted(true)
     if (errors.name || errors.rate || errors.leftOn) return
     const row = {
@@ -73,8 +75,7 @@ export function EmployeeModal({ employee, employees, save, onClose }: Props) {
       notes: notes.trim() || null,
     }
     setSaving(true)
-    const ok = await save((db) => (employee ? db.from('employees').update(row).eq('id', employee.id) : db.from('employees').insert(row)))
-    setSaving(false)
+    const ok = await save((db) => (employee ? db.from('employees').update(row).eq('id', employee.id) : db.from('employees').insert(row))).finally(() => setSaving(false))
     if (!ok) return
     toast(employee ? `${row.full_name} updated` : `${row.full_name} added to payroll`)
     onClose()

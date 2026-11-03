@@ -28,6 +28,8 @@ export default function Sales() {
   const toast = useToast()
   const f = useSalesFilter(sales, customers, 'This week')
   const [overlay, setOverlay] = useState<SaleOverlay>(null)
+  // A second tap while saving would approve or reject the sale twice.
+  const [saving, setSaving] = useState(false)
   const pending = sales.filter((s) => s.pendingApproval)
   const approved = sales.find((s) => s.approvedAt)
   const first = pending[0]
@@ -74,22 +76,28 @@ export default function Sales() {
                 ) : (
                 <>
                   <Button
+                    disabled={saving}
                     onClick={async () => {
-                      if (!(await rejectSale(first.receipt))) return
+                      if (saving) return
+                      setSaving(true)
+                      if (!(await rejectSale(first.receipt).finally(() => setSaving(false)))) return
                       toast(`${first.receipt} rejected`)
                     }}
                   >
-                    Reject
+                    {saving ? 'Saving…' : 'Reject'}
                   </Button>
                   <Button
                     variant="primary"
                     leadingIcon={Check}
+                    disabled={saving}
                     onClick={async () => {
-                      if (!(await approveSale(first.receipt, me))) return
+                      if (saving) return
+                      setSaving(true)
+                      if (!(await approveSale(first.receipt, me).finally(() => setSaving(false)))) return
                       toast(`${first.receipt} approved`)
                     }}
                   >
-                    Approve
+                    {saving ? 'Saving…' : 'Approve'}
                   </Button>
                 </>
                 )

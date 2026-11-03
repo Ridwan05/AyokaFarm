@@ -162,17 +162,22 @@ function WriteOffModal({ onClose }: { onClose: () => void }) {
   const eggs = Math.round((Number(count) || 0) * (unit === 'crates' ? farmSettings.eggsPerCrate : 1))
   const tooMany = eggs > stockOf('eggs')
 
+  // A second tap while saving would write the eggs off twice.
   async function submit(e: FormEvent) {
     e.preventDefault()
+    if (busy) return
     if (eggs <= 0 || tooMany) return
     if (!reason) return void toast.error('Add a “Broken eggs” adjustment reason in Settings › Lists first')
     setBusy(true)
-    const { error } = await createClient()
-      .from('stock_adjustments')
-      .insert({ item: 'eggs', quantity_change: -eggs, reason_id: reason.id, adjusted_on: todayISO(), note: note || null, recorded_by: user.id })
-    setBusy(false)
-    if (error) return void toast.error(/row-level security|permission/i.test(error.message) ? 'You don’t have permission to do that.' : error.message)
-    await reload()
+    try {
+      const { error } = await createClient()
+        .from('stock_adjustments')
+        .insert({ item: 'eggs', quantity_change: -eggs, reason_id: reason.id, adjusted_on: todayISO(), note: note || null, recorded_by: user.id })
+      if (error) return void toast.error(/row-level security|permission/i.test(error.message) ? 'You don’t have permission to do that.' : error.message)
+      await reload()
+    } finally {
+      setBusy(false)
+    }
     toast.success(`${num(eggs)} eggs written off`)
     onClose()
   }
