@@ -9,10 +9,10 @@ import { PageHeader } from '../components/layout/PageHeader'
 import { Alert } from '../components/ui/Alert'
 import { Button } from '../components/ui/Button'
 import { Card, CardHeader } from '../components/ui/Card'
-import { AutoInput, Field, SelectInput, TextInput } from '../components/ui/Form'
+import { AutoInput, DateInput, Field, SelectInput, TextInput } from '../components/ui/Form'
 
 import { feedTypes, medications } from '../data/inventory'
-import { staffWithRole, weekdayDayMonth } from '../data/metrics'
+import { addDays, flockBirdsOn, staffWithRole, weekdayDayMonth } from '../data/metrics'
 import { bagKgOf, canCorrectEntry, entryContext, formatAge, MEDICATION_MODES, MEDICATION_PURPOSES, savedEntry, todayISO, type MedicationLine } from '../data/production'
 import { farm, farmTodayISO } from '../data/session'
 import { useCurrentUser } from '../data/sessionContext'
@@ -123,6 +123,10 @@ function EntryScreen() {
   // Set by a Save tap with fields missing: empty fields then show their message.
   const [tried, setTried] = useState(false)
   const formRef = useRef<HTMLFormElement>(null)
+  // Owners can enter past days (the farm's history); everyone else records today (the database holds the same rule).
+  const owner = user.role === 'owner'
+  const [entryDate, setEntryDate] = useState(todayISO())
+  const past = !editId && entryDate < todayISO()
 
   // Read after mount: the server render has no access to this phone's storage. Corrections don't use drafts.
   useEffect(() => {
@@ -151,9 +155,10 @@ function EntryScreen() {
     }
   }, [editId])
   const touched = JSON.stringify(draft) !== JSON.stringify(blank)
+  // Drafts are for today's entry only; a past day is typed in one go.
   useEffect(() => {
-    if (!editId && !saved && touched) saveDraft(penId, draft)
-  }, [draft, penId, saved, touched, editId])
+    if (!editId && !saved && touched && !past) saveDraft(penId, draft)
+  }, [draft, penId, saved, touched, editId, past])
 
   if (!ctx) {
     return <PageHeader backTo="/" title="Pen not found" description={`There is no Pen ${param} on the farm.`} />
@@ -181,9 +186,19 @@ function EntryScreen() {
 
   const existing = productionRecords.find((r) => r.penId === penId && r.date === today)
   const recordedAt = existing?.time ?? ctx.recordedAt
+  // The pen's flock now; a past day must fall within its life (the database checks the same).
+  const flock = history.flocks.find((f) => f.pen_id === penId && f.status === 'active')
+  const pastRow = past ? history.daily.find((d) => d.penId === penId && d.date === entryDate) : undefined
+  const dateError = past && flock && entryDate < flock.placed_on ? `Flock ${flock.code} was placed on ${weekdayDayMonth(flock.placed_on)}` : undefined
 
-  // Calculated fields. A correction starts from that day's opening birds, not today's.
-  const opening = editing ? editing.row.opening : ctx.opening
+  // Calculated fields. A correction starts from that day's opening birds; a past day from the birds the night before.
+  const opening = editing
+    ? editing.row.opening
+    : past && flock
+      ? entryDate <= flock.placed_on
+        ? flock.birds_placed
+        : flockBirdsOn(history, flock, addDays(entryDate, -1))
+      : ctx.opening
   const died = num(draft.died)
   const closing = opening - (died ?? 0)
   const mortalityPct = died !== null && opening ? (died / opening) * 100 : 0
@@ -223,6 +238,7 @@ function EntryScreen() {
     bags !== null ? undefined : draft.feedBags.trim() !== '' ? 'Enter a number, e.g. 5.5' : tried ? 'Enter the bags used, 0 if none' : undefined
   const eggsError = (s: string) => (layers && tried && num(s) === null ? 'Enter 0 if none' : undefined)
   const valid =
+    !dateError &&
     died !== null &&
     !diedError &&
     bags !== null &&
@@ -243,8 +259,9 @@ function EntryScreen() {
     }
     const record = {
       penId,
-      // New entries are for the farm's today at the moment of saving (a screen left open past midnight).
-      date: editing ? editing.row.date : farmTodayISO(),
+      // New entries are for the farm's today at the moment of saving (a screen left open past midnight),
+      // or the past day an owner chose.
+      date: editing ? editing.row.date : past ? entryDate : farmTodayISO(),
       time: clockTime(),
       opening,
       died: died!,
@@ -261,7 +278,7 @@ function EntryScreen() {
       notes: draft.notes.trim() || undefined,
     }
     if (!(await (editing ? updateProductionRecord(editing.row.id, record) : addProductionRecord(record)))) return
-    if (!editing) saveDraft(penId, null)
+    if (!editing && !past) saveDraft(penId, null)
     setSaved(true)
     const who = managerNames(catalog)
     if (overMortality) {
@@ -269,7 +286,7 @@ function EntryScreen() {
         description: `Above the ${farmSettings.mortalityAlertPct}% alert level. It shows in Alerts${who ? ` for ${who}` : ''}.`,
       })
     } else {
-      toast.success(editing ? `${name} entry for ${weekdayDayMonth(editing.row.date)} corrected` : `${name} recorded for today`)
+      toast.success(editing ? `${name} entry for ${weekdayDayMonth(editing.row.date)} corrected` : past ? `${name} recorded for ${weekdayDayMonth(entryDate)}` : `${name} recorded for today`)
     }
     window.setTimeout(() => router.push(backTo), 700)
   }
@@ -277,28 +294,40 @@ function EntryScreen() {
   const header = (
     <PageHeader
       backTo={backTo}
-      eyebrow={[`${name} · ${ctx.type}`, editing ? weekdayDayMonth(editing.row.date) : formatShortDate(farm.today)]}
-      title={editing ? `Correct entry · ${weekdayDayMonth(editing.row.date)}` : 'Today’s entry'}
+      eyebrow={[`${name} · ${ctx.type}`, editing ? weekdayDayMonth(editing.row.date) : past ? weekdayDayMonth(entryDate) : formatShortDate(farm.today)]}
+      title={editing ? `Correct entry · ${weekdayDayMonth(editing.row.date)}` : past ? `Past entry · ${weekdayDayMonth(entryDate)}` : 'Today’s entry'}
       description={`Flock ${ctx.pen.flock} · ${ctx.pen.breed} · age ${formatAge(ctx.ageDays)}`}
     />
   )
 
+  // Owners choose the day; a past day starts from the birds left the night before.
+  const datePicker = owner && !editing && (
+    <Card>
+      <div className="px-5 py-4">
+        <Field label="Date" hint={past ? 'An earlier day — only owners can record past entries' : 'Today, or an earlier day to enter the farm’s history'} error={dateError}>
+          {(id) => <DateInput id={id} value={entryDate} max={today} min={flock?.placed_on} invalid={!!dateError} onChange={(e) => setEntryDate(e.target.value || today)} />}
+        </Field>
+      </div>
+    </Card>
+  )
+
   // FR-PRD-1: one record per pen per day.
-  if (!editing && recordedAt && !saved) {
-    const todays = history.daily.find((d) => d.penId === penId && d.date === today)
-    const mayCorrect = todays && canCorrectEntry(user, todays)
+  const dayRow = past ? pastRow : recordedAt ? history.daily.find((d) => d.penId === penId && d.date === today) : undefined
+  if (!editing && !saved && (past ? pastRow : recordedAt)) {
+    const mayCorrect = dayRow && canCorrectEntry(user, dayRow)
     return (
       <>
         {header}
-        <Alert tone="success" title={`${name} is already recorded for today (${recordedAt})`}>
+        {datePicker}
+        <Alert tone="success" title={past ? `${name} is already recorded for ${weekdayDayMonth(entryDate)}` : `${name} is already recorded for today (${recordedAt})`}>
           There’s one entry per pen per day.{' '}
-          {mayCorrect ? 'You can still correct it today.' : `To correct it, ask ${managerNames(catalog) || 'the farm manager'}.`}
+          {mayCorrect ? 'You can correct it.' : `To correct it, ask ${managerNames(catalog) || 'the farm manager'}.`}
         </Alert>
         <div className="flex flex-wrap gap-3">
           <Button onClick={() => router.push(backTo)}>Back</Button>
           {mayCorrect && (
-            <Button variant="primary" onClick={() => router.push(`/production/entry/${penId}?entry=${todays.id}`)}>
-              Correct today’s entry
+            <Button variant="primary" onClick={() => router.push(`/production/entry/${penId}?entry=${dayRow.id}`)}>
+              {past ? 'Correct this entry' : 'Correct today’s entry'}
             </Button>
           )}
         </div>
@@ -309,6 +338,7 @@ function EntryScreen() {
   return (
     <>
       {header}
+      {datePicker}
       {restored && (
         <Alert compact title="Picked up where you left off" onDismiss={() => setRestored(false)}>
           Your unsaved entry was kept on this phone.

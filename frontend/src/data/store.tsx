@@ -388,7 +388,8 @@ export function TradeProvider({ children }: { children: ReactNode }) {
         // One call so the sale and its pen portions are saved together (and checked by the database).
         db.rpc('record_sale', {
           sale: {
-            sold_on: today,
+            // Today, or an earlier day the owner chose (the database allows that for owners only).
+            sold_on: s.iso || today,
             customer_id: s.customerId === 'one-off' ? null : Number(s.customerId),
             buyer_name: s.customerId === 'one-off' ? 'Walk-in buyer' : null,
             product_id: Number(s.productId),

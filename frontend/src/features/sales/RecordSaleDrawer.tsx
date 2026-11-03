@@ -2,7 +2,7 @@ import { Package, Users } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { Alert } from '../../components/ui/Alert'
 import { Button } from '../../components/ui/Button'
-import { AutoInput, Field, SelectInput, SummaryBox, TextInput } from '../../components/ui/Form'
+import { AutoInput, DateInput, Field, SelectInput, SummaryBox, TextInput } from '../../components/ui/Form'
 import { explainMoney } from '../../data/explainMoney'
 import { KeyValueRow } from '../../components/ui/KeyValueRow'
 import { Drawer } from '../../components/ui/Overlay'
@@ -42,6 +42,12 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
   const lastMethod = sales.find((s) => s.recordedBy === currentUser.name.split(' ')[0] && s.method)?.method
   const [method, setMethod] = useState<(typeof METHODS)[number]>(lastMethod === 'cash' ? 'Cash' : lastMethod === 'transfer' ? 'Transfer' : 'POS')
   const [submitted, setSubmitted] = useState(false)
+  // A second tap while saving would record the sale twice.
+  const [saving, setSaving] = useState(false)
+  // Owners can enter past sales (the farm's history); everyone else records today's.
+  const owner = currentUser.role === 'owner'
+  const [saleDate, setSaleDate] = useState(todayISO())
+  const past = saleDate < todayISO()
   // Pens the sale came from. Birds must say; eggs and droppings can be left to the auto-split.
   const [split, setSplit] = useState(false)
   const [portions, setPortions] = useState<PortionRow[]>([])
@@ -57,6 +63,7 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
     qty: num(qty) > 0 ? undefined : 'Enter a quantity',
     price: num(price) > 0 ? undefined : 'Enter a price',
     paid: paidNow > total ? 'More than the total' : oneOffUnpaid ? 'One-off buyers pay in full' : undefined,
+    date: saleDate && saleDate <= todayISO() ? undefined : 'Pick a date up to today',
   }
   const unit = product.unit.replace(/s$/, '')
   const choices = penChoices(trade, product.id)
@@ -86,15 +93,17 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    if (saving) return
     setSubmitted(true)
-    if (errors.qty || errors.price || errors.paid || portionProblem) return
+    if (errors.qty || errors.price || errors.paid || errors.date || portionProblem) return
     const next = Math.max(...sales.map((s) => Number(s.receipt.slice(2)))) + 1
     const receipt = `S-${next}`
     const m: PaymentMethod = method === 'POS' ? 'POS' : method === 'Cash' ? 'cash' : 'transfer'
-    if (!(await addSale({
+    setSaving(true)
+    const ok = await addSale({
       receipt,
-      date: `${dm(todayISO())} ${nowHM()}`,
-      iso: todayISO(),
+      date: `${dm(saleDate)} ${past ? '' : nowHM()}`.trim(),
+      iso: saleDate,
       customerId: customer?.id ?? ONE_OFF.id,
       productId: product.id,
       qty: num(qty),
@@ -106,8 +115,9 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
       pendingApproval: belowMin,
       allocations: usePens ? parsePortions(portions) : [],
       history: [{ title: belowMin ? 'Sent for approval' : 'Sale recorded', detail: `By ${currentUser.name.split(' ')[0]}`, time: nowHM() }],
-    }))) return
-    toast(belowMin ? 'Sale sent for approval' : 'Sale recorded')
+    }).finally(() => setSaving(false))
+    if (!ok) return
+    toast(belowMin ? 'Sale sent for approval' : past ? `Sale recorded for ${weekdayDayMonth(saleDate)}` : 'Sale recorded')
     onClose()
   }
 
@@ -116,19 +126,24 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
       open
       onClose={onClose}
       title="Record a sale"
-      subtitle={`${weekdayDayMonth(todayISO())}, ${nowHM()} · recorded by ${currentUser.name.split(' ')[0]}`}
+      subtitle={`${past ? `Past sale · ${weekdayDayMonth(saleDate)}` : `${weekdayDayMonth(todayISO())}, ${nowHM()}`} · recorded by ${currentUser.name.split(' ')[0]}`}
       footer={
         <>
           <Button size="lg" className="flex-1" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="lg" variant="primary" className="flex-1" type="submit" form="record-sale">
-            {belowMin ? 'Send for approval' : 'Record sale'}
+          <Button size="lg" variant="primary" className="flex-1" type="submit" form="record-sale" disabled={saving}>
+            {saving ? 'Saving…' : belowMin ? 'Send for approval' : 'Record sale'}
           </Button>
         </>
       }
     >
       <form id="record-sale" onSubmit={submit} className="flex flex-col gap-5">
+        {owner && (
+          <Field label="Date of sale" hint={past ? 'An earlier day — only owners can record past sales' : 'Today, or an earlier day for past sales'} error={submitted ? errors.date : undefined}>
+            {(id) => <DateInput id={id} value={saleDate} max={todayISO()} onChange={(e) => setSaleDate(e.target.value)} />}
+          </Field>
+        )}
         <SegmentedControl fullWidth label="Product type" options={KINDS} value={kind} onChange={changeKind} />
         <Field
           label="Customer"

@@ -1,8 +1,8 @@
 'use client'
 
 import { penName as nameOfPen } from '../data/farmViews'
-import { CalendarDays, Download, ListFilter, Plus, Warehouse } from 'lucide-react'
-import { useState } from 'react'
+import { CalendarDays, ChevronDown, ChevronRight, Download, ListFilter, Plus, Warehouse } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Button } from '../components/ui/Button'
 import { Card, CardHeader } from '../components/ui/Card'
@@ -14,7 +14,7 @@ import { KeyValueRow } from '../components/ui/KeyValueRow'
 import { Select } from '../components/ui/Select'
 import { NumberCell, Table, TextCell, type Column } from '../components/ui/Table'
 import type { Expense } from '../data/expenses'
-import { addDays, period as periodRange, previous, type PeriodKey, type Range } from '../data/metrics'
+import { addDays, period as periodRange, previous, weekdayDayMonth, type PeriodKey, type Range } from '../data/metrics'
 import { expenseTotal, expensesIn, pctChange, spanLabel } from '../data/moneyKpis'
 import { useTrade } from '../data/tradeContext'
 import { AddExpenseModal } from '../features/expenses/AddExpenseModal'
@@ -39,6 +39,9 @@ function compareWith(p: Period, r: Range): Range {
   return { from: back(r.from), to: back(r.to), label: 'last year' }
 }
 
+/** A row of the grouped table: a day, or one expense under an open day. */
+type DayRow = { kind: 'day'; date: string; items: Expense[]; total: number } | { kind: 'item'; expense: Expense }
+
 export default function Expenses() {
   const { expenses, suppliers, catalog, history } = useTrade()
   const [period, setPeriod] = useState<Period>('This month')
@@ -47,6 +50,8 @@ export default function Expenses() {
   const [query, setQuery] = useState('')
   const [adding, setAdding] = useState(false)
   const [openId, setOpenId] = useState<string | null>(null)
+  // Days opened in the table.
+  const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
   // Correct or void the open expense.
   const [action, setAction] = useState<'edit' | 'void' | null>(null)
 
@@ -86,6 +91,39 @@ export default function Expenses() {
     { key: 'receipt', header: 'Receipt', width: 90, render: (e) => <TextCell>{e.receipt ? 'Photo' : '—'}</TextCell> },
     { key: 'by', header: 'Added by', width: 90, render: (e) => <TextCell>{e.addedBy}</TextCell> },
   ]
+
+  // One row per day (newest first); a day opens in place to show its expenses.
+  const days = [...new Set(rows.map((e) => e.date))].sort((a, b) => b.localeCompare(a)).map((date) => {
+    const items = rows.filter((e) => e.date === date)
+    return { kind: 'day' as const, date, items, total: items.reduce((n, e) => n + e.amount, 0) }
+  })
+  const isOpen = (date: string) => days.length === 1 || expanded.has(date)
+  const toggleDay = (date: string) =>
+    setExpanded((s) => {
+      const next = new Set(s)
+      if (next.has(date)) next.delete(date)
+      else next.add(date)
+      return next
+    })
+  const tableRows: DayRow[] = days.flatMap((d) => [d, ...(isOpen(d.date) ? d.items.map((expense) => ({ kind: 'item' as const, expense })) : [])])
+  const dayCell: Record<string, (d: (typeof days)[number]) => ReactNode> = {
+    date: (d) => {
+      const Chevron = isOpen(d.date) ? ChevronDown : ChevronRight
+      return (
+        <span className="flex items-center gap-1.5 whitespace-nowrap type-label-md text-fg-primary">
+          <Chevron size={16} strokeWidth={1.5} className="shrink-0 text-icon-secondary" aria-hidden />
+          {weekdayDayMonth(d.date)}
+        </span>
+      )
+    },
+    description: (d) => <TextCell tone="primary">{`${d.items.length} ${d.items.length === 1 ? 'expense' : 'expenses'}`}</TextCell>,
+    amount: (d) => <NumberCell>{formatNaira(d.total)}</NumberCell>,
+  }
+  const dayColumns: Column<DayRow>[] = columns.map((c) => ({
+    ...c,
+    width: c.key === 'date' ? 132 : c.width,
+    render: (r) => (r.kind === 'item' ? c.render(r.expense) : (dayCell[c.key]?.(r) ?? null)),
+  }))
 
   return (
     <>
@@ -175,7 +213,13 @@ export default function Expenses() {
           meta={<span className="type-body-sm text-fg-tertiary">Each one stamped with who added it · {formatNumber(rows.length)} shown</span>}
           action={{ label: 'All expenses', onClick: () => setPeriod('This year') }}
         />
-        <Table columns={columns} rows={rows} rowKey={(e) => e.id} onRowClick={(e) => setOpenId(e.id)} />
+        <Table
+          columns={dayColumns}
+          rows={tableRows}
+          rowKey={(r) => (r.kind === 'day' ? `day-${r.date}` : r.expense.id)}
+          onRowClick={(r) => (r.kind === 'day' ? toggleDay(r.date) : setOpenId(r.expense.id))}
+          rowClassName={(r) => (r.kind === 'item' ? 'bg-canvas [&_td:first-child]:pl-10' : undefined)}
+        />
         {rows.length === 0 && <p className="px-5 py-6 type-body-md text-fg-tertiary">No expenses match these filters.</p>}
       </Card>
 
