@@ -80,7 +80,9 @@ export function reorderSuggestion(history: History, catalog: Catalog, feeds: Fee
   const feed = inUse[0]
   if (!feed) return null
   const row = catalog.feedTypes.find((f) => f.name === feed.name)
+  // Use today's 7-day rate from the records, falling back to the feed card's.
   const perDay = (row && bagsPerDay(history, row.id)) || feed.bagsPerDay || 0
+  // Two weeks' use less stock, at least back to the reorder level and a week's use, rounded up to 10 bags (10 minimum).
   const bags = Math.max(10, Math.ceil(Math.max(perDay * 14 - feed.bags, feed.reorderAt - feed.bags, perDay * 7) / 10) * 10)
   const last = row ? lastPurchaseOf(history, { feedTypeId: row.id }) : undefined
   const supplier = last ? catalog.suppliers.find((s) => s.id === last.supplier_id) : undefined

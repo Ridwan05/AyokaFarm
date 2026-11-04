@@ -40,6 +40,8 @@ export default function PayslipPrint() {
   const deductions = items.filter((i) => i.kind !== 'earning')
   const units = Number(line.units)
   const monthly = line.pay_basis === 'monthly'
+  // How basic pay was worked out. Monthly staff's units are the share of the month they were employed
+  // (1 = the whole month); casuals' units are the days or weeks worked.
   const basicHow = monthly
     ? units >= 1
       ? `${money(Number(line.rate))} a month`
@@ -80,6 +82,7 @@ export default function PayslipPrint() {
         <h2 className="type-overline text-fg-tertiary">Deductions</h2>
         {deductions.length ? (
           deductions.map((i) => {
+            // Loan repayments also show what is still owed once this payslip's repayment is taken.
             const left = i.loan_id ? loanLeftAfter(data, i.loan_id, line) : null
             const detail = i.loan_id && left !== null ? `${ITEM_KIND_LABEL[i.kind]} · ${money(Math.max(left, 0))} left after this payslip` : ITEM_KIND_LABEL[i.kind]
             return (
@@ -118,6 +121,7 @@ export default function PayslipPrint() {
   )
 }
 
+/** A small label over a value, for the payslip's header facts. */
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex flex-col">
@@ -127,6 +131,7 @@ function Fact({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
+/** One payslip line: label (with an optional how-it-was-worked-out note) and amount. */
 function Row({ label, detail, strong, children }: { label: string; detail?: string; strong?: boolean; children: ReactNode }) {
   return (
     <div className="flex items-baseline gap-3">

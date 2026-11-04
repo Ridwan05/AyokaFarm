@@ -15,6 +15,7 @@ type PageHeaderProps = {
   sample?: boolean
 }
 
+/** Title block at the top of each screen: eyebrow or back link, title, description and actions. */
 export function PageHeader({ eyebrow, backTo, title, description, actions, sample }: PageHeaderProps) {
   return (
     <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-6">

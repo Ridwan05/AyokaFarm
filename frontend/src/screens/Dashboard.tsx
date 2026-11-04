@@ -65,6 +65,10 @@ const before = (r: Range): Range => {
   return { from: addDays(r.from, -(len + 1)), to: addDays(r.from, -1), label: 'previous period' }
 }
 
+/**
+ * The owner's and farm manager's home: KPIs for the chosen range, what needs attention, feed stock,
+ * feed used vs expected, money owed, and each pen's entry for today. Filters narrow it to a pen or bird type.
+ */
 export default function Dashboard() {
   const currentUser = useCurrentUser()
   const trade = useTrade()
@@ -75,6 +79,7 @@ export default function Dashboard() {
   // Filter by pen id; the name is only what's shown, so a rename can't break it.
   const penOptions = [ALL_PENS, ...catalog.pens.map((p) => String(p.id))]
   const penLabel = (v: string) => (v === ALL_PENS ? v : penName(catalog, Number(v)))
+  // Whether a pen passes the pen and bird-type filters. Bird type is judged by what the pen held over the range.
   const penOk = (id: number) => (pen === ALL_PENS || String(id) === pen) && (birds === 'Layers & broilers' || penKindIn(catalog, history, id, period(RANGE_KEY[range], todayISO())) === birds)
 
   const today = todayISO()
@@ -82,11 +87,13 @@ export default function Dashboard() {
   const recorded = rows.filter((p) => p.died !== null).length
   const alerts = useMemo(() => deriveAlerts(trade, today), [trade, today]).filter((a) => a.pen === undefined || penOk(a.pen))
   const todays = rowsOn(history.daily, today, penOk)
+  // Time of the latest entry saved today.
   const updated = todays.map((d) => d.createdAt).sort().at(-1)
   // Read the clock once, not on every render.
   const [hello] = useState(() => greeting(new Date()))
   const firstName = currentUser.name.split(' ')[0]
 
+  /** Downloads the "Pens today" table as shown, as CSV. */
   function exportPens() {
     downloadCsv(
       'pens-today',
@@ -123,6 +130,7 @@ export default function Dashboard() {
         </p>
       </div>
 
+      {/* KPI row */}
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
         {dashboardKpis(trade, period(RANGE_KEY[range], today), penOk, pen !== ALL_PENS || birds !== 'Layers & broilers').map((k) => (
           <KpiCard key={k.label} kpi={k} />
@@ -144,9 +152,14 @@ export default function Dashboard() {
   )
 }
 
+/**
+ * The four dashboard KPIs (live birds, laying rate, mortality, sales) for range r, each compared with
+ * the same number of days just before. `filtered` notes that sales are farm-wide, not per pen.
+ */
 function dashboardKpis(trade: Trade, r: Range, penOk: (id: number) => boolean, filtered: boolean) {
   const { history } = trade
   const prev = before(r)
+  // Sparklines cover the range, at least 8 and at most 30 days.
   const sparkDates = lastDays(Math.min(30, Math.max(8, daysFrom(r.from, r.to) + 1)), r.to)
   const isToday = r.from === r.to
   const cur = rowsIn(history.daily, r, penOk)
@@ -159,10 +172,12 @@ function dashboardKpis(trade: Trade, r: Range, penOk: (id: number) => boolean, f
   const live = sum([...liveBirdsByPen(history, penOk).values()], (n) => n)
 
   const lay = layingRate(cur)
+  // Pens that recorded eggs are the layer pens.
   const layerPens = new Set(cur.filter((d) => d.eggs !== null).map((d) => d.penId)).size
   const mort = mortalityPct(cur)
   const deaths = sum(cur, (d) => d.mortality)
 
+  // Sales can't be split by pen, so this ignores the pen filters. Only approved sales count.
   const sales = (x: { from: string; to: string }) =>
     sum(
       history.sales.filter((s) => s.approval === 'approved' && inRange(s.sold_on, x)),
@@ -178,6 +193,7 @@ function dashboardKpis(trade: Trade, r: Range, penOk: (id: number) => boolean, f
       value: formatNumber(live),
       unit: 'birds',
       current: live,
+      // No birds before (a new farm) means no comparison, not a jump from zero.
       previous: birdsOn(prev.to) || null,
       goodWhen: 'neither',
       context: `${flocks.length} pens`,
@@ -221,6 +237,7 @@ function dashboardKpis(trade: Trade, r: Range, penOk: (id: number) => boolean, f
   ]
 }
 
+/** The top few open alerts, with the total count and a link to all alerts. */
 function NeedsAttention({ alerts, total }: { alerts: Alert[]; total: number }) {
   return (
     <Card className="min-w-0 flex-1">
@@ -245,6 +262,7 @@ function NeedsAttention({ alerts, total }: { alerts: Alert[]; total: number }) {
   )
 }
 
+/** Days of feed cover per feed type; the bar is full at FEED_COVER_FULL_DAYS and turns accent when low. */
 function FeedStock() {
   return (
     <Card className="w-full shrink-0 lg:w-[400px]">
@@ -281,6 +299,7 @@ function FeedStock() {
   )
 }
 
+/** Daily feed used against expected over the last 30 days, with the tolerance band and the latest and overall variance. */
 function FeedChart({ trade, penOk, scope }: { trade: Trade; penOk: (id: number) => boolean; scope: string }) {
   const { history, catalog } = trade
   // Last 30 days, trimmed to the days with entries (a new farm, or today before anyone has recorded).
@@ -293,6 +312,7 @@ function FeedChart({ trade, penOk, scope }: { trade: Trade; penOk: (id: number) 
   // A day nobody recorded is a gap in the line, not 0 kg.
   const actual = daily.map((rows) => (rows.length ? sum(rows, (r) => r.feedKg) : null))
   const expected = daily.map((rows) => (rows.some((r) => r.expectedKg) ? sum(rows, (r) => r.expectedKg ?? 0) : null))
+  // The tolerance band is expected ± the farm's allowed feed variance.
   const tol = farmSettings.feedVariancePct / 100
   const lower = expected.map((e) => (e === null ? null : e * (1 - tol)))
   const upper = expected.map((e) => (e === null ? null : e * (1 + tol)))
@@ -304,6 +324,7 @@ function FeedChart({ trade, penOk, scope }: { trade: Trade; penOk: (id: number) 
   const lastRows = lastIdx >= 0 ? daily[lastIdx] : []
   const lastVar = feedVariance(lastRows)
   const worst = [...lastRows].filter((r) => r.variancePct !== null).sort((a, b) => Math.abs(b.variancePct!) - Math.abs(a.variancePct!))[0]
+  // Variance = (feed used − expected) ÷ expected, over every day shown.
   const overall = feedVariance(daily.flat())
   const within = overall !== null && Math.abs(overall) <= farmSettings.feedVariancePct
 
@@ -355,6 +376,7 @@ function FeedChart({ trade, penOk, scope }: { trade: Trade; penOk: (id: number) 
   )
 }
 
+/** One chart legend entry: a swatch and its label. */
 function Legend({ swatch, label }: { swatch: ReactNode; label: string }) {
   return (
     <span className="flex items-center gap-1.5">
@@ -364,8 +386,10 @@ function Legend({ swatch, label }: { swatch: ReactNode; label: string }) {
   )
 }
 
+/** Colours for the debt age buckets; the last is used for any overdue bucket. */
 const BUCKET_COLORS = ['bg-chart-1', 'bg-chart-2', 'bg-chart-4']
 
+/** Customer debt by age, and what the farm owes suppliers (with the amount past their payment terms). */
 function Receivables({ trade }: { trade: Trade }) {
   const today = todayISO()
   const owing = trade.customers.map((c) => trade.customerOpenBills(c.id)).filter((b) => b.length)
@@ -374,6 +398,7 @@ function Receivables({ trade }: { trade: Trade }) {
 
   const supplierOwed = trade.suppliers.map((s) => ({ s, owed: trade.supplierBalance(s.id) })).filter((x) => x.owed > 0)
   const supplierTotal = sum(supplierOwed, (x) => x.owed)
+  // A supplier bill is past terms once it's older than that supplier's agreed payment days.
   const overdue = sum(
     supplierOwed.flatMap(({ s }) => trade.supplierOpenBills(s.id).filter((b) => daysFrom(b.date, today) > s.termsDays)),
     (b) => b.left,
@@ -435,6 +460,7 @@ function Receivables({ trade }: { trade: Trade }) {
 
 const dash = <NumberCell tone="muted">—</NumberCell>
 
+/** Columns of the "Pens today" table. */
 const penColumns: Column<PenToday>[] = [
   {
     key: 'pen',
@@ -449,6 +475,7 @@ const penColumns: Column<PenToday>[] = [
     width: 120,
     render: (p) =>
       p.died === null ? dash : (
+        // Mortality today = died ÷ birds at the start of the day (closing birds + died); red over the alert threshold.
         <NumberCell tone={(p.died * 100) / (p.birds + p.died || 1) > farmSettings.mortalityAlertPct ? 'danger' : 'default'}>{p.died}</NumberCell>
       ),
   },
@@ -481,6 +508,7 @@ const penColumns: Column<PenToday>[] = [
   },
 ]
 
+/** Each pen's entry for today: deaths, feed vs expected, laying rate and entry status. */
 function PensToday({ rows, recorded }: { rows: PenToday[]; recorded: number }) {
   const router = useRouter()
   return (

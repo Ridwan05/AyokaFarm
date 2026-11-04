@@ -38,6 +38,7 @@ export type Lookups = {
   medicationUnit: Map<string, string>
 }
 
+/** Everything loadRemote returns: screen-shaped records, stock on hand, ids for writes, and the raw rows. */
 export type Remote = {
   sales: Sale[]
   purchases: Purchase[]
@@ -104,6 +105,7 @@ export type MedLine = {
   recordedBy: string
 }
 
+/** Dated records since `since`, for dashboards, reports and statements. Voided money records and rejected sales are left out. */
 export type History = {
   /** Oldest day loaded (YYYY-MM-DD). */
   since: string
@@ -127,6 +129,7 @@ export type History = {
   placements: Row<'flock_placements'>[]
 }
 
+/** Reference rows with their ids (pens, products, staff, customers, …), inactive ones included. */
 export type Catalog = {
   settings: Row<'farm_settings'> | null
   /** Active pens. `bird_types` is the bird type of the flock in the pen now (null when empty). */
@@ -159,7 +162,9 @@ const hm = (ts: string) => new Intl.DateTimeFormat('en-GB', { timeZone: LAGOS, h
 const monthYear = (ts: string) => new Intl.DateTimeFormat('en-GB', { timeZone: LAGOS, month: 'short', year: 'numeric' }).format(new Date(ts))
 const weekdayDm = (iso: string) => `${new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: 'UTC' }).format(new Date(`${iso}T00:00:00Z`))} ${dm(iso)}`
 const first = (name: string | undefined) => (name ?? '—').split(' ')[0]
+// n days before today on the farm's (Lagos) calendar.
 const daysAgo = (n: number) => new Date(Date.parse(farmTodayISO()) - n * 86_400_000).toISOString().slice(0, 10)
+// The database stores 'pos'; the screens show 'POS'.
 const method = (m: string | null): PaymentMethod | undefined => (m === 'pos' ? 'POS' : m === 'cash' || m === 'transfer' ? m : undefined)
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 /** Fill an imported array in place so every module that imported it sees the new rows. */
@@ -184,6 +189,10 @@ async function all<T>(q: { range: (from: number, to: number) => Page<T> }, what:
   }
 }
 
+/**
+ * Loads every record the signed-in person can see (RLS decides) and fills the shared lists and
+ * farmSettings in place. Throws with a readable message if any table fails to load.
+ */
 export async function loadRemote(db: DB): Promise<Remote> {
   // A year and a bit, so year-to-date reports work, and never less than the oldest flock still in a
   // pen, so its rearing cost is complete. Farm-scale volumes keep this small.
@@ -193,7 +202,9 @@ export async function loadRemote(db: DB): Promise<Remote> {
     db.from('farm_settings').select('go_live_date').limit(1),
   ])
   const since = [daysAgo(400), oldest?.[0]?.placed_on, live?.[0]?.go_live_date].filter((d): d is string => Boolean(d)).sort()[0]
+  // Window for each feed's short ledger and its daily use.
   const recent = daysAgo(8)
+  // Voided (deleted_at) rows and rejected sales never reach the screens.
   const [
     settingsRows, productRows, feedTypeRows, medicationRows, categoryRows, reasonRows, penRows, flockRows, staffPenRows, profileRows,
     customerRows, supplierRows, purchaseRows, saleRows, paymentRows, expenseRows, dailyRows, recordRows, medLineRows, levelRows, stockDayRows, batchRows,
@@ -278,7 +289,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
       layerLayingWeeks: settings.layer_laying_weeks,
     })
   }
-  // Expected feed by age, used by the daily entry form.
+  // Expected feed by age, used by the daily entry form. Only the Layer and Broiler bird types fill the fallback bands.
   for (const [key, birdName] of [['Layers · Isa Brown', 'Layer'], ['Broilers · Ross 308', 'Broiler']] as const) {
     const bird = birdTypeRows.find((b) => b.name === birdName)
     const feed = new Map(feedTypeRows.map((f) => [f.id, f.name]))
@@ -293,6 +304,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
   const medName = new Map(medicationRows.map((m) => [m.id, m.name]))
 
   // ── Reference lists ──
+  // A product's suggested price is the latest price it sold at (sales come newest first), else its minimum.
   const lastPrice = new Map<number, number>()
   for (const s of saleRows) if (!lastPrice.has(s.product_id)) lastPrice.set(s.product_id, Number(s.unit_price))
   fill(
@@ -312,6 +324,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
       })),
   )
 
+  // Stock on hand keyed by feed or medication name (or 'eggs' / 'cracked_eggs').
   const stock = new Map<string, number>()
   for (const l of levelRows) {
     const name = l.item === 'feed' ? feedName.get(l.feed_type_id!) : l.item === 'medication' ? medName.get(l.medication_id!) : l.item
@@ -325,6 +338,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
       .map<FeedType>((f) => {
         const days = stockDayRows.filter((d) => d.item === 'feed' && d.feed_type_id === f.id && d.moved_on! >= recent)
         const used = days.filter((d) => d.moved_on! >= daysAgo(7)).reduce((n, d) => n + Number(d.used ?? 0), 0)
+        // Rounded to 0.1 bag; days of cover round down so cover is never overstated.
         const bagsPerDay = used > 0 ? Math.round((used / 7) * 10) / 10 : null
         const bags = stock.get(f.name) ?? 0
         return {
@@ -350,6 +364,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
     medicationRows
       .filter((m) => m.is_active)
       .map<Medication>((m) => {
+        // Batches are ordered by expiry, so this is the one expiring soonest.
         const batch = batchRows.find((b) => b.medication_id === m.id)
         return {
           name: m.name,
@@ -379,6 +394,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
     const ageDays = flock ? Math.round((Date.parse(today) - Date.parse(flock.placed_on)) / 86_400_000) + flock.age_at_placement_days : 0
     const week = Math.floor(ageDays / 7) + 1
     // Birds now: today's count, or the last entry's plus birds added and less birds sold since (as the database counts).
+    // dailyRows come newest first, so this is the flock's latest entry.
     const lastRow = flock ? dailyRows.find((d) => d.flock_id === flock.id) : undefined
     const birds = todayRow?.closing_birds ?? (flock ? flockBirdsAfter({ placements: placementRows, sales: saleRows, saleAllocations: allocationRows, purchases: purchaseRows }, flock, lastRow ? { date: lastRow.record_date!, closing: lastRow.closing_birds! } : undefined) : 0)
     const meta = todayRow ? recordMeta.get(todayRow.id!) : undefined
@@ -405,6 +421,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
       liveBirds: flock ? birds : 0,
       capacity: p.capacity,
       status,
+      // Sort order for "needs attention": alerts, then warnings, then waiting or empty, then on track.
       attention: status.tone === 'danger' ? 1 : status.tone === 'warning' ? 2 : status.tone === 'neutral' ? 3 : 4,
       stats: [
         layers
@@ -466,6 +483,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
   fill(
     staff,
     profileRows.map<StaffMember>((p) => {
+      // No role yet: listed as a pen attendant but shown inactive until the owner gives them one.
       const role = p.role_id ? roleFromDb(p.role_id) : 'pen-attendant'
       const ids = (pensByProfile.get(p.id) ?? []).sort((a, b) => a - b)
       return {
@@ -484,6 +502,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
   )
 
   // ── Parties ──
+  // Rows come newest first, so the first one seen per party is the latest.
   const lastSaleOn = new Map<number, string>()
   for (const s of saleRows) if (s.customer_id && !lastSaleOn.has(s.customer_id)) lastSaleOn.set(s.customer_id, s.sold_on)
   const customers = customerRows.map<Customer>((c) => ({
@@ -587,6 +606,7 @@ export async function loadRemote(db: DB): Promise<Remote> {
   })
   const stockPurchases = purchaseRows.filter((p) => p.kind !== 'birds')
   const orders = stockPurchases.filter((p) => p.status === 'ordered').map(orderOf)
+  // The latest 20 deliveries are enough for the Store Keeper's list.
   const deliveries = stockPurchases
     .filter((p) => p.status === 'received')
     .slice(0, 20)

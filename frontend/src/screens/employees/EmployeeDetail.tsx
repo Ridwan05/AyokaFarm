@@ -23,8 +23,14 @@ import { can } from '../../lib/access'
 import { formatNaira } from '../../lib/format'
 import Placeholder from '../Placeholder'
 
+/** "09 Oct 2026" */
 const date = (iso: string) => `${dayMonth(iso)} ${iso.slice(0, 4)}`
 
+/**
+ * One employee: pay terms, bank details, advances and loans, and approved payslips.
+ * Only the owner records an advance or loan outright; other payroll roles send a request
+ * for the owner to approve.
+ */
 export default function EmployeeDetail() {
   const { employeeId = '' } = useParams<{ employeeId: string }>()
   const user = useCurrentUser()
@@ -47,6 +53,7 @@ export default function EmployeeDetail() {
   const login = e.profile_id ? catalog.profiles.find((p) => p.id === e.profile_id) : undefined
   const loans = data.loans.filter((l) => l.employee_id === e.id)
   const payslips = approvedPayslips(data, e.id)
+  // Calendar year by pay period, from approved payslips only — drafts don't count as paid.
   const paidThisYear = payslips.filter((p) => p.run.period.slice(0, 4) === todayISO().slice(0, 4)).reduce((n, p) => n + Number(p.line.net), 0)
 
   return (
@@ -107,6 +114,7 @@ export default function EmployeeDetail() {
         </Card>
       </div>
 
+      {/* Approving, changing or stopping a loan is the owner's call. */}
       <LoansCard
         loans={loans}
         balances={data.balances}

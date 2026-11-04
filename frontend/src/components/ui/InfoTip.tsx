@@ -14,10 +14,12 @@ const GAP = 6
 const HOVER_DELAY = 350
 /** Once a tip has been open, neighbours open straight away for a moment (no delay). */
 const WARM_MS = 600
+// Shared by every tip on the page, so moving between neighbouring icons skips the hover delay.
 let lastClosed = 0
 
 type Place = { left: number; top: number; above: boolean; originX: number }
 
+/** Info icon that explains how a figure is worked out; `label` names the figure. */
 export function InfoTip({ label, children, size = 14, className }: { label: string; children: ReactNode; size?: number; className?: string }) {
   const id = useId()
   const button = useRef<HTMLButtonElement>(null)
@@ -75,6 +77,7 @@ export function InfoTip({ label, children, size = 14, className }: { label: stri
           else timer.current = window.setTimeout(show, HOVER_DELAY)
         }}
         onPointerLeave={(e) => e.pointerType === 'mouse' && hide()}
+        // Only keyboard focus opens it; a tap focuses too, and the click handler toggles it then.
         onFocus={(e) => e.target.matches(':focus-visible') && show()}
         onBlur={hide}
         onClick={(e) => {

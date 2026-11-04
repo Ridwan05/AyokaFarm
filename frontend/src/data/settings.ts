@@ -3,6 +3,7 @@ import type { Role } from './session'
 // Staff and expected-feed bands, filled in place from Supabase when the farm's records load
 // (remote.ts). The rest of Settings reads the database directly through useTrade().catalog.
 
+/** A staff member as Settings → Staff lists them. */
 export type StaffMember = {
   id: string
   name: string
@@ -18,6 +19,7 @@ export type StaffMember = {
   active: boolean
 }
 
+/** Display name for each role. */
 export const roleLabels: Record<StaffMember['role'], string> = {
   owner: 'Owner · Admin',
   'farm-manager': 'Farm Manager',
@@ -27,10 +29,12 @@ export const roleLabels: Record<StaffMember['role'], string> = {
   'pen-attendant-all': 'Pen Attendant · all pens',
 }
 
+/** Every staff member. Filled from Supabase (remote.ts). */
 export const staff: StaffMember[] = []
 
 // ── Feed & targets ─────────────────────────────────────────────────
 
+/** Expected feed for a range of weeks of age (to: null = and older). */
 export type FeedBand = { from: number; to: number | null; grams: number; feed: string }
 
 /** Defaults until feed_targets load; Settings → Feed & targets edits the real bands. */

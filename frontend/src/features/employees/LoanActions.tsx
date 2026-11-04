@@ -24,6 +24,7 @@ export function LoanActions({ loan, balance, save }: { loan: Loan; balance?: Loa
     const ok = await save((db) => db.from('employee_loans').update({ status }).eq('id', loan.id)).finally(() => setSaving(false))
     if (ok) toast(done)
   }
+  // Once something has been repaid the loan can only be stopped, writing off the rest, not cancelled.
   const repaid = Number(balance?.repaid ?? 0)
   const items: MenuItem[] = []
   if (loan.status === 'pending') items.push({ label: 'Approve', disabled: saving, onSelect: () => void set('active', `${loan.ref} approved`) })
@@ -45,6 +46,7 @@ export function LoanActions({ loan, balance, save }: { loan: Loan; balance?: Loa
   )
 }
 
+/** Change how much comes off each payslip and from which month, e.g. to pause repayments for a while. */
 function ChangeRepaymentModal({ loan, balance, save, onClose }: { loan: Loan; balance?: LoanBalance; save: Save; onClose: () => void }) {
   const toast = useToast()
   const left = Number(balance?.balance ?? loan.amount)
@@ -58,6 +60,7 @@ function ChangeRepaymentModal({ loan, balance, save, onClose }: { loan: Loan; ba
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    // A second tap while saving would send the change twice.
     if (saving || error) return
     setSaving(true)
     const ok = await save((db) => db.from('employee_loans').update({ monthly_repayment: perMonth, first_month: `${first}-01` }).eq('id', loan.id)).finally(() => setSaving(false))

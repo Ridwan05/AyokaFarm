@@ -8,8 +8,10 @@ import { createClient, createSecretClient } from '../../../../lib/supabase/serve
 // Changes to profiles and pen assignments are made with the caller's own session, so row-level
 // security applies and the audit log records who made them; only login changes use the secret key.
 
+/** What every staff action returns: ok, or a message to show the person. */
 type Result = { ok: true } | { ok: false; error: string }
 
+/** Role ids the database accepts for a new account. */
 const ROLES = ['owner', 'farm_manager', 'sales_accounts', 'store_keeper', 'pen_attendant', 'pen_attendant_all'] as const
 type DbRole = (typeof ROLES)[number]
 
@@ -22,10 +24,15 @@ async function caller(): Promise<{ id: string; role: string | null } | null> {
   const { data: profile } = await supabase.from('profiles').select('role_id, is_active').eq('id', id).single()
   return profile?.is_active ? { id, role: profile.role_id } : null
 }
+/** Just the caller's role, or null if they're signed out or deactivated. */
 const callerRole = async () => (await caller())?.role ?? null
 
 const fail = (error: string): Result => ({ ok: false, error })
 
+/**
+ * Owner only: create a login for a new staff member, set their role and phone, and, for a pen
+ * attendant, the pens they work on. They sign in with their phone and this first password.
+ */
 export async function addStaff(input: { name: string; phone: string; role: string; password: string; whatsapp: boolean; pens: number[] }): Promise<Result> {
   if ((await callerRole()) !== 'owner') return fail('Only an owner can add staff.')
   const name = input.name.trim()
@@ -58,6 +65,10 @@ export async function addStaff(input: { name: string; phone: string; role: strin
   return { ok: true }
 }
 
+/**
+ * Owner only: deactivate or reactivate a staff account. Deactivating also signs them out
+ * everywhere. Nobody can deactivate themselves, and the last active owner can't be deactivated.
+ */
 export async function setStaffActive(profileId: string, active: boolean): Promise<Result> {
   const me = await caller()
   if (me?.role !== 'owner') return fail('Only an owner can deactivate staff.')
@@ -73,6 +84,7 @@ export async function setStaffActive(profileId: string, active: boolean): Promis
   const { error } = await db.from('profiles').update({ is_active: active }).eq('id', profileId)
   if (error) return fail(error.message)
   // A ban stops their session from refreshing, which signs them out everywhere.
+  // 876000h is about 100 years (there is no permanent ban); 'none' lifts it when they're reactivated.
   const { error: banError } = await admin.auth.admin.updateUserById(profileId, { ban_duration: active ? 'none' : '876000h' })
   return banError ? fail(banError.message) : { ok: true }
 }
@@ -80,6 +92,10 @@ export async function setStaffActive(profileId: string, active: boolean): Promis
 /** Roles whose passwords a farm manager may reset. */
 const FARM_MANAGER_RESETS = ['pen_attendant', 'pen_attendant_all', 'store_keeper']
 
+/**
+ * Set a new password for a staff member. The owner can reset anyone's; a farm manager only
+ * pen attendants' and store keepers'.
+ */
 export async function resetStaffPassword(profileId: string, password: string): Promise<Result> {
   const role = await callerRole()
   if (role !== 'owner' && role !== 'farm_manager') return fail('Only the owner or farm manager can reset passwords.')
@@ -96,6 +112,10 @@ export async function resetStaffPassword(profileId: string, password: string): P
   return error ? fail(error.message) : { ok: true }
 }
 
+/**
+ * Owner only: move a staff member to another role. Nobody changes their own role, the last active
+ * owner keeps theirs, and pen assignments are cleared when the new role isn't pen-based.
+ */
 export async function changeStaffRole(profileId: string, roleId: string): Promise<Result> {
   const me = await caller()
   if (me?.role !== 'owner') return fail('Only an owner can change someone’s role.')

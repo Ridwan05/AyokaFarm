@@ -7,11 +7,13 @@ import { accessOf } from '../../lib/access'
 // Who may correct or void a money record, mirroring the database rules (private.within_edit_window
 // and the soft_delete trigger) so the buttons only show when the save will be accepted.
 
+/** The access module that governs each kind of money record. */
 export const MODULE_OF: Record<MoneyKind, AppModule> = { sales: 'sales', purchases: 'purchases', payments: 'payments', expenses: 'expenses' }
 
 /** The farm's date of a timestamp (Africa/Lagos). */
 const farmDate = (ts: string) => farmTodayISO(new Date(ts))
 
+// The owner and the farm manager may correct anyone's records at any time.
 const isManager = (user: User) => user.role === 'owner' || user.role === 'farm-manager'
 
 /**
@@ -24,6 +26,7 @@ export function canEditRecord(user: User, kind: MoneyKind, row: { recorded_by: s
   const level = accessOf(user, MODULE_OF[kind], 'edit')
   if (level === 'none' || (kind === 'purchases' && level !== 'all')) return false
   if (isManager(user)) return true
+  // Whole farm days (Lagos) since it was recorded, so the window doesn't depend on the hour.
   const days = Math.round((Date.parse(farmTodayISO()) - Date.parse(farmDate(row.created_at))) / 86_400_000)
   return row.recorded_by === user.id && days <= farmSettings.editWindowDays
 }
@@ -31,4 +34,5 @@ export function canEditRecord(user: User, kind: MoneyKind, row: { recorded_by: s
 /** Voiding (soft delete with a reason) needs delete permission for the module — the owner by default. */
 export const canVoidRecord = (user: User, kind: MoneyKind) => accessOf(user, MODULE_OF[kind], 'delete') !== 'none'
 
+/** Each kind of money record in a sentence: "Void sale S-1042". */
 export const KIND_LABEL: Record<MoneyKind, string> = { sales: 'sale', purchases: 'purchase', payments: 'payment', expenses: 'expense' }

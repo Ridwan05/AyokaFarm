@@ -1,5 +1,6 @@
 const number = new Intl.NumberFormat('en-NG')
 
+/** "620,000" — Nigerian grouping. */
 export const formatNumber = (n: number) => number.format(n)
 
 /** "₦ 620,000" — the design puts a space after the sign in tables. */
@@ -16,6 +17,7 @@ export function formatLongDate(d: Date) {
   return `${weekday}, ${rest}`
 }
 
+/** "Good morning" / "Good afternoon" / "Good evening" by the device's clock. */
 export function greeting(d: Date) {
   const h = d.getHours()
   return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening'
@@ -28,7 +30,7 @@ export function formatShortDate(d: Date) {
   return `${weekday} ${rest}`
 }
 
-/** Parse "2026-10-08" as a local date. */
+/** Parse "2026-10-08" as a local date (new Date(iso) would read it as UTC midnight). */
 export function parseISODate(iso: string) {
   const [y, m, d] = iso.split('-').map(Number)
   return new Date(y, m - 1, d)

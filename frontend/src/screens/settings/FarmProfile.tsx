@@ -26,6 +26,7 @@ const TIME_ZONES = [{ value: 'Africa/Lagos', label: 'West Africa Time (WAT) · A
 /** Highest number in refs like "S-1042", plus one. */
 const nextNumber = (refs: string[]) => refs.reduce((n, r) => Math.max(n, Number(r.replace(/^\D+-?/, '')) || 0), 0) + 1
 
+/** Farm profile: name and contact details, financial year, rearing-cost treatment, receipts and WhatsApp. Owner edits; others view. */
 export default function FarmProfile() {
   const router = useRouter()
   const user = useCurrentUser()
@@ -52,6 +53,7 @@ export default function FarmProfile() {
   const birds = [...liveBirdsByPen(history).values()].reduce((n, b) => n + b, 0)
   const activeStaff = catalog.profiles.filter((p) => p.is_active && p.role_id).length
   const goLive = settings?.go_live_date ? `${dayMonth(settings.go_live_date)} ${settings.go_live_date.slice(0, 4)}` : 'Not set'
+  // The month before the start month (start is 1-based).
   const fyEnd = MONTHS[(Number(form.financial_year_start_month) + 10) % 12]
 
   // A second tap while saving would save the profile twice.
@@ -83,6 +85,7 @@ export default function FarmProfile() {
           layer_laying_weeks: weeks,
         })
         .eq('id', true)
+      // RLS blocks anyone but the owner from updating farm settings.
       if (error) return toast.error(/row-level security|permission/i.test(error.message) ? 'Only the owner can change the farm profile.' : error.message)
       toast.success('Farm profile saved')
       await reload()
@@ -104,6 +107,7 @@ export default function FarmProfile() {
           )
         }
       />
+      {/* Read-only for anyone who can't edit settings, and while saving. */}
       <fieldset disabled={!editable || saving} className="contents">
         <div className="flex flex-col gap-4 lg:flex-row">
           <Card className="min-w-0 flex-1 gap-4 p-5">
@@ -168,6 +172,7 @@ export default function FarmProfile() {
               {(id) => (
                 <AutoInput
                   id={id}
+                  // P- numbers money in; PP- (money out) has its own sequence, so leave those out.
                   value={`S-${String(nextNumber(sales.map((s) => s.receipt))).padStart(4, '0')} sales · P-${String(nextNumber(payments.filter((p) => !p.ref.startsWith('PP-')).map((p) => p.ref))).padStart(4, '0')} payments · PF/PM/PB purchases`}
                 />
               )}
@@ -185,6 +190,7 @@ export default function FarmProfile() {
   )
 }
 
+/** A settings card's title with an optional short note beside it. */
 export function SectionTitle({ title, note }: { title: string; note?: string }) {
   return (
     <div className="flex flex-wrap items-baseline gap-x-2">

@@ -28,8 +28,10 @@ import { useCurrentUser } from '../data/sessionContext'
 const DIRECTIONS = ['Received', 'Paid out'] as const
 const PERIODS = ['This week', 'This month', 'All time'] as const
 const METHODS = ['All methods', 'Cash', 'Transfer', 'POS'] as const
+/** How each stored payment method is shown. */
 const methodLabel = { cash: 'Cash', transfer: 'Transfer', POS: 'POS' }
 
+/** Payments received from customers or paid to suppliers outside a sale or purchase, with correct and void actions. */
 export default function Payments() {
   const trade = useTrade()
   const { payments, customers, suppliers } = trade
@@ -40,10 +42,12 @@ export default function Payments() {
   const [recording, setRecording] = useState(false)
   const [acting, setActing] = useState<{ kind: 'edit' | 'void'; ref: string } | null>(null)
   const user = useCurrentUser()
+  // The stored row, needed to decide who may correct this payment.
   const rowOf = (p: Payment) => trade.history.payments.find((x) => x.ref === p.ref)
 
   const isIn = direction === 'Received'
   const actingPayment = acting ? payments.find((p) => p.ref === acting.ref) : undefined
+  // Received payments come from customers; paid-out ones go to suppliers.
   const party = (p: Payment) =>
     isIn ? customers.find((c) => c.id === p.partyId) : suppliers.find((s) => s.id === p.partyId)
   const q = query.trim().toLowerCase()
@@ -108,6 +112,7 @@ export default function Payments() {
         <SearchInput label="Search customer or reference" placeholder="Search customer or reference" value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>
 
+      {/* KPI row */}
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
         {paymentKpis(trade).map((kpi) => (
           <KpiCard key={kpi.label} kpi={kpi} />
@@ -126,6 +131,7 @@ export default function Payments() {
           rowKey={(p) => p.ref}
           actionsWidth={56}
           rowActions={(p) => {
+            // Correcting depends on the role and the record; voiding is for roles allowed to void payments.
             const items = [
               ...(canEditRecord(user, 'payments', rowOf(p)) ? [{ label: 'Correct payment…', onSelect: () => setActing({ kind: 'edit', ref: p.ref }) }] : []),
               ...(canVoidRecord(user, 'payments') ? [{ label: 'Void payment…', danger: true, onSelect: () => setActing({ kind: 'void', ref: p.ref }) }] : []),

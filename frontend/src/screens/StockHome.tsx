@@ -30,11 +30,13 @@ export default function StockHome() {
     .sort()
     .at(-1)
   const countNote = lastCount ? `last count ${daysFrom(lastCount, todayISO())} days ago` : 'no count recorded yet'
+  // Days of cover = bags in the store ÷ bags used per day; null for a feed no pen is eating now.
   const feed = feedTypes.map((f) => {
     const bags = stockOf(f.name, f.bags)
     return { ...f, bags, daysOfCover: f.bagsPerDay ? Math.floor(bags / f.bagsPerDay) : null }
   })
   const meds = medications.map((m) => ({ ...m, stock: stockOf(m.name, m.stock) })).map((m) => ({ ...m, status: medicationStatus(m) }))
+  // Feed is low when it covers no more than the farm's low-stock days; medication when its status warns.
   const lowFeed = feed.filter((f) => f.daysOfCover !== null && f.daysOfCover <= farmSettings.lowStockDays).length
   const lowMeds = meds.filter((m) => m.status.tone === 'warning').length
   const low = lowFeed + lowMeds
@@ -50,11 +52,13 @@ export default function StockHome() {
       <ReorderRequests canDecide={false} />
 
 
+      {/* Quick actions */}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <QuickAction href="/deliveries" icon={<PackageCheck size={22} strokeWidth={1.5} />} title="Receive a delivery" detail={`${orders.length} waiting`} />
         <QuickAction href="/inventory/count" icon={<Scale size={22} strokeWidth={1.5} />} title="Weekly count" detail="Feed, eggs and medication" />
       </div>
 
+      {/* Feed tiles, one per feed type */}
       <section className="flex flex-col gap-3">
         <h2 className="flex items-center gap-1.5 type-h3 text-fg-primary">
           Feed in the store
@@ -82,6 +86,7 @@ export default function StockHome() {
         </div>
       </section>
 
+      {/* Medication stock and orders on the way */}
       <div className="flex flex-col gap-6 lg:flex-row">
         <Card className="min-w-0 flex-1">
           <CardHeader title="Medication" info={`Stock: ${explain.medicationOnHand()} ${explain.medicationStatus()}`} action={{ label: 'Open', to: '/inventory/medication' }} />
@@ -121,6 +126,7 @@ export default function StockHome() {
   )
 }
 
+/** A large tap target linking to a common store-keeper task. */
 function QuickAction({ href, icon, title, detail }: { href: string; icon: ReactNode; title: string; detail: string }) {
   return (
     <Link

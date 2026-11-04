@@ -22,6 +22,7 @@ export function ReorderRequests({ canDecide, onRecordPurchase }: Props) {
   const { open, error, decide } = useReorderRequests()
   // A second tap while saving would settle a request twice.
   const [saving, setSaving] = useState(false)
+  // If the requests can't be loaded, say so rather than hide the card.
   if (error) return <p className="type-body-sm text-fg-warning">{error}</p>
   if (!open.length) return null
 

@@ -23,8 +23,10 @@ import { SettingsHeader } from './SettingsHeader'
 
 /** Built-in roles by their label; custom roles by their id until the roles list loads. */
 const roleName = (role: string) => roleLabels[role as StaffMember['role']] ?? role.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase())
+/** Pen ids as a readable list, e.g. "Pen 1, Pen 3". */
 const penText = (ids: number[]) => (ids.length === 0 ? 'no pens' : ids.map((id) => farmPens.find((p) => p.id === id)?.name ?? `Pen ${id}`).join(', '))
 
+/** Staff: everyone with a login, their role and pens, with add, assign pens, reset password, change role and deactivate. */
 export default function Staff() {
   const toast = useToast()
   const { reload } = useTrade()
@@ -47,6 +49,7 @@ export default function Staff() {
   const q = query.trim().toLowerCase()
   const rows = (key === 'Active' ? active : key === 'Deactivated' ? inactive : staff).filter((p) => !q || p.name.toLowerCase().includes(q))
 
+  // Deactivating also signs them out (done by the server action).
   const setActive = async (p: StaffMember, value: boolean) => {
     if (saving) return
     setSaving(true)
@@ -107,7 +110,9 @@ export default function Staff() {
                   : p.role === 'pen-attendant-all'
                     ? [{ label: 'Works on all pens', disabled: true, onSelect: () => {} }]
                     : []),
+                // The farm manager may only reset passwords for attendants and the store keeper.
                 { label: 'Reset password…', onSelect: () => setResetting(p), disabled: !p.active || (!isOwner && !['pen-attendant', 'pen-attendant-all', 'store-keeper'].includes(p.role)) },
+                // Nobody changes their own role or deactivates themselves.
                 ...(isOwner && p.id !== myId ? [{ label: 'Change role…', disabled: !p.active, onSelect: () => setChangingRole(p) }] : []),
                 ...(isOwner
                   ? [
@@ -133,6 +138,7 @@ export default function Staff() {
   )
 }
 
+/** Add a staff member with a phone-number login, a first password, a role and (for attendants) pens. */
 function AddStaffModal({ onClose }: { onClose: () => void }) {
   const toast = useToast()
   const { reload } = useTrade()
@@ -222,6 +228,7 @@ function AddStaffModal({ onClose }: { onClose: () => void }) {
   )
 }
 
+/** Choose which pens a pen attendant works on. Only the differences are written. */
 function AssignPensModal({ person, onClose }: { person: StaffMember; onClose: () => void }) {
   const toast = useToast()
   const { reload } = useTrade()
@@ -281,6 +288,7 @@ function AssignPensModal({ person, onClose }: { person: StaffMember; onClose: ()
   )
 }
 
+/** Set a new password for someone; the old one stops working at once. */
 function ResetPasswordModal({ person, onClose }: { person: StaffMember; onClose: () => void }) {
   const toast = useToast()
   const [password, setPassword] = useState('')
@@ -322,6 +330,7 @@ function ResetPasswordModal({ person, onClose }: { person: StaffMember; onClose:
   )
 }
 
+/** Give someone a different role, picked from every role including custom ones. */
 function ChangeRoleModal({ person, onClose }: { person: StaffMember; onClose: () => void }) {
   const { reload } = useTrade()
   const [roles, setRoles] = useState<{ id: string; name: string; description: string }[] | null>(null)
@@ -329,6 +338,7 @@ function ChangeRoleModal({ person, onClose }: { person: StaffMember; onClose: ()
   // A second tap while saving would change the role twice.
   const [busy, setBusy] = useState(false)
 
+  // Roles are read fresh so custom roles show up.
   useEffect(() => {
     let cancelled = false
     void createClient()

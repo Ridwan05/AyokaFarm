@@ -12,6 +12,7 @@ import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { createInterface } from 'node:readline'
 
+// supabase-js is installed in the frontend, so it is loaded from there.
 const require = createRequire(new URL('../../frontend/package.json', import.meta.url))
 const { createClient } = require('@supabase/supabase-js')
 
@@ -30,8 +31,10 @@ if (!env.NEXT_PUBLIC_SUPABASE_URL || !env.SUPABASE_SECRET_KEY) {
 }
 const db = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SECRET_KEY, { auth: { autoRefreshToken: false, persistSession: false } })
 
-// Same rules as frontend/src/lib/phone.ts.
+// Same rules as frontend/src/lib/phone.ts. Staff sign in with a phone number, stored as a made-up
+// email address on this domain.
 const LOGIN_DOMAIN = 'phone.ayokafarm.app'
+/** A Nigerian mobile number as 234XXXXXXXXXX, or null if it isn't one. */
 function normalisePhone(input) {
   let d = input.replace(/\D/g, '')
   if (d.startsWith('0') && d.length === 11) d = '234' + d.slice(1)
@@ -48,6 +51,7 @@ const ask = (q) => new Promise((resolve) => rl.question(q, resolve))
 function askHidden(q) {
   return new Promise((resolve) => {
     const write = rl._writeToOutput
+    // Echo the prompt as is, then a star for each key typed.
     rl._writeToOutput = (s) => (s.includes(q) ? write.call(rl, s) : write.call(rl, '*'.repeat(s.length ? 1 : 0)))
     rl.question(q, (answer) => {
       rl._writeToOutput = write
@@ -60,6 +64,7 @@ function askHidden(q) {
 /** Multi-row inserts: columns a row leaves out take their default rather than null. */
 const OPTS = { defaultToNull: false }
 
+/** The data from a Supabase result, or stop with an error saying what failed. */
 function check(result, what) {
   if (result.error) throw new Error(`${what}: ${result.error.message}`)
   return result.data
@@ -84,6 +89,7 @@ async function createAccount({ name, phone, password, role, demo = false }) {
 
 // ── Owner ───────────────────────────────────────────────────────────
 
+/** Makes sure an Owner exists: reuses or repairs an existing one, else asks for the details. Returns its id. */
 async function setupOwner() {
   const { data: existing } = await db.from('profiles').select('id, full_name').eq('role_id', 'owner').limit(1)
   if (existing?.length) {
@@ -112,10 +118,16 @@ async function setupOwner() {
 
 // ── Demo farm ───────────────────────────────────────────────────────
 
+// The farm day is Lagos time, so demo dates line up with what the app calls today.
 const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date())
 const daysAgo = (n) => new Date(Date.parse(today) - n * 86_400_000).toISOString().slice(0, 10)
+/** name → id for a lookup list (bird types, feed types, products…). */
 const ids = async (table, key = 'name') => new Map(check(await db.from(table).select(`id, ${key}`), table).map((r) => [r[key], r.id]))
 
+/**
+ * Loads a week of demo farm data: staff, pens, flocks, customers, suppliers, opening stock,
+ * purchases, daily entries, sales, payments and expenses. Skips if daily entries already exist.
+ */
 async function setupDemo(ownerId) {
   const { count } = await db.from('production_records').select('id', { count: 'exact', head: true })
   if (count) {
@@ -123,8 +135,10 @@ async function setupDemo(ownerId) {
     return
   }
   // A run that stopped part-way left some rows behind; reuse them rather than duplicate them.
+  // (Only staff and the tables loaded through ensure() are matched; the records below are inserted fresh.)
   const existing = async (table, key) => new Map(check(await db.from(table).select(`id, ${key}`), table).map((r) => [r[key], r.id]))
   const { data: userList } = await db.auth.admin.listUsers({ perPage: 1000 })
+  // A fresh random password for every demo account on each run, printed once at the end.
   const demoPassword = `demo-${randomBytes(4).toString('hex')}`
   console.log('\nLoading the demo farm…')
 
@@ -137,6 +151,7 @@ async function setupDemo(ownerId) {
     ['Kemi Adewale (demo)', '07000000005', 'pen_attendant'],
     ['Yemi Okafor (demo)', '07000000006', 'pen_attendant_all'],
   ]
+  // First name → profile id. Accounts left from an earlier run get the new password and their role back.
   const staff = {}
   for (const [name, phone, role] of people) {
     const normalised = normalisePhone(phone)
@@ -197,6 +212,7 @@ async function setupDemo(ownerId) {
     })),
   )
 
+  // Musa covers Pens 3–5 and Kemi Pen 2; Yemi is the all-pens attendant, so needs no rows.
   check(
     await db.from('staff_pens').upsert(
       [...['Pen 3', 'Pen 4', 'Pen 5'].map((p) => ({ profile_id: staff.Musa, pen_id: pen[p] })), { profile_id: staff.Kemi, pen_id: pen['Pen 2'] }],
@@ -254,6 +270,7 @@ async function setupDemo(ownerId) {
   )
 
   // Seven days of production, oldest first, so bird counts carry forward. Today is left for the attendants.
+  // Feed a bird a day in grams by age, and the feed for that age; bags are 25 kg, with a little day-to-day noise.
   const grams = (layers, weeks) => (layers ? (weeks >= 19 ? 115 : weeks >= 17 ? 95 : 68) : [20, 45, 75, 110, 145, 165][Math.min(weeks, 6) - 1])
   const feedFor = (layers, weeks) => (layers ? (weeks >= 17 ? 'Layer mash' : 'Grower mash') : weeks >= 4 ? 'Broiler finisher' : 'Broiler starter')
   const live = Object.fromEntries(flockSpec.map(([p, , , birds]) => [p, birds]))
@@ -285,6 +302,7 @@ async function setupDemo(ownerId) {
 
   // Sales, payments and expenses.
   const eggs = product.get('Eggs · crate of 30')
+  /** An egg sale to a regular customer `back` days ago, paid by transfer if anything was paid. */
   const sale = (back, who, crates, price, paid) => ({ sold_on: daysAgo(back), customer_id: customer[who], product_id: eggs, quantity: crates, unit_price: price, amount_paid: paid, payment_method: paid ? 'transfer' : null, recorded_by: staff.Funmi })
   check(
     await db.from('sales').insert([
@@ -310,6 +328,7 @@ async function setupDemo(ownerId) {
       { spent_on: daysAgo(6), category_id: category.get('Labour'), description: 'Casual labour — pen cleaning (demo)', amount: 25000, amount_paid: 25000, payment_method: 'cash', recorded_by: staff.Funmi },
       { spent_on: daysAgo(3), category_id: category.get('Fuel & power'), description: 'Diesel for the generator (demo)', amount: 48000, amount_paid: 48000, payment_method: 'transfer', recorded_by: staff.Funmi },
       { spent_on: daysAgo(2), category_id: category.get('Vet services'), description: 'Vet visit — Pen 2 (demo)', amount: 30000, amount_paid: 30000, payment_method: 'transfer', pen_id: pen['Pen 2'], recorded_by: staff.Kemi },
+      // Part-paid supplier expense: the unpaid ₦40,000 adds to what we owe the supplier.
       { spent_on: daysAgo(1), category_id: category.get('Equipment'), description: '20 egg crates (demo)', amount: 60000, amount_paid: 20000, payment_method: 'cash', supplier_id: supplier['Ibadan Crates & Cages'], recorded_by: staff.Funmi },
     ], OPTS),
     'expenses',

@@ -31,7 +31,9 @@ import { formatLongDate, formatNaira, formatNumber, greeting } from '../lib/form
 import { Presence } from '../components/ui/Overlay'
 import { InfoTip } from '../components/ui/InfoTip'
 
+// The chase table shows only the biggest few balances; the rest are on Customers.
 const CHASE_ROWS = 5
+/** Naira shown in thousands, for the KPI tiles. */
 const thousands = (n: number) => String(Math.round(n / 1000))
 
 type ChaseRow = { c: Customer; balance: number; bills: Bill[] }
@@ -48,20 +50,25 @@ export default function AccountsHome() {
   const today = trade.sales.filter((s) => (s.iso ?? '') === todayIso)
   const day = (iso: string) => salesIn(trade.sales, { from: iso, to: iso })
   const soldOn = (iso: string) => day(iso).reduce((n, s) => n + amountOf(s), 0)
+  // Cap each payment at the sale amount so an overpayment doesn't count as money collected for that day.
   const collectedOn = (iso: string) => day(iso).reduce((n, s) => n + Math.min(s.paid, amountOf(s)), 0)
   const days = lastDays(8)
   const yesterday = addDays(todayIso, -1)
   const overdue = overdueToSuppliers(trade)
   const who = approvers(trade)
+  // Sales under the minimum price wait for owner/manager approval and don't count as sold until approved.
   const approved = today.filter((s) => !s.pendingApproval)
   const waiting = today.filter((s) => s.pendingApproval)
   const sold = approved.reduce((n, s) => n + amountOf(s), 0)
   const collected = approved.reduce((n, s) => n + s.paid, 0)
+  // Net of any customer credit (a negative balance), so it can be lower than the sum of debts.
   const owed = trade.customers.reduce((n, c) => n + trade.customerBalance(c.id), 0)
   const owing = trade.customers.filter((c) => trade.customerBalance(c.id) > 0)
   const suppliers = trade.suppliers.map((s) => ({ s, balance: trade.supplierBalance(s.id) }))
   const weOwe = suppliers.filter((x) => x.balance > 0)
+  // A negative supplier balance means we paid ahead and they hold credit for us.
   const credit = suppliers.filter((x) => x.balance < 0)
+  // The first sale waiting for approval is shown in the banner.
   const first = waiting[0]
   const firstProduct = first && products.find((p) => p.id === first.productId)!
   const firstCustomer = first && trade.customers.find((c) => c.id === first.customerId)
@@ -87,6 +94,7 @@ export default function AccountsHome() {
       align: 'right',
       width: 124,
       render: (r) => {
+        // Open bills come oldest first; past the farm's overdue limit turns red.
         const d = daysBetween(r.bills[0].date)
         return <NumberCell tone={d > farmSettings.overdueDebtDays ? 'danger' : 'default'}>{d} days</NumberCell>
       },
@@ -131,12 +139,14 @@ export default function AccountsHome() {
         </Alert>
       )}
 
+      {/* KPI row */}
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
         {kpis.map((kpi) => (
           <KpiCard key={kpi.label} kpi={kpi} />
         ))}
       </div>
 
+      {/* Customers to chase, biggest balance first */}
       <Card>
         <CardHeader title="To chase" meta={<span className="type-body-sm text-fg-tertiary">Biggest balance first · WhatsApp reminders only where the customer opted in</span>} action={{ label: 'All customers', to: '/customers' }} />
         <Table
@@ -156,6 +166,7 @@ export default function AccountsHome() {
         />
       </Card>
 
+      {/* Supplier bills and today's receipts, side by side on wide screens */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         <Card className="min-w-0 flex-1 px-6 pt-5 pb-3">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pb-2">
@@ -223,6 +234,7 @@ export default function AccountsHome() {
   )
 }
 
+/** Props for a single row in the bills or sales list. */
 type ListRowProps = {
   icon: typeof Truck
   title: string
@@ -234,6 +246,7 @@ type ListRowProps = {
   last?: boolean
 }
 
+/** A tappable list row: icon, title, detail line and amount. Links when `to` is given, otherwise a button. */
 function ListRow({ icon: Icon, title, detail, amount, amountTone = 'text-fg-primary', to, onClick, last }: ListRowProps) {
   const inner = (
     <>

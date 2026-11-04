@@ -2,7 +2,9 @@ import { Banknote, ChevronRight, Clock, HeartPulse, Package, Wheat, type LucideI
 import Link from 'next/link'
 import { cn } from '../../lib/cn'
 
+/** What an alert is about; picks the icon on its row. */
 export type AlertKind = 'mortality' | 'debt' | 'feed' | 'stock' | 'missing-entry'
+/** How urgent an alert is; picks the colour of its icon tile. */
 export type AlertTone = 'danger' | 'warning' | 'info'
 
 const icons: Record<AlertKind, LucideIcon> = {

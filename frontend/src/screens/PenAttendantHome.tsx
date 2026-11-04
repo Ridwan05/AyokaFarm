@@ -29,11 +29,14 @@ export default function PenAttendantHome() {
   const user = useCurrentUser()
   const { productionRecords, expenses, catalog } = useTrade()
   const [addingExpense, setAddingExpense] = useState(false)
+  // Only the pens this attendant is assigned to (all pens for the all-pens attendant).
   const mine = pensToday.filter((p) => canSeePen(user, p.id)).map((p) => withTodaysRecord(p, productionRecords))
+  // A pen with no deaths figure yet has no entry for today.
   const due = mine.filter((p) => p.died === null)
   // Read the clock once, not on every render.
   const [hello] = useState(() => greeting(new Date()))
   const firstName = user.name.split(' ')[0]
+  // Expenses are tagged with the adder's first name, so match on that.
   const myExpenses = expenses.filter((e) => e.addedBy === firstName && e.date === TODAY_ISO)
 
   return (
@@ -53,6 +56,7 @@ export default function PenAttendantHome() {
         }
       />
 
+      {/* One card per pen: today's figures once recorded, otherwise a button to record */}
       <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {mine.map((p) => {
           const pen = pens.find((x) => x.id === p.id)!
@@ -88,6 +92,7 @@ export default function PenAttendantHome() {
                   <Stat
                     label="Feed vs exp."
                     value={p.feedVsExpected === null ? '—' : formatSignedPct(p.feedVsExpected)}
+                    // Flag feed use outside the farm's allowed variance either way.
                     warn={p.feedVsExpected !== null && Math.abs(p.feedVsExpected) > farmSettings.feedVariancePct}
                     info={explain.feedVsExpected()}
                   />
@@ -133,6 +138,7 @@ export default function PenAttendantHome() {
   )
 }
 
+/** One small figure with its label and an info tip explaining how it's worked out. */
 function Stat({ label, value, warn, info }: { label: string; value: string; warn?: boolean; info: string }) {
   return (
     <div className="flex min-w-0 flex-col gap-0.5">

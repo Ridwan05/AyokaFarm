@@ -9,10 +9,12 @@ export function customerStatus(bills: Bill[]): { tone: Tone; label: string } {
   const days = daysBetween(bills[0].date)
   const labels = agingLabels()
   if (days > farmSettings.overdueDebtDays) return { tone: 'danger', label: 'Overdue' }
+  // The warning band starts at 31 days, or earlier when the overdue limit is under 30.
   if (days > Math.min(30, farmSettings.overdueDebtDays)) return { tone: 'warning', label: labels.days31to60 }
   return { tone: 'neutral', label: 'Owing' }
 }
 
+/** Age in days of the oldest unpaid bill, or null when nothing is owed. Bills come oldest first. */
 export const oldestDays = (bills: Bill[]) => (bills.length ? daysBetween(bills[0].date) : null)
 
 /** Legend for the ageing bar (labels follow the overdue limit in Settings). */

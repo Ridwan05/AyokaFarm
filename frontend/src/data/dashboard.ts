@@ -4,6 +4,7 @@ import type { AlertKind, AlertTone } from '../features/alerts/AlertRow'
 // Shapes shared by the dashboard and production screens. The figures are calculated from
 // the farm's records (metrics.ts); pensToday is filled in place when the records load (remote.ts).
 
+/** An alert as a short dashboard row (see alertRow in farmViews.ts). */
 export type Alert = {
   id: string
   kind: AlertKind
@@ -17,6 +18,7 @@ export type Alert = {
 /** Days of cover that fill the bar. */
 export const FEED_COVER_FULL_DAYS = 15
 
+/** One pen's row in today's production table. */
 export type PenToday = {
   id: number
   initials: string

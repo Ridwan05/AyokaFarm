@@ -18,11 +18,14 @@ import { SettingsHeader } from './SettingsHeader'
 
 const ACTIONS = ['view', 'add', 'edit', 'delete'] as const
 type Action = (typeof ACTIONS)[number]
+/** One module's access for a role: a level per action, plus a short note on what it covers. */
 type Perm = Record<Action, AccessLevel> & { scope: string }
 type RoleRow = Tables<'roles'> & { permissions: Record<AppModule, Perm> }
 
+/** Tapping a cell cycles None → Own → All → None. */
 const NEXT: Record<AccessLevel, AccessLevel> = { none: 'own', own: 'all', all: 'none' }
 const LEVEL_LABEL: Record<AccessLevel, string> = { none: 'None', own: 'Own', all: 'All' }
+/** A module with no permission row is hidden from the role. */
 const HIDDEN: Perm = { view: 'none', add: 'none', edit: 'none', delete: 'none', scope: 'Hidden' }
 
 // Non-managers can change their own records for this many days (farm_settings.edit_window_days).
@@ -33,8 +36,10 @@ const EDIT_WINDOWS = [
   { value: '7', label: 'Up to a week after' },
 ]
 
+/** True when the role can't do anything in the module. */
 const isHidden = (p: Perm) => ACTIONS.every((a) => p[a] === 'none')
 
+/** Every role with its permissions for each module, straight from the database. */
 async function loadRoles(): Promise<RoleRow[]> {
   const db = createClient()
   const [{ data: roles, error }, { data: perms, error: permsError }] = await Promise.all([
@@ -53,10 +58,15 @@ async function loadRoles(): Promise<RoleRow[]> {
   }))
 }
 
+/**
+ * Roles & permissions: what each role can view, add, edit and delete per module, the edit window for
+ * own records, and new roles. Only the owner edits; the owner role itself can't be changed.
+ */
 export default function Roles() {
   const user = useCurrentUser()
   const { catalog, settings, reload } = useTrade()
   const editable = canEditSettings(user)
+  // What's saved, and the working copy being edited; the difference is what Save writes.
   const [saved, setSaved] = useState<RoleRow[] | null>(null)
   const [roles, setRoles] = useState<RoleRow[] | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -121,6 +131,7 @@ export default function Roles() {
   const changedModules = modules.filter((m) => JSON.stringify(role.permissions[m.id]) !== JSON.stringify(before?.permissions[m.id]))
   const windowChanged = editWindow !== String(settings?.edit_window_days ?? 0)
   const dirty = changedModules.length > 0 || windowChanged
+  // The edit window only matters for roles that edit their own production entries.
   const showsWindow = role.permissions.production.edit === 'own' || role.id.startsWith('pen_attendant')
 
   const update = (m: AppModule, change: (p: Perm) => Perm) =>
@@ -295,6 +306,7 @@ export default function Roles() {
   )
 }
 
+/** One permission cell: shows the level and cycles it when tapped. */
 function LevelButton({ value, disabled, label, onCycle }: { value: AccessLevel; disabled: boolean; label: string; onCycle: () => void }) {
   return (
     <button
@@ -315,12 +327,14 @@ function LevelButton({ value, disabled, label, onCycle }: { value: AccessLevel; 
   )
 }
 
+/** Create a role as a copy of another role's permissions. */
 function NewRoleModal({ roles, onClose, onCreated }: { roles: RoleRow[]; onClose: () => void; onCreated: (id: string) => void }) {
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [copyFrom, setCopyFrom] = useState(roles.find((r) => r.id === 'pen_attendant')?.id ?? roles[0].id)
   // A second tap while saving would try to create the role twice.
   const [busy, setBusy] = useState(false)
+  // The role id is the name in lower case with underscores (and can't start with a digit).
   const id = name
     .trim()
     .toLowerCase()

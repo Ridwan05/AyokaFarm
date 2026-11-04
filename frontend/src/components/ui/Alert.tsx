@@ -25,9 +25,11 @@ type AlertProps = {
   onDismiss?: () => void
 }
 
+/** Coloured banner for a notice, warning or pending approval. */
 export function Alert({ tone = 'info', title, children, action, actions, icon, compact, onDismiss }: AlertProps) {
   const t = tones[tone]
   const Icon = icon ?? t.Icon
+  // Buttons on the right only fit beside a single line of text.
   compact = compact || !!actions
   return (
     <div role="status" className={cn('flex gap-3 rounded-lg border', compact ? 'items-center px-4 py-3' : 'items-start p-4', t.box)}>

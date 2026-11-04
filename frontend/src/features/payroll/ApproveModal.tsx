@@ -25,6 +25,7 @@ export function ApproveModal({ runId, period, staff, totals, save, onClose }: Pr
     // A second tap while approving would post the month twice.
     if (busy) return
     setBusy(true)
+    // The database locks the month, posts the Labour expense and books loan repayments in one step.
     const ok = await save((db) => db.rpc('approve_payroll', { run_id: runId })).finally(() => setBusy(false))
     if (!ok) return
     toast(`${monthLabel(period)} approved and posted to Expenses`)

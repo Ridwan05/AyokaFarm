@@ -7,6 +7,8 @@ import { farmSettings } from '../../data/farmSettings'
 // A clean A4 page for receipts and statements. On screen it shows inside the app with a Print
 // button; when printed (or saved as PDF from the print dialog) only the sheet is printed.
 
+// Hide everything, then show only the sheet and pin it to the top-left of the page,
+// so the app's sidebar and buttons never reach the paper.
 const PRINT_CSS = `
 @media print {
   @page { size: A4; margin: 14mm; }
@@ -26,7 +28,9 @@ type Props = {
   children: ReactNode
 }
 
+/** A printable A4 sheet with the farm's letterhead from Settings, the document kind and its reference. */
 export function PrintSheet({ kind, docRef, children }: Props) {
+  // The trading name leads when there is one; the farm name shows under it.
   const name = farmSettings.tradingAs ?? farmSettings.farmName
   const contact = [farmSettings.address, farmSettings.phone, farmSettings.email].filter(Boolean)
   return (

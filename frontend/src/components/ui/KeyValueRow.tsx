@@ -13,6 +13,7 @@ type KeyValueRowProps = {
   onClick?: () => void
 }
 
+/** One label–value line in a summary card; `strong` styles a total with a rule above it. */
 export function KeyValueRow({ label, children, calculated, strong, onClick }: KeyValueRowProps) {
   const tip = calculated ? <InfoTip label={label}>{calculated}</InfoTip> : null
   if (strong) {

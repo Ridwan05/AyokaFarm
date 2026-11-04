@@ -6,6 +6,7 @@ import { LinkTabs } from '../../components/ui/Tabs'
 import { useCurrentUser } from '../../data/sessionContext'
 import { accessOf } from '../../lib/access'
 
+/** Reports every role with report access can open. */
 const tabs = [
   { label: 'Profit & loss', to: '/reports' },
   { label: 'Daily production', to: '/reports/production' },

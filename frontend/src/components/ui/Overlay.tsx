@@ -17,6 +17,7 @@ type OverlayProps = {
   footer?: ReactNode
 }
 
+// Outside <Presence> an overlay is always "present" and needs no exit callback.
 const PresenceContext = createContext({ present: true, onExited: () => {} })
 
 /**
@@ -25,6 +26,7 @@ const PresenceContext = createContext({ present: true, onExited: () => {} })
  */
 export function Presence({ children }: { children: ReactNode }) {
   const [last, setLast] = useState<ReactNode>(null)
+  // Keep the last children so they can stay on screen while the closing animation plays.
   if (children && children !== last) setLast(children)
   const present = Boolean(children)
   if (!present && !last) return null
@@ -52,6 +54,7 @@ function CloseButton({ onClose }: { onClose: () => void }) {
   )
 }
 
+/** Open state as <Presence> sees it, plus whether to use the desktop dialog or the phone sheet. */
 function useOverlay(open: boolean) {
   const presence = useContext(PresenceContext)
   const wide = useMediaQuery('(min-width: 1024px)')
@@ -85,6 +88,7 @@ function BottomSheet({ open, onClose, onExited, title, subtitle, children, foote
   )
 }
 
+/** Desktop dialog: a centred modal or a right-hand panel. */
 function DialogShell({
   open,
   onClose,
@@ -102,6 +106,7 @@ function DialogShell({
         <Dialog.Content
           aria-describedby={undefined}
           onOpenAutoFocus={(e) => focusFirstField(e, true)}
+          // Only this element's own exit animation counts, not one bubbling up from a child.
           onAnimationEnd={(e) => e.target === e.currentTarget && !open && onExited()}
           className={cn(
             'fixed z-50 flex flex-col bg-surface shadow-lg outline-none',

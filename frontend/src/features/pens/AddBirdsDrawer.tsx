@@ -32,7 +32,9 @@ export function AddBirdsDrawer({ flock, onClose }: Props) {
 
   const totals = sourceTotals(rows, choices)
   const problem = sourceError(rows, choices)
+  // Top-ups come after the placement day (first-day birds are edited on the flock) and not in the future.
   const dateError = !date ? 'Pick a date' : date <= flock.placed_on ? 'Must be after the flock was placed' : date > today ? 'That’s in the future' : undefined
+  // Only the owner may add birds that weren't bought, so others need a batch in bird stock.
   const noStock = choices.length === 0 && !owner
 
   const submit = async (e: FormEvent) => {

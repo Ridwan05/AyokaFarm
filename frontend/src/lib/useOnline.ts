@@ -9,5 +9,5 @@ const subscribe = (cb: () => void) => {
   }
 }
 
-/** Whether the browser currently has a connection. */
+/** Whether the browser currently has a connection. Assumed online during server rendering. */
 export const useOnline = () => useSyncExternalStore(subscribe, () => navigator.onLine, () => true)

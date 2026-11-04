@@ -14,6 +14,7 @@ import { Avatar } from '../ui/Avatar'
 import { NavLink } from '../ui/NavLink'
 import { canSee, navFor, settingsItem, type NavItem } from './nav'
 
+/** One sidebar link with its icon, highlighted on the current page. */
 function NavRow({ item, onNavigate }: { item: NavItem; onNavigate?: () => void }) {
   const Icon = item.icon
   return (
@@ -80,9 +81,11 @@ function UserCard({ onNavigate }: { onNavigate?: () => void }) {
   )
 }
 
+/** Farm name, the role's nav links, Settings and the user card; shared by the sidebar and phone menu. */
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const { user } = useSession()
   const role = user.role
+  // Someone with 'own' admin access only manages staff, so Settings opens the staff list for them.
   const settings = { ...settingsItem, to: settingsHomeFor(user) }
   return (
     <>
@@ -99,6 +102,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
       {/* Only the nav scrolls, so the account and Settings stay in reach on short phone screens. */}
       <nav aria-label="Main" className="-mx-1 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-1 pb-4">
         {navFor(role).map((group, i) => {
+          // Hide links the role can't open, and a group with none left.
           const items = group.items.filter((item) => canSee(item, user))
           if (!items.length) return null
           return (

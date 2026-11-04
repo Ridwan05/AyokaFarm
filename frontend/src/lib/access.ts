@@ -50,6 +50,7 @@ const areas: { prefix: string; module: Area; label: string; group: string }[] = 
   { prefix: '/go-live', module: 'admin', label: 'Go-live setup', group: 'Settings' },
 ]
 
+// The most specific area wins, so /reports/income is Finance rather than Reports.
 const areaFor = (path: string) => areas.filter((a) => path === a.prefix || path.startsWith(a.prefix + '/')).sort((a, b) => b.prefix.length - a.prefix.length)[0]
 
 /** The user's access level for a module and action, from Roles & permissions. */
@@ -58,6 +59,7 @@ export const accessOf = (user: User, module: AppModule, action: keyof ModuleAcce
 /** True when the role allows the action at all (own or all). */
 export const can = (user: User, module: AppModule, action: keyof ModuleAccess = 'view') => accessOf(user, module, action) !== 'none'
 
+/** Whether the user can open an area, including the areas that aren't permission modules of their own. */
 function canView(user: User, module: Area) {
   // Receiving deliveries: the store keeper, and anyone who can adjust stock (a farm without a store keeper still receives).
   if (module === 'deliveries') return accessOf(user, 'purchases') === 'own' || can(user, 'inventory', 'add')
@@ -79,6 +81,10 @@ const penInPath = (path: string) => {
   return m ? Number(m[1]) : null
 }
 
+/**
+ * Whether the user may open a page. Mirrors Roles & permissions for navigation only —
+ * RLS is still what keeps data out of reach.
+ */
 export function canAccess(path: string, user: User) {
   const { role } = user
   // Every role has a home: the dashboard, or its own start page for the narrower roles.

@@ -18,6 +18,7 @@ type Props = {
 }
 
 const METHODS = ['Transfer', 'Cash', 'POS'] as const
+// The payment method as the database stores it.
 const DB_METHOD = { Transfer: 'transfer', Cash: 'cash', POS: 'pos' } as const
 
 /** Record that net pay went out for the selected payslips of an approved month. */
@@ -32,6 +33,7 @@ export function PayModal({ lineIds, total, save, onClose }: Props) {
     e.preventDefault()
     // A second tap while saving would record the payment twice.
     if (busy) return
+    // Pay can't be marked as going out on a future day.
     if (!date || date > todayISO()) return
     setBusy(true)
     const ok = await save((db) =>

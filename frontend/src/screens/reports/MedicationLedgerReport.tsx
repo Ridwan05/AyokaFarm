@@ -22,9 +22,11 @@ import { ReportHeader } from './ReportHeader'
 const FLAT = [0, 0]
 
 const RANGES = ['7 days', '30 days', 'This month', '90 days'] as const
+/** What a stock movement was. A count that added stock is "Counted"; one that took it away is "Written off". */
 type Kind = 'Used' | 'Received' | 'Written off' | 'Counted' | 'Opening'
 const kindTone: Record<Kind, Tone> = { Used: 'neutral', Received: 'success', 'Written off': 'danger', Counted: 'warning', Opening: 'neutral' }
 
+/** One medication stock movement, with the batch balance after it. */
 type Row = {
   id: number
   date: string
@@ -44,8 +46,10 @@ type Row = {
   balance: number
 }
 
+/** A signed quantity with its unit, e.g. "+20 vials" or "−1 vial". */
 const qty = (n: number, unit: string) => `${n > 0 ? '+' : '−'}${formatNumber(Math.abs(n))} ${unit === 'vials' && Math.abs(n) === 1 ? 'vial' : unit}`
 
+/** Columns of the movements table. */
 const columns: Column<Row>[] = [
   { key: 'date', header: 'Date', width: 72, render: (r) => <TextCell>{dm(r.date)}</TextCell> },
   { key: 'med', header: 'Medication', render: (r) => <TextCell tone="primary">{r.medication}</TextCell> },
@@ -67,6 +71,7 @@ const columns: Column<Row>[] = [
   { key: 'by', header: 'By', width: 72, render: (r) => <TextCell>{r.by}</TextCell> },
 ]
 
+/** Medication ledger: every batch received, dose given and count adjusted, cost by pen, and pens in withdrawal. */
 export default function MedicationLedgerReport() {
   const { history, catalog, stockOf } = useTrade()
   const [rangeName, setRangeName] = useState<(typeof RANGES)[number]>('30 days')
@@ -76,6 +81,7 @@ export default function MedicationLedgerReport() {
   const range: Range = rangeName === 'This month' ? period('month', today) : period(rangeName === '7 days' ? '7d' : rangeName === '30 days' ? '30d' : '90d', today)
 
   const meds = new Map(catalog.medications.map((m) => [m.id, m]))
+  // Units are stored singular for vials; show them plural.
   const unitOf = (id: number) => {
     const u = meds.get(id)?.stock_unit ?? ''
     return u === 'vial' ? 'vials' : u
@@ -94,6 +100,7 @@ export default function MedicationLedgerReport() {
     onHand.set(`${m.id}|null`, stockOf(m.name) - batches.reduce((n, b) => n + b.onHand, 0))
   }
 
+  // Movements arrive newest first: each row's balance is what's on hand after it, then undo it for the next (older) row.
   const all: Row[] = history.medMovements.map((x) => {
     const medicationId = x.medication_id!
     const key = `${medicationId}|${x.purchase_id ?? 'null'}`
@@ -109,6 +116,7 @@ export default function MedicationLedgerReport() {
       by = line?.recordedBy.split(' ')[0] ?? '—'
       const days = m?.withdrawal_days ?? 0
       if (days > 0) {
+        // Clear to sell the day after the last withdrawal day.
         const clear = addDays(x.moved_on, days + 1)
         note = clear > today ? `Withdrawal to ${weekdayDayMonth(addDays(clear, -1))}` : `${days}-day withdrawal, ended ${dm(addDays(clear, -1))}`
       }
@@ -126,6 +134,7 @@ export default function MedicationLedgerReport() {
         note = `${p.ref} · ${catalog.suppliers.find((s) => s.id === p.supplier_id)?.short_name ?? catalog.suppliers.find((s) => s.id === p.supplier_id)?.name ?? ''}`
       }
     }
+    // Valued at its batch's unit cost (purchase price ÷ units bought).
     const unitCost = medicationUnitCost(history, medicationId, x.purchase_id)
     return {
       id: x.id,
@@ -182,12 +191,14 @@ export default function MedicationLedgerReport() {
           {dayMonth(range.from)} – {dayMonth(range.to)}
         </span>
       </div>
+      {/* KPI row */}
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
         {kpis.map((k) => (
           <KpiCard key={k.label} kpi={k} />
         ))}
       </div>
 
+      {/* Cost by pen and the withdrawal tracker */}
       <div className="flex flex-col gap-4 lg:flex-row">
         <Card className="min-w-0 flex-1 px-5 pt-4 pb-5">
           <div className="flex items-baseline gap-2 pb-2">
@@ -214,6 +225,7 @@ export default function MedicationLedgerReport() {
           <h2 className="pb-3 type-h3 text-fg-primary">Withdrawal tracker</h2>
           {!inForce.length && <p className="type-body-md text-fg-tertiary">No pen is in a withdrawal period. Eggs and birds from every pen can be sold.</p>}
           {inForce.map((w) => {
+            // Cap at the last day so the bar never runs past full.
             const day = Math.min(w.days, w.dayOf)
             return (
               <div key={w.penId} className="flex flex-col border-b border-line pb-3 last:border-b-0">
@@ -243,6 +255,7 @@ export default function MedicationLedgerReport() {
         </Card>
       </div>
 
+      {/* Every movement in the range */}
       <Card>
         <CardHeader title="Movements" meta={<span className="type-body-sm text-fg-tertiary">Newest first · used first-expiry-first-out</span>} action={{ label: 'Export', onClick: exportRows }} />
         <Table columns={columns} rows={rows} rowKey={(r) => String(r.id)} />

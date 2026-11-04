@@ -9,18 +9,21 @@ import { Providers } from './providers'
 
 const instrumentSerif = Instrument_Serif({ weight: '400', subsets: ['latin', 'latin-ext'], variable: '--font-instrument-serif' })
 
+/** Browser tab title, description and icon for every page. */
 export const metadata: Metadata = {
   title: 'AyokaFarm',
   description: 'Poultry farm records: production, stock, sales and accounts.',
   icons: { icon: '/favicon.svg' },
 }
 
+/** Mobile viewport; the theme colour matches the canvas background. */
 export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   themeColor: '#f7f7f4',
 }
 
+/** Root HTML document: loads the fonts and app-wide providers. */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en-NG" className={cn(GeistSans.variable, GeistMono.variable, instrumentSerif.variable)}>

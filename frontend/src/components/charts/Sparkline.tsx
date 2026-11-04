@@ -4,7 +4,7 @@ type SparklineProps = {
   className?: string
 }
 
-/** Trend line for KPI cards. Scales the series to fill the box. */
+/** Trend line for KPI cards. Scales the series into the top half of the box, leaving room below. */
 export function Sparkline({ values, color, className }: SparklineProps) {
   const w = 100
   const h = 36

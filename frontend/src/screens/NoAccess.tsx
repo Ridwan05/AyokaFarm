@@ -12,6 +12,7 @@ import { useTrade } from '../data/tradeContext'
 import { canAccess, describeArea } from '../lib/access'
 import { navGroups } from '../components/layout/nav'
 
+/** What each built-in role sees, in plain words. A custom role falls back to its visible nav items. */
 const sees: Partial<Record<string, string>> = {
   owner: 'everything',
   'farm-manager': 'pens, production, stock, sales and purchases',
@@ -32,6 +33,7 @@ export default function NoAccess() {
   const roleName = user.roleLabel
   // Who to ask: the owner(s) by first name.
   const owner = staffWithRole(catalog, 'owner')[0] ?? 'the owner'
+  // Nav pages this user can open (home left out), used when the role has no fixed wording above.
   const visible = navGroups.flatMap((g) => g.items).filter((i) => i.to !== '/' && canAccess(i.to, user)).map((i) => i.label.toLowerCase())
   const seen = sees[user.role] ?? (visible.length ? visible.join(', ') : 'your home page')
 

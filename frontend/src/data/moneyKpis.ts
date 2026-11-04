@@ -54,14 +54,18 @@ export function spanLabel(r: Span) {
 }
 
 const money = (n: number) => nairaKpi(n)
+// Sales waiting for approval don't count towards any money figure until approved.
 const isApproved = (s: Sale) => !s.pendingApproval
+/** A sale's ISO date. */
 export const saleDate = (s: Sale) => saleISODate(s)
+/** Approved sales dated in the span. */
 export const salesIn = (sales: Sale[], r: Span) => sales.filter((s) => isApproved(s) && inRange(saleDate(s), r))
 const salesTotal = (sales: Sale[], r: Span) => salesIn(sales, r).reduce((n, s) => n + amountOf(s), 0)
 const isEggCrate = (s: Sale) => products.find((p) => p.id === s.productId)?.kind === 'Eggs'
 
 // ── Sales ───────────────────────────────────────────────────────────
 
+/** Sales screen tiles: sales, eggs sold, sold on credit and collected, this week vs the same days last week. */
 export function salesKpis(trade: Trade): Kpi[] {
   const { now, before } = weekSpans()
   const weeks = weeksBack()
@@ -70,6 +74,7 @@ export function salesKpis(trade: Trade): Kpi[] {
   const crates = (r: Span) => eggs(r).reduce((n, s) => n + s.qty, 0)
   const eggValue = eggs(now).reduce((n, s) => n + amountOf(s), 0)
   const credit = (r: Span) => salesIn(trade.sales, r).reduce((n, s) => n + Math.max(0, amountOf(s) - s.paid), 0)
+  // Overpaying at the sale doesn't count twice: only up to the sale total is "collected" there.
   const collected = (r: Span) =>
     salesIn(trade.sales, r).reduce((n, s) => n + Math.min(s.paid, amountOf(s)), 0) +
     trade.payments.filter((p) => p.direction === 'in' && inRange(p.date, r)).reduce((n, p) => n + p.amount, 0)
@@ -108,10 +113,12 @@ function latestPrice(purchases: Purchase[], kind: PurchaseKind) {
   const last = sorted[0]
   if (!last) return null
   const sameItem = sorted.filter((p) => p.item === last.item)
+  // Compare with the last different price, so a run of the same price still shows the last change.
   const prev = sameItem.find((p) => p.price !== last.price) ?? sameItem[1]
   return { last, prev, history: sameItem.slice(0, 8).reverse().map((p) => p.price) }
 }
 
+/** Tile for the latest price paid for a kind of purchase. */
 function priceKpi(purchases: Purchase[], kind: PurchaseKind, unit: string): Kpi {
   const lp = latestPrice(purchases, kind)
   if (!lp) return kpi({ label: 'Last price', value: '—', unit, current: null, previous: null, context: 'nothing bought yet', info: em.lastPrice(kind.toLowerCase()), spark: FLAT })
@@ -128,6 +135,7 @@ function priceKpi(purchases: Purchase[], kind: PurchaseKind, unit: string): Kpi 
   })
 }
 
+/** Purchases screen tiles: all purchases, or one kind's tab (feed, birds, medication). Month vs same days last month. */
 export function purchaseKpis(trade: Trade, kind?: PurchaseKind): Kpi[] {
   const { purchases } = trade
   const { now, before } = monthSpans()
@@ -186,6 +194,7 @@ export function purchaseKpis(trade: Trade, kind?: PurchaseKind): Kpi[] {
 const paid = (payments: Payment[], dir: 'in' | 'out', r: Span) => payments.filter((p) => p.direction === dir && inRange(p.date, r))
 const sumOf = (list: { amount: number }[]) => list.reduce((n, p) => n + p.amount, 0)
 
+/** Payments screen tiles: received this week, share by transfer, paid to suppliers, and still owed to the farm. */
 export function paymentKpis(trade: Trade): Kpi[] {
   const { now, before } = weekSpans()
   const weeks = weeksBack()
@@ -222,7 +231,10 @@ export function agingLabels() {
 
 type Settled = { date: string; amount: number; credit: boolean; settledOn: string | null }
 
-/** Each approved sale to a customer with the day it was paid off (sale's own payment first, then payments oldest first). */
+/**
+ * Each approved sale to a customer with the day it was paid off (sale's own payment first, then payments oldest first).
+ * The opening balance is cleared first but isn't returned.
+ */
 export function settlements(c: Customer, sales: Sale[], payments: Payment[]): Settled[] {
   const list = sales
     .filter((s) => s.customerId === c.id && isApproved(s))
@@ -246,6 +258,7 @@ export function settlements(c: Customer, sales: Sale[], payments: Payment[]): Se
   return list.map((b) => ({ date: b.date, amount: b.amount, credit: b.credit, settledOn: settledOn.get(b) ?? null }))
 }
 
+/** Average days to pay and % paid within 30 days, for credit sales in a span. */
 function payStats(trade: Trade, r: Span) {
   const all = trade.customers.flatMap((c) => settlements(c, trade.sales, trade.payments)).filter((s) => s.credit)
   const settled = all.filter((s) => s.settledOn && inRange(s.settledOn, r))
@@ -256,11 +269,13 @@ function payStats(trade: Trade, r: Span) {
   return { avgDays, onTime }
 }
 
+/** Customers screen tiles: owed to the farm, overdue, average days to pay, and paid within 30 days (last 90 days vs the 90 before). */
 export function customerKpis(trade: Trade): Kpi[] {
   const today = todayISO()
   const rows = trade.customers.map((c) => ({ c, balance: trade.customerBalance(c.id), aging: agingOf(trade.customerOpenBills(c.id)) }))
   const owing = rows.filter((r) => r.balance > 0)
   const total = owing.reduce((n, r) => n + r.balance, 0)
+  // over60 holds the overdue bucket, whatever the overdue limit in Settings is.
   const overdue = rows.filter((r) => r.aging.over60 > 0).sort((a, b) => b.aging.over60 - a.aging.over60)
   const overdueTotal = overdue.reduce((n, r) => n + r.aging.over60, 0)
   const now: Range = { from: addDays(today, -89), to: today, label: '' }
@@ -278,6 +293,7 @@ export function customerKpis(trade: Trade): Kpi[] {
 
 // ── Suppliers ───────────────────────────────────────────────────────
 
+/** Suppliers screen tiles: what we owe, credit held with suppliers, bought this month, and active suppliers. */
 export function supplierKpis(trade: Trade): Kpi[] {
   const rows = trade.suppliers.map((s) => ({ s, balance: trade.supplierBalance(s.id) }))
   const owe = rows.filter((r) => r.balance > 0)
@@ -301,6 +317,7 @@ export function supplierKpis(trade: Trade): Kpi[] {
 export function approvers(trade: Trade) {
   const names = trade.catalog.profiles
     .filter((p) => p.is_active && (p.role_id === 'farm_manager' || p.role_id === 'owner'))
+    // Farm managers first: they handle approvals day to day.
     .sort((a, b) => (a.role_id === b.role_id ? 0 : a.role_id === 'farm_manager' ? -1 : 1))
     .map((p) => p.full_name.split(' ')[0])
   if (!names.length) return 'a manager'
@@ -309,10 +326,12 @@ export function approvers(trade: Trade) {
 
 // ── Expenses ────────────────────────────────────────────────────────
 
+/** Expenses dated in the span. */
 export const expensesIn = (expenses: Expense[], r: Span) => expenses.filter((e) => inRange(e.date, r))
+/** Total of the expenses dated in the span. */
 export const expenseTotal = (expenses: Expense[], r: Span) => expensesIn(expenses, r).reduce((n, e) => n + e.amount, 0)
 
-/** "−4%" / "+12%" / "—" comparing two totals. */
+/** "−4%" / "+12%" / "No change" comparing two totals; "—" when there's nothing to compare with. */
 export function pctChange(now: number, before: number) {
   if (!before) return '—'
   const d = Math.round(((now - before) / before) * 100)

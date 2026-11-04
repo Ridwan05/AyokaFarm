@@ -3,6 +3,7 @@ import { Button } from '../../components/ui/Button'
 import { Card } from '../../components/ui/Card'
 import { LinkTabs } from '../../components/ui/Tabs'
 
+/** Tabs across the Finance screens: fixed assets, capital and loans, opening balances. */
 export function FinanceTabs() {
   return (
     <LinkTabs

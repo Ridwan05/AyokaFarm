@@ -17,8 +17,10 @@ import { downloadCsv } from '../../lib/export'
 import { InfoTip } from '../../components/ui/InfoTip'
 import { explainMoney } from '../../data/explainMoney'
 
+// Tabs filter in place here, unlike the overview's link tabs.
 const TABS = ['All', 'Feed', 'Birds', 'Medication'] as const
 
+/** Every purchase since go-live, filtered by type, with the actions from the Purchases overview. */
 export default function AllPurchases() {
   const trade = useTrade()
   const { purchases } = trade

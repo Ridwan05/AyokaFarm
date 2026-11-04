@@ -46,6 +46,10 @@ type BatchRow = {
 
 const qty = (n: number, unit: string) => `${formatNumber(n)} ${unit}`
 
+/**
+ * A batch's badge, most urgent first: expired, expiring soon, in a withdrawal, then the
+ * medication's reorder level (checked on its total, not the one batch).
+ */
 function status(r: BatchRow, today: string): { tone: Tone; label: string } {
   if (r.expiry && r.expiry < today) return { tone: 'danger', label: 'Expired' }
   if (r.expiry && daysFrom(today, r.expiry) <= farmSettings.expiryWarningDays) return { tone: 'warning', label: `Expires ${dayMonth(r.expiry)}` }
@@ -55,6 +59,10 @@ function status(r: BatchRow, today: string): { tone: Tone; label: string } {
   return { tone: 'success', label: 'OK' }
 }
 
+/**
+ * Medication stock by batch, with expiry and withdrawal warnings and monthly spend. The store
+ * keeper receives deliveries; others record purchases; pen attendants only look.
+ */
 export default function MedicationStock() {
   const router = useRouter()
   const user = useCurrentUser()
@@ -73,6 +81,7 @@ export default function MedicationStock() {
     .flatMap((m) => {
       const total = stockOf(m.name)
       const batches = catalog.batches.filter((b) => b.medicationId === m.id && b.onHand > 0)
+      // Whatever the batches don't account for is opening stock from go-live (no batch number).
       const opening = total - batches.reduce((n, b) => n + b.onHand, 0)
       const base = {
         name: m.name,
@@ -84,12 +93,14 @@ export default function MedicationStock() {
         inUseBy: inForce.filter((w) => w.medication === m.name).map((w) => penName(catalog, w.penId)),
       }
       const list: BatchRow[] = batches.map((b) => ({ ...base, key: `${m.id}-${b.purchaseId}`, batch: b.batchNo ?? '—', expiry: b.expiry, stock: b.onHand }))
+      // A medication with nothing in stock still gets one row, so it doesn't vanish from the list.
       if (opening > 0 || !list.length) list.push({ ...base, key: `${m.id}-opening`, batch: opening > 0 ? 'Opening stock' : '—', expiry: null, stock: Math.max(0, opening) })
       return list
     })
 
   const month = period('month', today)
   const lastMonth = previous(month)
+  // Medication purchases by purchase date in a range.
   const spent = (r: { from: string; to: string }) =>
     history.purchases.filter((p) => p.kind === 'medication' && p.purchased_on >= r.from && p.purchased_on <= r.to).reduce((n, p) => n + Number(p.total ?? p.quantity * p.unit_price), 0)
   const expiring = rows.filter((r) => r.expiry && daysFrom(today, r.expiry) <= farmSettings.expiryWarningDays)
@@ -176,6 +187,7 @@ export default function MedicationStock() {
         ))}
       </div>
 
+      {/* One alert per pen in withdrawal; dismissing any hides them all until the page reloads. */}
       {showWithdrawal &&
         inForce.map((w) => (
           <Alert

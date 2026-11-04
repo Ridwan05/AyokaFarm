@@ -22,6 +22,7 @@ type Props = {
 /** Advances and loans with what's left, the schedule and the next repayment. */
 export function LoansCard({ loans, balances, ownerActions, save, onAdd, addLabel = 'Advance or loan…' }: Props) {
   const today = todayISO()
+  // Only loans being repaid count; pending ones haven't been paid out yet.
   const owed = loans.filter((l) => l.status === 'active').reduce((n, l) => n + Math.max(0, Number(balanceOf(balances, l.id)?.balance ?? 0)), 0)
   return (
     <Card>
@@ -41,6 +42,7 @@ export function LoansCard({ loans, balances, ownerActions, save, onAdd, addLabel
         <ul className="flex flex-col">
           {loans.map((l) => {
             const b = balanceOf(balances, l.id)
+            // With no balance row yet (e.g. still pending), the whole amount is left.
             const left = Math.max(0, Number(b?.balance ?? l.amount))
             const next = b ? nextRepayment(b, today) : null
             return (

@@ -26,6 +26,7 @@ import { formatNaira } from '../../lib/format'
 
 const TABS = ['Working', 'Casual', 'Left', 'All'] as const
 
+/** A plain KPI tile: no trend, delta or sparkline, since these figures are a snapshot. */
 const tile = (label: string, value: string, unit: string, context: string, info: string): Kpi => ({
   label,
   value,
@@ -38,6 +39,10 @@ const tile = (label: string, value: string, unit: string, context: string, info:
   spark: [0, 0],
 })
 
+/**
+ * Everyone on the payroll, with app logins or not: headcount, the monthly salary bill and
+ * what staff owe on advances and loans. Adding staff needs payroll "add" access.
+ */
 export default function Employees() {
   const router = useRouter()
   const user = useCurrentUser()
@@ -47,8 +52,10 @@ export default function Employees() {
   const [adding, setAdding] = useState(false)
 
   const working = data.employees.filter(isWorking)
+  // Casuals (paid by the day or week) are left out of the monthly bill; their pay depends on time worked.
   const monthlyBill = working.filter((e) => e.pay_basis === 'monthly').reduce((n, e) => n + Number(e.pay_rate), 0)
   const casuals = working.filter((e) => e.pay_basis !== 'monthly').length
+  // Loans are owed by leavers too, so this counts every employee, not only those working.
   const owed = data.employees.reduce((n, e) => n + owedBy(data.balances, e.id), 0)
   const pending = data.loans.filter((l) => l.status === 'pending').length
   const bill = nairaKpi(monthlyBill)

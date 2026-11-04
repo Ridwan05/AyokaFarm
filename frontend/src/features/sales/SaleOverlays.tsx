@@ -7,6 +7,7 @@ import { RecordPaymentModal } from './RecordPaymentModal'
 import { RecordSaleDrawer } from './RecordSaleDrawer'
 import { SaleDrawer } from './SaleDrawer'
 
+/** Which sale drawer or modal is open, and for which receipt; null when none. */
 export type SaleOverlay = { kind: 'detail' | 'payment' | 'edit' | 'void'; receipt: string } | { kind: 'record' } | null
 
 /** Renders whichever sale overlay is open. Looks the sale up so it reflects live changes. */

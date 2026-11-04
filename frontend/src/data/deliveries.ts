@@ -1,7 +1,9 @@
 // Deliveries for the Store Keeper (ST-D52), loaded in remote.ts. Orders are purchases placed but not yet received.
 
+/** What a delivery brings into the store. */
 export type StockKind = 'feed' | 'medication'
 
+/** A purchase waiting to be received. */
 export type Order = {
   ref: string
   supplierId: string
@@ -17,6 +19,7 @@ export type Order = {
   orderedBy: string
 }
 
+/** A received order: when, by whom, and how much was sent back. */
 export type Delivery = Omit<Order, 'orderedBy'> & { received: string; by: string; sentBack: number; note: string }
 
 /** A change to stock made in this session (delivery received or count adjustment). */

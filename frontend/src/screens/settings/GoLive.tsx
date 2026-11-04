@@ -23,11 +23,17 @@ import { formatNaira, formatNumber } from '../../lib/format'
 import { createClient } from '../../lib/supabase/client'
 import type { Database } from '../../lib/supabase/database.types'
 
+/** A customer or supplier with its opening balance and whether someone has checked it. */
 type Party = { id: number; kind: 'customer' | 'supplier'; name: string; opening: number; source: string | null; checked: boolean }
 type StockItem = Database['public']['Enums']['stock_item']
 
+/** "Permission denied" → a plain sentence. */
 const why = (message: string) => (/row-level security|permission/i.test(message) ? 'You don’t have permission to change this.' : message)
 
+/**
+ * Go-live setup, done once: farm profile, pens and flocks, opening stock, opening balances and staff,
+ * then a review. Opening stock and balances are entered here; the other steps link to their screens.
+ */
 export default function GoLive() {
   const router = useRouter()
   const user = useCurrentUser()
@@ -43,6 +49,7 @@ export default function GoLive() {
   const asAt = goLive ? weekdayDayMonth(goLive) + ' ' + goLive.slice(0, 4) : 'go-live day'
   const closeOfBusiness = goLive ? `${dayMonth(addDays(goLive, -1))}` : 'the day before go-live'
 
+  // One-off buyers never carry a balance, so they're left out.
   const parties: Party[] = [
     ...catalog.customers.filter((c) => c.customer_type !== 'one_off').map((c) => ({ id: c.id, kind: 'customer' as const, name: c.name, opening: Number(c.opening_balance), source: c.opening_balance_source, checked: c.opening_balance_checked })),
     ...catalog.suppliers.map((s) => ({ id: s.id, kind: 'supplier' as const, name: s.name, opening: Number(s.opening_balance), source: s.opening_balance_source, checked: s.opening_balance_checked })),
@@ -61,6 +68,7 @@ export default function GoLive() {
   const staffCount = catalog.profiles.filter((p) => p.is_active && p.role_id).length
   const profileDone = Boolean(settings?.farm_name && settings.address && settings.phone)
 
+  // Staff is done once someone besides the owner has a role.
   const steps = [
     { title: 'Farm profile', detail: profileDone ? `${settings!.farm_name} · ${settings!.address}` : 'Name, address and phone for receipts', done: profileDone },
     { title: 'Pens & flocks', detail: `${catalog.pens.length} pens · ${activeFlocks.length} flocks with placement dates`, done: catalog.pens.length > 0 && activeFlocks.length > 0 },
@@ -74,6 +82,7 @@ export default function GoLive() {
   const [step, setStep] = useState(firstOpen === -1 ? steps.length : firstOpen)
   const allSteps = [...steps, { title: 'Review', detail: doneCount === steps.length ? 'Everything is in place' : 'Check totals', done: doneCount === steps.length }]
 
+  /** Marks a party's opening balance as checked against the books. */
   async function confirm(p: Party) {
     if (saving) return
     setSaving(true)
@@ -115,6 +124,7 @@ export default function GoLive() {
     },
   ]
 
+  // What an opening count was for, and its unit.
   const stockName = (a: (typeof openingStock)[number]) =>
     a.item === 'feed' ? (catalog.feedTypes.find((f) => f.id === a.feed_type_id)?.name ?? 'Feed') : a.item === 'medication' ? (catalog.medications.find((m) => m.id === a.medication_id)?.name ?? 'Medication') : a.item === 'eggs' ? 'Eggs' : 'Cracked eggs'
   const stockUnit = (a: (typeof openingStock)[number]) => (a.item === 'feed' ? 'bags' : a.item === 'medication' ? (catalog.medications.find((m) => m.id === a.medication_id)?.stock_unit ?? '') : 'eggs')
@@ -166,6 +176,7 @@ export default function GoLive() {
           <p className="pt-2 type-body-sm text-fg-secondary">Go-live date: {goLive ? `${dayMonth(goLive)} ${goLive.slice(0, 4)}` : 'not set'}.</p>
         </Card>
 
+        {/* Steps 3 and 4 (opening stock and balances) are done here; the review is step 6; the rest link out. */}
         {step === 2 ? (
           <Card className="min-w-0 flex-1 gap-4 p-5">
             <div className="flex flex-wrap items-baseline gap-x-2">
@@ -266,6 +277,7 @@ export default function GoLive() {
   )
 }
 
+/** Enter or change a party's opening balance and where the figure came from. */
 function OpeningBalanceModal({ party, onClose, onSaved }: { party: Party; onClose: () => void; onSaved: () => Promise<void> }) {
   const [amount, setAmount] = useState(String(party.opening))
   const [source, setSource] = useState(party.source ?? '')
@@ -321,6 +333,7 @@ function OpeningBalanceModal({ party, onClose, onSaved }: { party: Party; onClos
   )
 }
 
+/** Add an opening stock count. Feed and eggs need inventory access; medication needs medication access. */
 function OpeningStockModal({ goLive, onClose, onSaved }: { goLive: string | null; onClose: () => void; onSaved: () => Promise<void> }) {
   const user = useCurrentUser()
   const { catalog } = useTrade()

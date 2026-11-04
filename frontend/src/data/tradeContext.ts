@@ -15,6 +15,7 @@ import type { TablesUpdate } from '../lib/supabase/database.types'
 /** The money records that can be voided (soft-deleted with a reason) or corrected. */
 export type MoneyKind = 'sales' | 'purchases' | 'payments' | 'expenses'
 
+/** A payment to record outside a sale or purchase. */
 export type NewPayment = {
   direction: 'in' | 'out'
   partyId: string
@@ -24,6 +25,10 @@ export type NewPayment = {
   date: string
 }
 
+/**
+ * The farm's records and every action that changes them (store.tsx). Each action resolves true
+ * (or a value) when it saved, and shows its own error toast otherwise.
+ */
 export type Trade = {
   sales: Sale[]
   purchases: Purchase[]
@@ -111,18 +116,24 @@ export type Trade = {
   reload: () => Promise<void>
 }
 
+/** A new pen from Settings. */
 export type NewPen = { name: string; capacity: number; description?: string }
+/** Pen fields the owner can change. */
 export type PenPatch = Partial<{ name: string; capacity: number; description: string | null; is_active: boolean }>
 /** Where placed birds come from: a bird purchase in stock, or (owner only) not from a purchase. */
 export type BirdSource = { purchaseId: number | null; birds: number; costPerBird?: number | null }
+/** Flock fields the owner can change. */
 export type FlockPatch = Partial<{ code: string; breed: string | null; placed_on: string; age_at_placement_days: number; bird_type_id: number; notes: string | null }>
+/** A flock to place in an empty pen, with where its birds come from. */
 export type NewFlock = { code: string; penId: number; birdTypeId: number; breed: string; placedOn: string; ageAtPlacementDays: number; sources: BirdSource[]; notes?: string }
 
+/** Provided by TradeProvider (store.tsx). Read it through useTrade, not directly. */
 export const TradeContext = createContext<Trade | null>(null)
 
 // The store's actions with the double-tap safety net (lib/once), made once per store value.
 const guarded = new WeakMap<Trade, Trade>()
 
+/** The farm's records and actions, with every action guarded against a double tap. */
 export function useTrade() {
   const ctx = useContext(TradeContext)
   if (!ctx) throw new Error('useTrade must be used inside TradeProvider')

@@ -2,8 +2,10 @@ import type { PaymentMethod } from './sales'
 
 // Expenses come from Supabase (remote.ts). Categories are the expense_categories rows (Settings › Lists).
 
+/** An expense category name from Settings › Lists. */
 export type ExpenseCategory = string
 
+/** One expense as the expense screens and reports use it. */
 export type Expense = {
   id: string
   /** ISO date */

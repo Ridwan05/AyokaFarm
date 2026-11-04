@@ -1,5 +1,6 @@
 import { cn } from '../../lib/cn'
 
+/** On/off toggle with its label; clicking the label flips it too. */
 export function Switch({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <label className="flex cursor-pointer items-center gap-3 type-body-md text-fg-primary">

@@ -6,6 +6,7 @@ import { useToast } from '../../components/ui/toastContext'
 import { useTrade, type MoneyKind } from '../../data/tradeContext'
 import { KIND_LABEL } from './recordRules'
 
+// What voiding undoes, so the owner knows before confirming.
 const EFFECT: Record<MoneyKind, string> = {
   sales: 'It leaves sales, the customer’s balance and the reports. Eggs go back into the store and birds back on the flock.',
   purchases: 'It leaves purchases, the supplier’s balance and the reports. Stock it brought in comes out again.',
@@ -21,6 +22,7 @@ export function VoidModal({ kind, refId, label, onClose, onVoided }: { kind: Mon
   const [submitted, setSubmitted] = useState(false)
   // A second tap while saving would void the record twice.
   const [saving, setSaving] = useState(false)
+  // A reason of at least 3 characters, so the audit log says something useful.
   const error = reason.trim().length < 3 ? 'Say why it’s being voided' : undefined
 
   const submit = async (e: FormEvent) => {

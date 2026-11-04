@@ -77,8 +77,10 @@ type PenEntry = {
   } | null
 }
 
+/** Shown in a cell when there's no entry or no figure. */
 const dash = <NumberCell tone="muted">—</NumberCell>
 
+/** Columns of the pen entries table. */
 const columns: Column<PenEntry>[] = [
   { key: 'pen', header: 'Pen', render: (p) => <PrimaryCell initials={p.initials} title={p.name} subtitle={p.flock} /> },
   { key: 'age', header: 'Age', width: 76, render: (p) => <TextCell>wk {p.ageWeeks}</TextCell> },
@@ -148,6 +150,10 @@ function rangeFor(period: Period, day: string): Range {
   return { from: day.slice(0, 8) + '01', to: day, label: new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${day}T00:00:00Z`)) }
 }
 
+/**
+ * Daily production: today's entry status, KPIs (not for attendants), a missing-entry warning, and every
+ * pen's entry for a chosen day, or the week / month up to it. Attendants see only their own pens.
+ */
 export default function Production() {
   const router = useRouter()
   const user = useCurrentUser()
@@ -160,12 +166,14 @@ export default function Production() {
   // Days that have entries, newest first, always starting with today.
   const days = [...new Set([today, ...history.daily.filter((d) => mine(d.penId)).map((d) => d.date)])].sort().reverse().slice(0, 90)
   const [period, setPeriod] = useState<Period>('Day')
+  // Open on the latest earlier day with entries: today is usually still being recorded.
   const [day, setDay] = useState(days[1] ?? today)
   const [pens, setPens] = useState<(typeof PEN_FILTERS)[number]>('All pens')
   const [showMissing, setShowMissing] = useState(true)
 
   const range = rangeFor(period, day)
   const span = daysFrom(range.from, range.to) + 1
+  // The same number of days just before, for the KPI comparisons.
   const prev: Range = { from: addDays(range.from, -span), to: addDays(range.from, -1), label: 'previous' }
   const penOk = (id: number) => mine(id) && (pens === 'All pens' || penKindIn(catalog, history, id, range) === pens)
   const rows = penRows(trade, range, penOk)
@@ -173,6 +181,7 @@ export default function Production() {
   const prevRows = rowsIn(history.daily, prev, penOk)
 
   const todayRows = pensToday.filter((p) => mine(p.id)).map((p) => withTodaysRecord(p, productionRecords))
+  // Late = active pens with no entry for yesterday, for the warning banner.
   const missing = missingEntries(history, today).filter((m) => mine(m.penId) && m.late)
   const recorded = rows.filter((p) => p.entry).length
 
@@ -184,6 +193,7 @@ export default function Production() {
   const variance = feedVariance(periodRows)
   const laying = layingRate(periodRows)
 
+  /** Downloads the pen entries table as shown, as CSV. */
   function exportRows() {
     downloadCsv(
       `production-${range.from}${range.to !== range.from ? `-to-${range.to}` : ''}`,
@@ -230,6 +240,7 @@ export default function Production() {
 
       <TodayCard rows={todayRows} canRecord={(id) => canRecordProduction(user, id)} />
 
+      {/* KPI row, for managers and up */}
       {!attendant && (
         <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
           {productionKpis(history.daily, range, prev, periodRows, prevRows, penOk).map((k) => (
@@ -263,6 +274,7 @@ export default function Production() {
           // One day shows one entry per pen, which can be corrected or deleted here.
           rowActions={period === 'Day' ? (p) => <EntryActions row={history.daily.find((d) => d.penId === p.penId && d.date === day)} /> : undefined}
         />
+        {/* Farm total row */}
         <div className="flex flex-wrap items-center gap-x-6 gap-y-1 rounded-b-xl bg-canvas px-5 py-3 type-label-md">
           <span className="flex flex-1 items-center gap-1.5 text-fg-primary">
             Farm total · {range.label}
@@ -288,12 +300,14 @@ export default function Production() {
 function penRows(trade: ReturnType<typeof useTrade>, range: Range, penOk: (id: number) => boolean): PenEntry[] {
   const { history, catalog } = trade
   const inWithdrawal = new Set(withdrawals(history, catalog, range.to).map((w) => w.penId))
+  // Every flock that was in a pen at any point in the range.
   const flocks = history.flocks.filter((f) => penOk(f.pen_id) && f.placed_on <= range.to && (f.closed_on === null || f.closed_on >= range.from))
   return flocks
     .map((f) => {
       const rows = history.daily.filter((d) => d.flockId === f.id && d.date >= range.from && d.date <= range.to).sort((a, b) => a.date.localeCompare(b.date))
       const first: DailyRow | undefined = rows[0]
       const last: DailyRow | undefined = rows.at(-1)
+      // Age from the latest entry, or worked out from placement when nothing was recorded.
       const ageDays = last?.ageDays ?? daysFrom(f.placed_on, range.to) + f.age_at_placement_days
       const kind = flockKind(catalog, f)
       const firstName = (n: string) => n.split(' ')[0]
@@ -304,11 +318,14 @@ function penRows(trade: ReturnType<typeof useTrade>, range: Range, penOk: (id: n
         initials: `P${f.pen_id}`,
         name: `${penName(catalog, f.pen_id)} · ${kind}`,
         flock: inWithdrawal.has(f.pen_id) ? `${f.code} · withdrawal` : f.code,
+        // Age shown as the week the flock is in (days 0–6 = week 1).
         ageWeeks: Math.floor(ageDays / 7) + 1,
+        // With no entry, opening is the birds alive at the end of the day before.
         opening: first?.opening ?? flockBirdsOn(history, f, addDays(range.from, -1)),
         entry: last
           ? {
               died: sum(rows, (r) => r.mortality),
+              // Mortality = deaths ÷ birds at the start of each day; flagged above the alert threshold.
               diedFlag: (mort ?? 0) > farmSettings.mortalityAlertPct,
               closing: last.closing,
               feedBags: sum(rows, (r) => r.feedBags),
@@ -323,6 +340,7 @@ function penRows(trade: ReturnType<typeof useTrade>, range: Range, penOk: (id: n
     .sort((a, b) => a.penId - b.penId)
 }
 
+/** The four production KPIs (eggs, laying rate, mortality, feed) for the range, each compared with the period before. */
 function productionKpis(daily: DailyRow[], range: Range, prev: Range, cur: DailyRow[], old: DailyRow[], penOk: (id: number) => boolean) {
   const spark = lastDays(Math.max(8, Math.min(30, daysFrom(range.from, range.to) + 1)), range.to)
   const day = (d: string) => rowsOn(daily, d, penOk)
@@ -332,6 +350,7 @@ function productionKpis(daily: DailyRow[], range: Range, prev: Range, cur: Daily
   const lay = layingRate(cur)
   const died = sum(cur, (d) => d.mortality)
   const bags = sum(cur, (d) => d.feedBags)
+  // Expected feed is stored in kg; convert to bags using each entry's own kg-per-bag.
   const expectedBags = sum(cur, (d) => (d.expectedKg && d.feedKg && d.feedBags ? (d.expectedKg * d.feedBags) / d.feedKg : 0))
   const layerPens = new Set(cur.filter((d) => d.eggs !== null).map((d) => d.penId)).size
   return [

@@ -24,6 +24,10 @@ const sizes: Record<Size, string> = {
   lg: 'h-12 px-5 gap-2 type-label-lg',
 }
 
+/**
+ * The app's button. Defaults to type="button" so it never submits a form by accident;
+ * pass type="submit" for the form's main action. Secondary is the default look.
+ */
 export function Button({
   variant = 'secondary',
   size = 'md',

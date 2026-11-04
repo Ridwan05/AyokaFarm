@@ -20,6 +20,7 @@ const removeButton =
 /** Rows of [bird stock batch] [birds], plus owner rows for birds not from a purchase. */
 export function BirdSources({ choices, rows, onChange, allowNoPurchase, showErrors }: Props) {
   const totals = sourceTotals(rows, choices)
+  // Each batch can be picked on one row only; its select still lists its own batch.
   const used = new Set(rows.flatMap((r) => (r.kind === 'stock' ? [r.purchaseId] : [])))
   const unused = choices.filter((c) => !used.has(c.purchaseId))
   const set = (i: number, row: SourceRow) => onChange(rows.map((r, j) => (j === i ? row : r)))
@@ -72,6 +73,7 @@ export function BirdSources({ choices, rows, onChange, allowNoPurchase, showErro
         ),
       )}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+        {/* A new batch row starts with all the birds left in it */}
         {unused.length > 0 && (
           <Button size="sm" variant="ghost" leadingIcon={Plus} onClick={() => onChange([...rows, { kind: 'stock', purchaseId: unused[0].purchaseId, birds: formatNumber(unused[0].left) }])}>
             Add batch

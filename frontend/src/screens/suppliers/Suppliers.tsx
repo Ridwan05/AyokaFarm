@@ -19,14 +19,20 @@ import { downloadCsv } from '../../lib/export'
 import { formatNaira } from '../../lib/format'
 import { Presence } from '../../components/ui/Overlay'
 
+/** One table row: the supplier and what we owe them (negative = credit they hold for us). */
 type Row = { s: Supplier; balance: number }
 
 /** We owe first (biggest first), then suppliers holding credit, then paid up. */
 const rank = (balance: number) => (balance > 0 ? 0 : balance < 0 ? 1 : 2)
 
+/** Status badge from the balance: we owe, they hold credit, or paid up. */
 const status = (balance: number) =>
   balance > 0 ? { tone: 'warning' as const, label: 'We owe' } : balance < 0 ? { tone: 'info' as const, label: 'Credit' } : { tone: 'success' as const, label: 'Paid up' }
 
+/**
+ * Suppliers list: what we owe each one, worked out from purchases, supplier expenses and
+ * payments, with quick actions to open a statement or pay.
+ */
 export default function Suppliers() {
   const router = useRouter()
   const trade = useTrade()
@@ -104,6 +110,7 @@ export default function Suppliers() {
             <RowMenu
               items={[
                 { label: 'Open statement', onSelect: () => router.push(`/suppliers/${r.s.id}`) },
+                // Paying a supplier we don't owe would only add to their credit.
                 { label: 'Pay supplier', onSelect: () => setOverlay({ kind: 'pay', id: r.s.id }), disabled: r.balance <= 0 },
                 { label: 'New purchase', onSelect: () => router.push('/purchases') },
               ]}

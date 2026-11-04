@@ -25,10 +25,13 @@ import { AlertRow, type AlertKind } from '../features/alerts/AlertRow'
 
 const TYPE_FILTERS = ['All types', ...Object.values(alertTypes)]
 
+/** The status shown under an alert in the list. */
 const statusLabel = (a: FarmAlert) => (a.status === 'acknowledged' ? `Acknowledged by ${a.acknowledgedBy}` : 'New')
 
+/** A live alert with any shared acknowledge/resolve mark laid over it. */
 type DisplayAlert = FarmAlert & { markedAt?: string; markNote?: string }
 
+/** A row of the "Resolved this week" table. */
 type ResolvedRow = AlertMark & { id: string; title: string; where: string; raised: string }
 
 /**
@@ -59,6 +62,10 @@ const resolvedColumns: Column<ResolvedRow>[] = [
   { key: 'note', header: 'Note', width: 300, render: (r) => <TextCell>{r.note ?? '—'}</TextCell> },
 ]
 
+/**
+ * Farm alerts (mortality spikes, feed off target, missing entries, low stock, expiring medication,
+ * overdue debt), with a detail panel to acknowledge or resolve and a list of what was resolved this week.
+ */
 export default function Alerts() {
   const currentUser = useCurrentUser()
   const toast = useToast()
@@ -79,8 +86,10 @@ export default function Alerts() {
   })
   const open = alerts.filter((a) => a.status !== 'resolved')
   const acknowledged = alerts.filter((a) => a.status === 'acknowledged')
+  // Open covers new and acknowledged alerts, so acknowledged ones stay visible until resolved.
   const tabs = [`Open · ${open.length}`, `Acknowledged · ${acknowledged.length}`, 'Resolved', 'All']
   const [tab, setTab] = useState(tabs[0])
+  // The tab labels carry live counts, so match on the name before the dot.
   const tabKey = tab.split(' · ')[0]
 
   const visible = alerts
@@ -89,6 +98,7 @@ export default function Alerts() {
     )
     .filter((a) => type === 'All types' || alertTypes[a.kind as AlertKind] === type)
     .filter((a) => pen === 'All pens' || a.pen === Number(pen))
+  // Fall back to the first alert when the picked one is filtered out or has cleared.
   const selected = visible.find((a) => a.id === selectedId) ?? visible[0]
   const critical = visible.filter((a) => a.severity === 'Critical').length
 
@@ -97,6 +107,7 @@ export default function Alerts() {
   const resolved: ResolvedRow[] = Object.entries(marks)
     .filter(([, m]) => m.status === 'resolved' && m.at.slice(0, 10) >= weekFrom)
     .map(([id, m]) => {
+      // Use the live alert's wording when it's still raised; otherwise rebuild it from the id.
       const live = derived.find((a) => a.id === id)
       const about = live
         ? { title: live.title, where: live.pen ? penName(trade.catalog, live.pen) : alertTypes[live.kind], raised: live.time }
@@ -105,6 +116,7 @@ export default function Alerts() {
     })
     .sort((a, b) => b.at.localeCompare(a.at))
 
+  // Saves a mark for everyone; shows the problem and returns false if it didn't save.
   const mark = async (a: FarmAlert, status: AlertMark['status'], note?: string) => {
     const problem = await saveMark(a.id, status, note)
     if (problem) {
@@ -145,6 +157,7 @@ export default function Alerts() {
         <p className="type-body-sm whitespace-nowrap text-fg-tertiary">WhatsApp alerts aren’t connected yet</p>
       </div>
 
+      {/* Alert list and the selected alert's detail */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         <Card className="min-w-0 flex-1">
           <CardHeader title={tabKey} meta={critical > 0 && <Badge tone="danger">{critical} critical</Badge>} />
@@ -172,6 +185,7 @@ export default function Alerts() {
         {selected && <AlertDetail key={selected.id} alert={selected} onAcknowledge={acknowledge} onResolve={resolve} />}
       </div>
 
+      {/* Resolved in the last 7 days */}
       <Card>
         <CardHeader
           title="Resolved this week"
@@ -183,12 +197,14 @@ export default function Alerts() {
   )
 }
 
+/** Props for the alert detail panel. */
 type DetailProps = {
   alert: DisplayAlert
   onAcknowledge: (a: FarmAlert) => Promise<void>
   onResolve: (a: FarmAlert, note: string) => Promise<void>
 }
 
+/** The selected alert: severity, facts, who was notified, and acknowledge / resolve actions. Resolving needs a note. */
 function AlertDetail({ alert, onAcknowledge, onResolve }: DetailProps) {
   const router = useRouter()
   const [note, setNote] = useState('')

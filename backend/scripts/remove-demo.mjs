@@ -5,6 +5,8 @@
 //   node backend/scripts/remove-demo.mjs
 //
 // It deletes ALL farm records, demo or not — run it only before the farm starts using the app.
+// The list below covers the tables the demo fills. Employees, payroll, loans, finance entries, fixed
+// assets, bird placements and reorder requests aren't in it; clear those first if any were added.
 
 import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
@@ -13,6 +15,7 @@ import { createInterface } from 'node:readline'
 const require = createRequire(new URL('../../frontend/package.json', import.meta.url))
 const { createClient } = require('@supabase/supabase-js')
 
+// KEY=value lines from frontend/.env.local; the script needs the project URL and the secret key.
 const env = Object.fromEntries(
   readFileSync(new URL('../../frontend/.env.local', import.meta.url), 'utf8')
     .split(/\r?\n/)
@@ -23,8 +26,10 @@ if (!env.NEXT_PUBLIC_SUPABASE_URL || !env.SUPABASE_SECRET_KEY) {
   console.error('Set NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SECRET_KEY in frontend/.env.local first.')
   process.exit(1)
 }
+// The secret key bypasses row-level security; no session is kept, as this is a one-off script.
 const db = createClient(env.NEXT_PUBLIC_SUPABASE_URL, env.SUPABASE_SECRET_KEY, { auth: { autoRefreshToken: false, persistSession: false } })
 
+// Nothing is deleted until the person types DELETE.
 const rl = createInterface({ input: process.stdin, output: process.stdout })
 const answer = await new Promise((resolve) => rl.question('This deletes every farm record and the demo staff. Type DELETE to continue: ', resolve))
 rl.close()
@@ -43,6 +48,7 @@ try {
     console.log(`✓ ${table} cleared`)
   }
 
+  // Only accounts setup.mjs marked as demo go; the Owner and real staff stay.
   const { data, error } = await db.auth.admin.listUsers({ perPage: 1000 })
   if (error) throw new Error(error.message)
   const demo = data.users.filter((u) => u.app_metadata?.demo === true)

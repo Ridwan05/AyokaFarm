@@ -27,6 +27,10 @@ import { formatNaira } from '../../lib/format'
 
 const FLAT = [0, 0]
 
+/**
+ * Capital & loans: the entries list, KPIs and the balance owed per lender. Recording needs
+ * Finance "add", editing needs "edit", and deleting needs "all" delete access.
+ */
 export default function CapitalLoans() {
   const user = useCurrentUser()
   const toast = useToast()
@@ -41,6 +45,7 @@ export default function CapitalLoans() {
   const canEdit = can(user, 'finance', 'edit')
   const canDelete = accessOf(user, 'finance', 'delete') === 'all'
 
+  // Opening cash and bank live on Opening balances, not here.
   const entries = data.entries.filter((e) => e.kind !== 'opening_cash').sort((a, b) => b.entry_on.localeCompare(a.entry_on) || b.id - a.id)
   const sinceGoLive = entries.filter((e) => e.entry_on >= goLive)
   const capital = sinceGoLive.filter((e) => e.kind === 'capital_in').reduce((n, e) => n + Number(e.amount), 0)
@@ -56,8 +61,10 @@ export default function CapitalLoans() {
     else l.repaid += Number(e.amount)
     loans.set(key, l)
   }
+  // Biggest balance owed first.
   const loanList = [...loans.values()].sort((a, b) => b.received - b.repaid - (a.received - a.repaid))
   const owed = loanList.reduce((n, l) => n + l.received - l.repaid, 0)
+  // Names already used, offered as suggestions in the entry form.
   const lenders = [...new Set(data.entries.map((e) => e.counterparty).filter((x): x is string => Boolean(x)))]
 
   const kpis = [
@@ -102,6 +109,7 @@ export default function CapitalLoans() {
       entries.map((e) => [e.ref, e.entry_on, KIND_LABEL[e.kind], accountLabel(e.account), e.counterparty, e.loan_term, entrySign(e.kind) * Number(e.amount), e.notes]),
     )
 
+  /** Delete an entry after a confirm; the Balance Sheet and Income Statement follow. */
   const remove = async (e: FinanceEntry) => {
     if (saving || !window.confirm(`Delete ${e.ref}?`)) return
     setSaving(true)

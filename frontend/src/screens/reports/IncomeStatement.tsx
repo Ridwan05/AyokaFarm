@@ -28,6 +28,7 @@ function withPrev(now: Line[], before: Line[]): StatementRow[] {
   return rows
 }
 
+/** The statement's rows in order: revenue, operating expenses, gross profit, overheads, net profit. */
 function rowsFor(s: Statement, p: Statement): StatementRow[] {
   return [
     { type: 'heading', label: '1. Revenue (income)' },
@@ -44,6 +45,10 @@ function rowsFor(s: Statement, p: Statement): StatementRow[] {
   ]
 }
 
+/**
+ * Income statement (profit and loss on an accrual basis) for a period, compared with the period before.
+ * For roles with finance access; payroll detail only for roles that can see payroll.
+ */
 export default function IncomeStatement() {
   const { history, catalog } = useTrade()
   const user = useCurrentUser()
@@ -57,11 +62,13 @@ export default function IncomeStatement() {
   const prevRange = previous(range)
   // Payroll figures only for roles that can see all of payroll (otherwise RLS returns just their own).
   const payrollData = accessOf(user, 'payroll') !== 'none' && payroll.loaded && !payroll.error ? payroll.data : null
+  // Wait for payroll too, unless it failed (then the statement is worked out without it).
   const ready = finance.loaded && (payroll.loaded || payroll.error !== null)
   const inputs = { history, catalog, finance: finance.data, payroll: payrollData }
   const s = ready ? incomeStatement(inputs, range) : null
   const p = ready ? incomeStatement(inputs, prevRange) : null
   const rows = s && p ? rowsFor(s, p) : []
+  // Go-live: the day the opening balances were entered.
   const G = openingDate(history)
   const prevLabel = `${dayMonth(prevRange.from)} – ${dayMonth(prevRange.to)}`
 
@@ -94,6 +101,7 @@ export default function IncomeStatement() {
 
       {finance.error ? (
         <Alert tone="danger" title="Financial records aren’t available">
+          {/* A missing-table error means the finance migrations haven't been run yet. */}
           {/fixed_assets|finance_entries|does not exist|schema cache/i.test(finance.error)
             ? 'The finance tables haven’t been set up yet. Run the finance migrations in the Supabase SQL Editor, then reload.'
             : finance.error}

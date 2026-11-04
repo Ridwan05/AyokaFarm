@@ -44,9 +44,11 @@ export function EmployeeModal({ employee, employees, save, onClose }: Props) {
   const [submitted, setSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  // A login can belong to only one employee, so hide logins already linked to someone else.
   const linked = new Set(employees.filter((e) => e.profile_id && e.id !== employee?.id).map((e) => e.profile_id))
   const logins = catalog.profiles.filter((p) => !linked.has(p.id))
   const left = status === 'Has left'
+  // A rate of 0 is allowed while pay isn't agreed yet, but the box can't be left empty.
   const errors = {
     name: name.trim() ? undefined : 'Enter a name',
     rate: num(rate) >= 0 && rate.trim() !== '' ? undefined : 'Enter the pay rate (0 if not set yet)',
@@ -66,6 +68,7 @@ export function EmployeeModal({ employee, employees, save, onClose }: Props) {
       pay_basis: toBasis(basis),
       pay_rate: num(rate),
       started_on: started,
+      // Someone who has left is also made inactive, so they drop off new payroll months.
       left_on: left ? leftOn : null,
       is_active: !left,
       profile_id: login || null,
@@ -137,6 +140,7 @@ export function EmployeeModal({ employee, employees, save, onClose }: Props) {
             {(id) => <TextInput id={id} type="date" value={started} onChange={(e) => setStarted(e.target.value)} />}
           </Field>
         </div>
+        {/* Leaving only applies to someone already on the payroll */}
         {employee && (
           <>
             <SegmentedControl fullWidth label="Still working here?" options={STATUSES} value={status} onChange={setStatus} />

@@ -115,6 +115,7 @@ export function LineChart({ series, band, yTicks, formatY, xLabels, height = 200
             ))}
           </svg>
           {series.map((s) => {
+            // Dots for days with no neighbours, and the end dot if asked for.
             const last = runs(s.values).at(-1)?.at(-1)
             const solo = lonely(s.values).filter((p) => !(s.endDot && p === last))
             return [...solo.map((p) => dot(s, p, `${s.label}-${p[0]}`)), s.endDot && last ? dot(s, last, `${s.label}-end`) : null]

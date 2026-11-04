@@ -10,6 +10,7 @@ import { useTrade } from '../../data/tradeContext'
 import { formatNumber } from '../../lib/format'
 
 const METHODS = ['Cash', 'Transfer', 'POS'] as const
+// The database spells POS in lower case; the app's payment type uses capitals.
 const DB = { Cash: 'cash', Transfer: 'transfer', POS: 'pos' } as const
 const LABEL = { cash: 'Cash', transfer: 'Transfer', POS: 'POS' } as const
 const num = (v: string) => Number(v.replace(/,/g, '')) || 0

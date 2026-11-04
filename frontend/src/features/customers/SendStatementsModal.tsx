@@ -9,6 +9,11 @@ import { farmSettings } from '../../data/farmSettings'
 import { formatNumber } from '../../lib/format'
 import { oldestDays } from './customerView'
 
+/**
+ * Pick customers who owe money and send them their statement on WhatsApp.
+ * Only customers who agreed to WhatsApp can be ticked; the rest get a Print link.
+ * WhatsApp isn't connected yet, so Send only explains to use Print for now.
+ */
 export function SendStatementsModal({ onClose }: { onClose: () => void }) {
   const { customers, customerBalance, customerOpenBills, sales } = useTrade()
   const toast = useToast()
@@ -18,7 +23,9 @@ export function SendStatementsModal({ onClose }: { onClose: () => void }) {
     .sort((a, b) => b.balance - a.balance)
   const optedIn = owing.filter((x) => x.c.whatsapp)
   const noConsent = owing.filter((x) => !x.c.whatsapp)
+  // Everyone who opted in starts ticked.
   const [selected, setSelected] = useState(() => new Set(optedIn.map((x) => x.c.id)))
+  // The message preview uses the first ticked customer, biggest balance first.
   const first = optedIn.find((x) => selected.has(x.c.id))
 
   const toggle = (id: string) =>

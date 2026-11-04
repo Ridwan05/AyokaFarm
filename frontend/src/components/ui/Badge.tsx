@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { cn } from '../../lib/cn'
 
+/** Status colour shared by badges, alerts and KPI cards. */
 export type Tone = 'neutral' | 'success' | 'warning' | 'danger' | 'info'
 
 const tones: Record<Tone, { bg: string; text: string; dot: string }> = {

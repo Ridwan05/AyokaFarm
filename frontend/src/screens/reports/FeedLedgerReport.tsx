@@ -27,9 +27,12 @@ const FLAT = [0, 0]
 const RANGES = ['7 days', '30 days', 'This month', '90 days'] as const
 const dash = <NumberCell tone="muted">—</NumberCell>
 
+/** One feed type's stock movements over the period, in bags, with its average cost and current cover. */
 type FeedRow = { id: number; name: string; opening: number; received: number; used: number; adjusted: number; closing: number; avgCost: number; dailyUse: number | null; cover: number | null }
+/** Cost of the feed used: bags used × the weighted average price a bag. */
 const costOf = (f: FeedRow) => f.used * f.avgCost
 
+/** Columns of the by-feed-type table. */
 const columns: Column<FeedRow>[] = [
   { key: 'name', header: 'Feed type', render: (f) => <TextCell tone="primary">{f.name}</TextCell> },
   { key: 'opening', header: 'Opening', align: 'right', width: 96, render: (f) => <NumberCell>{formatNumber(f.opening)}</NumberCell> },
@@ -48,6 +51,7 @@ const columns: Column<FeedRow>[] = [
   },
 ]
 
+/** Feed ledger: opening, received, used, adjusted and closing bags per feed type, its cost, and feed used vs expected by pen. */
 export default function FeedLedgerReport() {
   const { history, catalog } = useTrade()
   const [rangeName, setRangeName] = useState<(typeof RANGES)[number]>('30 days')
@@ -55,6 +59,7 @@ export default function FeedLedgerReport() {
   const today = todayISO()
   const range: Range = rangeName === 'This month' ? period('month', today) : period(rangeName === '7 days' ? '7d' : rangeName === '30 days' ? '30d' : '90d', today)
 
+  // dailyLedger is newest first: opening comes from the oldest day, closing from the newest.
   const ledgerOf = (id: number, r: { from: string; to: string }) => {
     const days = dailyLedger(history, (d) => d.item === 'feed' && d.feedTypeId === id, r.from, r.to)
     return {
@@ -65,6 +70,7 @@ export default function FeedLedgerReport() {
       closing: days[0]?.closing ?? 0,
     }
   }
+  // Active feed types, plus any retired one that was still used in the range.
   const all: FeedRow[] = catalog.feedTypes
     .filter((f) => f.is_active || ledgerOf(f.id, range).used > 0)
     .map((f) => {
@@ -76,10 +82,12 @@ export default function FeedLedgerReport() {
   const used = rows.reduce((n, f) => n + f.used, 0)
   const cost = rows.reduce((n, f) => n + costOf(f), 0)
   const priced = all.filter((f) => f.avgCost > 0)
+  // Average over all feed, weighted by bags used; if nothing was used, the plain average of the prices.
   const allAvg = (() => {
     const bags = priced.reduce((n, f) => n + f.used, 0)
     return bags ? priced.reduce((n, f) => n + costOf(f), 0) / bags : priced.length ? priced.reduce((n, f) => n + f.avgCost, 0) / priced.length : 0
   })()
+  // Name the bag size in the heading only when every feed type uses the same one.
   const bagKg = new Set(catalog.feedTypes.map((f) => Number(f.bag_kg)))
 
   const feedId = type === 'All feed types' ? null : all.find((f) => f.name === type)?.id
@@ -93,6 +101,7 @@ export default function FeedLedgerReport() {
     .map((v) => ({ ...v, pct: Number(v.pct.toFixed(1)) }))
   const farmVar = feedVariance(entries)
   const tol = farmSettings.feedVariancePct
+  // Half the tolerance: pens past this are shown in amber as ones to watch.
   const watchPct = tol / 2
   const outlier = [...variance].sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct))[0]
   const note = !outlier
@@ -127,12 +136,14 @@ export default function FeedLedgerReport() {
           {dayMonth(range.from)} – {dayMonth(range.to)}
         </span>
       </div>
+      {/* KPI row */}
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
         {kpis.map((k) => (
           <KpiCard key={k.label} kpi={k} />
         ))}
       </div>
 
+      {/* Variance by pen and the weighted average cost */}
       <div className="flex flex-col gap-4 lg:flex-row">
         <Card className="min-w-0 flex-1 px-5 pt-4 pb-5">
           <div className="flex items-baseline gap-2 pb-2">
@@ -178,6 +189,7 @@ export default function FeedLedgerReport() {
         </Card>
       </div>
 
+      {/* Stock ledger by feed type */}
       <Card>
         <CardHeader title="By feed type" meta={<span className="type-body-sm text-fg-tertiary">Bags · closing = opening + received − used ± counts</span>} action={{ label: 'Export', onClick: exportRows }} />
         <Table columns={columns} rows={rows} rowKey={(f) => f.name} />

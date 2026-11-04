@@ -13,6 +13,7 @@ import { ENTRY_KINDS, KIND_LABEL, num } from './financeView'
 type Kind = (typeof ENTRY_KINDS)[number]
 const isLoan = (k: Kind) => k === 'loan_received' || k === 'loan_repaid'
 
+// What each kind of entry does to the books, shown under the picker.
 const HINT: Record<Kind, string> = {
   capital_in: 'Money the owner put into the farm. It adds to cash or bank and to owner’s capital.',
   drawing: 'Money the owner took out for personal use. It comes off cash or bank and off owner’s capital.',
@@ -34,6 +35,7 @@ type Props = {
 /** Record (or edit) owner's capital, a drawing, a loan, a loan repayment or other income. */
 export function EntryModal({ entry, defaults, lenders, save, onClose, since }: Props) {
   const toast = useToast()
+  // Opening balances have their own tab, so an opening entry never shows its kind here.
   const [kind, setKind] = useState<Kind>(entry && entry.kind !== 'opening_cash' ? entry.kind : (defaults?.kind ?? 'capital_in'))
   const [date, setDate] = useState(entry?.entry_on ?? defaults?.date ?? todayISO())
   const [amount, setAmount] = useState(entry ? formatNumber(Number(entry.amount)) : '')
@@ -43,6 +45,7 @@ export function EntryModal({ entry, defaults, lenders, save, onClose, since }: P
   const [notes, setNotes] = useState(entry?.notes ?? '')
   const [submitted, setSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
+  // A loan dated before go-live counts as owed at go-live, not as cash received.
   const goLive = farmSettings.goLiveDate ?? since
 
   const errors = {
@@ -63,7 +66,9 @@ export function EntryModal({ entry, defaults, lenders, save, onClose, since }: P
       entry_on: date,
       amount: num(amount),
       account: account.toLowerCase(),
+      // A loan always names its lender; for other entries "who" is optional.
       counterparty: isLoan(kind) ? lender.trim() : lender.trim() || null,
+      // Short loans are current liabilities on the Balance Sheet; long ones are long-term.
       loan_term: isLoan(kind) ? (term === 'Longer' ? 'long' : 'short') : null,
       notes: notes.trim() || null,
     }

@@ -16,6 +16,7 @@ const laysEggs = (catalog: Catalog, flock: Flock) => catalog.birdTypes.find((b) 
 const minDate = (a: string, b: string) => (a < b ? a : b)
 const maxDate = (a: string, b: string) => (a > b ? a : b)
 
+/** A flock's rearing cost broken down, with the dates it covers. */
 export type Rearing = {
   from: string
   /** Last day counted (the day before lay starts, or today / closing while still rearing). */
@@ -50,6 +51,7 @@ export function rearingCost(history: History, catalog: Catalog, flock: Flock, to
   const end = flock.closed_on ?? today
   const to = layingSince ? addDays(layingSince, -1) : end
   const from = flock.placed_on
+  // A flock that laid on its first day has no rearing period, so no pen costs.
   const m = to >= from ? penMoney(history, catalog, { from, to }).find((x) => x.penId === flock.pen_id) : undefined
   // Birds placed in the flock up to the end of rearing, at what they cost (bird stock or typed by the owner).
   const birds = placementCost(history, flock.id, { from: '0000-01-01', to })
@@ -58,6 +60,7 @@ export function rearingCost(history: History, catalog: Catalog, flock: Flock, to
   const total = birds + (m ? m.feed + m.medication + m.direct + m.overhead : 0)
   const firstLaying = layingSince ? history.daily.find((d) => d.flockId === flock.id && d.date === layingSince) : undefined
   const lastRow = [...rows].sort((a, b) => b.date.localeCompare(a.date))[0]
+  // Hens at lay come from the first laying day's entry; with no entry that day the figure is unknown.
   const hens = firstLaying?.opening ?? (layingSince ? null : (lastRow?.closing ?? null))
   return {
     from,
@@ -90,6 +93,7 @@ export function suggestedLayStart(history: History, flock: Flock) {
   )
 }
 
+/** One pen's adjustments for the "Spread rearing" P&L view. */
 export type SpreadLine = {
   penId: number
   /** Rearing-period costs in this period, moved out of it into the flock's rearing investment. */
@@ -126,8 +130,10 @@ export function spreadCharges(history: History, catalog: Catalog, r: { from: str
       const spreadEnd = addDays(rear.layingSince, days - 1)
       const lastLaying = flock.closed_on ? minDate(flock.closed_on, spreadEnd) : spreadEnd
       const a = maxDate(rear.layingSince, r.from)
+      // Never charge for days that haven't happened yet.
       const b = minDate(lastLaying, minDate(r.to, today))
       if (a <= b) line.spread += perDay * (daysFrom(a, b) + 1)
+      // Closed before its laying period ran out: what's left is charged on the closing day.
       if (flock.closed_on && flock.closed_on < spreadEnd && inRange(flock.closed_on, r)) {
         line.writtenOff += rear.total - perDay * (daysFrom(rear.layingSince, flock.closed_on) + 1)
       }

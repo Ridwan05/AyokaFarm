@@ -1,6 +1,7 @@
 // The farm's settings (farm_settings in Supabase). Filled in place when the farm's records load,
 // so any module that imports `farmSettings` reads the saved values. Defaults match the database.
 
+/** The saved farm settings, read by every module that needs a threshold or the farm's details. */
 export const farmSettings = {
   farmName: 'AyokaFarm',
   tradingAs: null as string | null,
@@ -35,4 +36,5 @@ export const farmSettings = {
   layerLayingWeeks: 60,
 }
 
+/** The shape of the farm settings. */
 export type FarmSettings = typeof farmSettings

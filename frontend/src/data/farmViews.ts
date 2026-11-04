@@ -38,10 +38,12 @@ export const flockKind = (catalog: Pick<Catalog, 'birdTypes'>, flock: Pick<Flock
  * now, so a closed or replaced flock keeps its records under the right type.
  */
 export function penLaysIn(catalog: Catalog, history: Pick<History, 'flocks'>, penId: number, r: { from: string; to: string }) {
+  // An open flock (no closed_on) counts as still in the pen.
   const then = history.flocks.filter((f) => f.pen_id === penId && f.placed_on <= r.to && (f.closed_on ?? '9999-12-31') >= r.from)
   return then.length ? then.some((f) => flockLays(catalog, f)) : penKind(catalog, penId) === 'Layers'
 }
 
+/** "Layers" / "Broilers" for a pen over a period, by the flocks in it then. */
 export const penKindIn = (catalog: Catalog, history: Pick<History, 'flocks'>, penId: number, r: { from: string; to: string }) =>
   penLaysIn(catalog, history, penId, r) ? 'Layers' : 'Broilers'
 

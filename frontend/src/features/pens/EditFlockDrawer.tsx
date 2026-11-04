@@ -14,7 +14,9 @@ type Props = { flock: History['flocks'][number]; onClose: () => void }
 export function EditFlockDrawer({ flock, onClose }: Props) {
   const toast = useToast()
   const { history, catalog, updateFlock, setFlockSources } = useTrade()
+  // Once there are daily entries, the bird type and placement date are locked.
   const hasEntries = history.daily.some((d) => d.flockId === flock.id)
+  // Only the first-day placements are edited here; later top-ups are kept as they are.
   const firstDay = history.placements.filter((p) => p.flock_id === flock.id && p.placed_on === flock.placed_on)
   const startRows = rowsFromPlacements(firstDay)
 
@@ -33,6 +35,7 @@ export function EditFlockDrawer({ flock, onClose }: Props) {
   const credit = new Map<number, number>()
   for (const p of firstDay) if (p.purchase_id !== null) credit.set(p.purchase_id, (credit.get(p.purchase_id) ?? 0) + p.birds)
   const choices = batchChoices(catalog, birdTypeId, birdTypeId === flock.bird_type_id ? credit : undefined)
+  // Birds are only replaced, and only checked, when they actually changed.
   const sourcesChanged = JSON.stringify(rows) !== JSON.stringify(startRows) || birdTypeId !== flock.bird_type_id
   const problem = sourcesChanged ? sourceError(rows, choices) : ''
   const errors = { code: code.trim() ? undefined : 'Give the flock a code', age: num(ageDays) >= 0 ? undefined : 'Enter an age in days' }
@@ -42,6 +45,7 @@ export function EditFlockDrawer({ flock, onClose }: Props) {
     if (busy) return
     setSubmitted(true)
     if (errors.code || errors.age || problem) return
+    // Send only the fields that changed.
     const patch: FlockPatch = {}
     if (code.trim() !== flock.code) patch.code = code.trim()
     if ((breed.trim() || null) !== flock.breed) patch.breed = breed.trim() || null
@@ -97,6 +101,7 @@ export function EditFlockDrawer({ flock, onClose }: Props) {
               value={String(birdTypeId)}
               onChange={(e) => {
                 setBirdTypeId(Number(e.target.value))
+                // Batches belong to one bird type, so a new type starts with no birds picked.
                 setRows([])
               }}
               options={catalog.birdTypes.map((b) => ({ value: String(b.id), label: b.name }))}

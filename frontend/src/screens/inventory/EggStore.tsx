@@ -29,11 +29,19 @@ import { InventoryTabs } from './InventoryTabs'
 /** A flat line for KPIs with no daily trend to show. */
 const FLAT = [0, 0]
 
+/** A ledger day plus the eggs held back for withdrawal by then (null when no pen is in withdrawal). */
 type Row = ReturnType<typeof dailyLedger>[number] & { held: number | null }
 
+/** Eggs as signed crates in a number cell, or a dash for none. */
 const signed = (eggs: number, sign: '+' | '−') => (eggs ? <NumberCell>{`${sign}${num(crates(eggs), 1).replace(/\.0$/, '')}`}</NumberCell> : <NumberCell tone="muted">—</NumberCell>)
+/** Eggs as crates, one decimal, without a trailing ".0". */
 const cr = (eggs: number) => num(crates(eggs), 1).replace(/\.0$/, '')
 
+/**
+ * Egg store: crates on hand, eggs held back for pens in medication withdrawal, and a 14-day
+ * ledger. The store keeper gets only the stock count; other roles can also write off broken
+ * eggs; pen attendants only look.
+ */
 export default function EggStore() {
   const [showHeld, setShowHeld] = useState(true)
   const [writingOff, setWritingOff] = useState(false)
@@ -49,6 +57,7 @@ export default function EggStore() {
   const heldTotal = held.reduce((n, h) => n + h.eggs, 0)
   const onHand = stockOf('eggs')
   const ledger = dailyLedger(history, (d) => d.item === 'eggs', addDays(today, -13), today)
+  // Held on each ledger day: eggs each withdrawal pen collected from the dose date up to that day.
   const rows: Row[] = ledger.map((r) => ({
     ...r,
     held: held.length ? held.reduce((n, h) => n + (r.date >= h.since ? history.daily.filter((d) => d.penId === h.penId && d.date >= h.since && d.date <= r.date).reduce((m, d) => m + (d.eggs ?? 0), 0) : 0), 0) : null,
@@ -127,6 +136,7 @@ export default function EggStore() {
         ))}
       </div>
 
+      {/* One alert per pen in withdrawal; dismissing any hides them all until the page reloads. */}
       {showHeld &&
         held.map((h) => (
           <Alert key={h.penId} title={`${penName(catalog, h.penId)}’s eggs are held until ${weekdayDayMonth(h.clearFrom)}`} onDismiss={() => setShowHeld(false)}>

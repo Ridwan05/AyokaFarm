@@ -12,6 +12,7 @@ export function normalisePhone(input: string): string | null {
   return /^234[789]\d{9}$/.test(d) ? d : null
 }
 
+/** The placeholder sign-in email for a normalised number. */
 export const loginEmailFor = (normalised: string) => `${normalised}@${LOGIN_DOMAIN}`
 
 /** "2348113860000" → "0811 386 0000" */

@@ -10,13 +10,20 @@ import type { Database } from '../lib/supabase/database.types'
 // payroll staff get everything; everyone else only their own employee record, loans and payslips.
 
 type Tables = Database['public']['Tables']
+/** An employee on the payroll (not necessarily a staff login). */
 export type Employee = Tables['employees']['Row']
+/** An advance or loan to an employee. */
 export type Loan = Tables['employee_loans']['Row']
+/** What's still owed on a loan, from the employee_loan_balances view. */
 export type LoanBalance = Database['public']['Views']['employee_loan_balances']['Row']
+/** One month's payroll. */
 export type PayrollRun = Tables['payroll_runs']['Row']
+/** One person's payslip in a payroll month. */
 export type PayrollLine = Tables['payroll_lines']['Row']
+/** An extra or deduction on a payslip. */
 export type PayslipItem = Tables['payslip_items']['Row']
 
+/** Everything the payroll screens need, as far as RLS lets the person see. */
 export type Payroll = {
   employees: Employee[]
   loans: Loan[]
@@ -42,6 +49,7 @@ async function rows<T>(q: { range: (from: number, to: number) => Page<T> }, what
   }
 }
 
+/** Read every payroll table the person can see. Throws with a readable message if one fails. */
 export async function loadPayroll(db = createClient()): Promise<Payroll> {
   const [employees, loans, balances, runs, lines, items] = await Promise.all([
     rows(db.from('employees').select('*').order('full_name').order('id'), 'employees'),
@@ -94,6 +102,7 @@ export function usePayroll() {
 
 // ── Money helpers ───────────────────────────────────────────────────
 
+/** "October 2026" for a payroll period. Read in UTC so the month never slips a day. */
 export const monthLabel = (period: string) =>
   new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${period.slice(0, 7)}-01T00:00:00Z`))
 
@@ -106,10 +115,14 @@ export function nextMonth(iso: string) {
   return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
 }
 
+/** How each pay basis is named on forms. */
 export const PAY_BASIS_LABEL: Record<Employee['pay_basis'], string> = { monthly: 'Monthly salary', daily: 'Daily rate', weekly: 'Weekly rate' }
+/** The period a rate is for, e.g. "₦ 5,000 a day". */
 export const PAY_UNIT: Record<Employee['pay_basis'], string> = { monthly: 'a month', daily: 'a day', weekly: 'a week' }
+/** Display name for each loan status. */
 export const LOAN_STATUS_LABEL: Record<Loan['status'], string> = { pending: 'Waiting for approval', active: 'Being repaid', repaid: 'Repaid', cancelled: 'Cancelled' }
 
+/** How each payroll figure is worked out, for the info icons. */
 export const explainPayroll = {
   basic: () => 'Monthly staff: salary × the share of the month they were employed. Casuals: days or weeks worked × their rate.',
   gross: () => 'Basic pay + extras (overtime, bonus).',

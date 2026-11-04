@@ -21,8 +21,10 @@ import { SectionTitle } from './FarmProfile'
 
 type Band = Tables<'feed_targets'>
 type FeedType = Tables<'feed_types'>
+/** A feed type with the pens eating it now. */
 type FeedTypeRow = FeedType & { usedBy: string }
 
+/** The alert thresholds in farm settings, with how each is typed in. */
 const THRESHOLDS = [
   { key: 'mortality_alert_pct', label: 'Mortality alert', suffix: '% of birds a day', decimal: true },
   { key: 'feed_variance_pct', label: 'Feed variance tolerance', suffix: '± %', decimal: true },
@@ -37,6 +39,7 @@ type ThresholdKey = (typeof THRESHOLDS)[number]['key']
 /** "Permission denied" → a sentence for the owner-only settings. */
 const why = (message: string) => (/row-level security|permission/i.test(message) ? 'Only the owner can change feed and targets.' : message)
 
+/** Feed & targets: expected feed bands by age, alert thresholds, and feed types. Owner edits; others view. */
 export default function FeedTargets() {
   const user = useCurrentUser()
   const { catalog, history, settings, reload } = useTrade()
@@ -50,6 +53,7 @@ export default function FeedTargets() {
         ...catalog.feedTargets.map((t) => ({ birdTypeId: t.bird_type_id, breed: t.breed })),
         ...catalog.birdTypes.filter((b) => b.is_active).map((b) => ({ birdTypeId: b.id, breed: null as string | null })),
       ]
+        // A bird type's "any breed" tab is dropped once it has breed-specific bands.
         .filter((g, _, all) => g.breed !== null || !all.some((x) => x.birdTypeId === g.birdTypeId && x.breed !== null))
         .map((g) => {
           const bird = catalog.birdTypes.find((b) => b.id === g.birdTypeId)?.name ?? 'Birds'
@@ -77,6 +81,7 @@ export default function FeedTargets() {
     return { ...f, usedBy: pens.join(', ') || '—' }
   })
 
+  /** Checks each threshold, then saves them all at once. */
   async function saveThresholds() {
     if (saving) return
     const patch: TablesUpdate<'farm_settings'> = {}
@@ -109,6 +114,7 @@ export default function FeedTargets() {
     }
   }
 
+  /** Deletes a feed band. */
   async function removeBand(b: Band) {
     if (saving) return
     setSaving(true)
@@ -122,6 +128,7 @@ export default function FeedTargets() {
     }
   }
 
+  /** Hides a feed type from new entries and purchases, or brings it back. Old records keep it. */
   async function setActive(f: FeedType, active: boolean) {
     if (saving) return
     setSaving(true)
@@ -166,6 +173,7 @@ export default function FeedTargets() {
         }
       />
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+        {/* Expected feed bands for the chosen bird type and breed */}
         <Card className="min-w-0 flex-1 gap-4 p-5">
           <SectionTitle title="Expected feed by age" note="g per bird per day" />
           {groups.length > 0 && (
@@ -279,6 +287,7 @@ export default function FeedTargets() {
   )
 }
 
+/** The saved thresholds as form text, with the farm defaults when nothing is saved. */
 function thresholdValues(s: Tables<'farm_settings'> | null): Record<ThresholdKey, string> {
   return {
     mortality_alert_pct: String(Number(s?.mortality_alert_pct ?? 0.5)),
@@ -291,6 +300,7 @@ function thresholdValues(s: Tables<'farm_settings'> | null): Record<ThresholdKey
   }
 }
 
+/** Add or edit a feed band. Bands for the same birds can't overlap. */
 function BandModal({
   band,
   group,
@@ -309,6 +319,7 @@ function BandModal({
   onSaved: () => Promise<void>
 }) {
   const last = bands[bands.length - 1]
+  // A new band starts the week after the last one ends.
   const [from, setFrom] = useState(String(band?.week_from ?? (last ? (last.week_to ?? last.week_from) + 1 : 1)))
   const [to, setTo] = useState(band?.week_to ? String(band.week_to) : '')
   const [grams, setGrams] = useState(band ? String(Number(band.grams_per_bird_day)) : '')
@@ -326,6 +337,7 @@ function BandModal({
     if (t !== null && (!Number.isInteger(t) || t < f)) return toast.error('To week must be a whole number from the start week on, or blank for “and over”')
     if (!(g > 0)) return toast.error('Enter grams per bird per day')
     const end = t ?? Infinity
+    // Two week ranges overlap when each starts before the other ends; a blank end means "and over".
     const clash = bands.find((b) => b.id !== band?.id && f <= (b.week_to ?? Infinity) && b.week_from <= end)
     if (clash) return toast.error(`Overlaps the band from week ${clash.week_from}${clash.week_to ? ` to ${clash.week_to}` : ' and over'}`)
     setBusy(true)
@@ -373,6 +385,7 @@ function BandModal({
   )
 }
 
+/** Add or edit a feed type: name, bag weight and reorder level. */
 function FeedTypeModal({ feedType, all, onClose, onSaved }: { feedType: FeedType | null; all: FeedType[]; onClose: () => void; onSaved: () => Promise<void> }) {
   const [name, setName] = useState(feedType?.name ?? '')
   const [bagKg, setBagKg] = useState(String(feedType ? Number(feedType.bag_kg) : 25))

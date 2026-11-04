@@ -1,7 +1,7 @@
 // Customers (P-D15) and their statements (P-D3), loaded from Supabase.
 // Balances are never stored: they're calculated from each customer's ledger (see ledger.ts).
 
-/** A sale from before the sales in `sales.ts`. */
+/** A sale from before the sales in `sales.ts`. Not loaded from Supabase today, so always empty. */
 export type OlderSale = {
   ref: string
   /** ISO date */
@@ -12,6 +12,7 @@ export type OlderSale = {
   paid: number
 }
 
+/** A customer as the customer screens show them. */
 export type Customer = {
   id: string
   name: string

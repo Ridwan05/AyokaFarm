@@ -30,6 +30,7 @@ const PERIODS = ['Today', 'This week', 'Last week', 'This month', 'Last month', 
 type Period = (typeof PERIODS)[number]
 const PERIOD_KEY: Record<Period, PeriodKey> = { Today: 'today', 'This week': 'week', 'Last week': 'last-week', 'This month': 'month', 'Last month': 'last-month', 'This year': 'ytd' }
 
+/** The dates a period filter covers. */
 const rangeOf = (p: Period): Range => periodRange(PERIOD_KEY[p])
 /** The period compared against: the day before, the same weekdays a week earlier, or the same days a month (or year) earlier. */
 function compareWith(p: Period, r: Range): Range {
@@ -42,6 +43,7 @@ function compareWith(p: Period, r: Range): Range {
 /** A row of the grouped table: a day, or one expense under an open day. */
 type DayRow = { kind: 'day'; date: string; items: Expense[]; total: number } | { kind: 'item'; expense: Expense }
 
+/** Farm expenses for a period: totals by category, where the money goes, and a table grouped by day. */
 export default function Expenses() {
   const { expenses, suppliers, catalog, history } = useTrade()
   const [period, setPeriod] = useState<Period>('This month')
@@ -56,6 +58,7 @@ export default function Expenses() {
   const [action, setAction] = useState<'edit' | 'void' | null>(null)
 
   const penName = (id: number | null) => (id === null ? 'General' : nameOfPen(catalog, id))
+  // Active categories plus any old category still used by an expense, so past records stay filterable.
   const categories = [...new Set([...catalog.categories.filter((c) => c.is_active).map((c) => c.name), ...expenses.map((e) => e.category)])]
   const categoryFilters = ['All categories', ...categories]
   // Filter by pen id; the name is only what's shown, so a rename can't break it.
@@ -76,9 +79,11 @@ export default function Expenses() {
     .filter((x) => x.amount > 0)
     .sort((a, b) => b.amount - a.amount)
   const max = Math.max(...byCategory.map((x) => x.amount), 1)
+  // Expenses with a pen are that pen's cost; the rest is general overhead.
   const tied = inPeriod.filter((e) => e.pen !== null).reduce((n, e) => n + e.amount, 0)
   const withReceipt = inPeriod.filter((e) => e.receipt).length
   const open = expenses.find((e) => e.id === openId)
+  // Overhead is shared only across pens with an active flock.
   const pensWithBirds = new Set(history.flocks.filter((f) => f.status === 'active').map((f) => f.pen_id)).size
 
   const columns: Column<Expense>[] = [
@@ -97,6 +102,7 @@ export default function Expenses() {
     const items = rows.filter((e) => e.date === date)
     return { kind: 'day' as const, date, items, total: items.reduce((n, e) => n + e.amount, 0) }
   })
+  // A single day is always open; there's nothing to collapse it against.
   const isOpen = (date: string) => days.length === 1 || expanded.has(date)
   const toggleDay = (date: string) =>
     setExpanded((s) => {
@@ -106,6 +112,7 @@ export default function Expenses() {
       return next
     })
   const tableRows: DayRow[] = days.flatMap((d) => [d, ...(isOpen(d.date) ? d.items.map((expense) => ({ kind: 'item' as const, expense })) : [])])
+  // What a day row shows in each column; columns not listed stay empty.
   const dayCell: Record<string, (d: (typeof days)[number]) => ReactNode> = {
     date: (d) => {
       const Chevron = isOpen(d.date) ? ChevronDown : ChevronRight
@@ -139,6 +146,7 @@ export default function Expenses() {
                 downloadCsv(
                   'expenses',
                   ['Ref', 'Date', 'Category', 'Description', 'Pen', 'Supplier', 'Amount (₦)', 'Paid (₦)', 'Method', 'Receipt', 'Added by'],
+                  // Exports what the filters show. An expense with no method was paid through payroll.
                   rows.map((e) => [e.id, e.date, e.category, e.description, penName(e.pen), suppliers.find((s) => s.id === e.supplierId)?.name ?? '', e.amount, e.amountPaid ?? e.amount, e.method ?? 'Payroll (per payslip)', e.receipt ? 'Yes' : 'No', e.addedBy]),
                 )
               }
@@ -152,6 +160,7 @@ export default function Expenses() {
         }
       />
 
+      {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
         <Select label="Period" leadingIcon={CalendarDays} width={170} options={PERIODS} value={period} onChange={setPeriod} />
         <Select label="Category" leadingIcon={ListFilter} width={190} options={categoryFilters} value={category} onChange={setCategory} />
@@ -160,6 +169,7 @@ export default function Expenses() {
         <SearchInput label="Search description" placeholder="Search description" width={240} value={query} onChange={(e) => setQuery(e.target.value)} />
       </div>
 
+      {/* By category and the period summary */}
       <div className="flex flex-col gap-4 lg:flex-row">
         <Card className="min-w-0 flex-1 px-5 pt-4 pb-5">
           <div className="flex items-center gap-2 pb-2">
@@ -207,6 +217,7 @@ export default function Expenses() {
         </Card>
       </div>
 
+      {/* Expenses grouped by day */}
       <Card>
         <CardHeader
           title={`Expenses · ${period.toLowerCase()}`}

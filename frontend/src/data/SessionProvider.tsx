@@ -10,6 +10,10 @@ import { SessionContext } from './sessionContext'
 
 type State = { status: 'loading' } | { status: 'no-role'; name: string } | { status: 'error'; message: string } | { status: 'ready'; user: User }
 
+/**
+ * Loads the signed-in person's profile, role permissions and pens, then renders the app.
+ * Shows a splash while loading, or when the account has no role yet or failed to load.
+ */
 export function SessionProvider({ children }: { children: ReactNode }) {
   const router = useRouter()
   const [state, setState] = useState<State>({ status: 'loading' })
@@ -35,6 +39,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       ])
       if (cancelled) return
       if (error || !profile) return setState({ status: 'error', message: 'Your staff profile couldn’t be loaded.' })
+      // A deactivated account is treated like one with no role: it can't use the app.
       if (!profile.role_id || !profile.is_active) return setState({ status: 'no-role', name: profile.full_name })
       // What the role can do, from Settings → Roles & permissions. Menus follow it; RLS enforces it.
       const { data: perms, error: permsError } = await supabase.from('role_permissions').select('*').eq('role_id', profile.role_id)
@@ -82,6 +87,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   return <SessionContext.Provider value={{ user: state.user, signOut }}>{children}</SessionContext.Provider>
 }
 
+/** Full-screen centred message, used before the app can show. */
 export function Splash({ children }: { children: ReactNode }) {
   return <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-canvas px-4 type-body-md text-fg-tertiary">{children}</div>
 }

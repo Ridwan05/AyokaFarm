@@ -25,9 +25,11 @@ export function PendingCounts({ only }: { only?: Only }) {
   const [busy, setBusy] = useState<number | null>(null)
   if (!canApprove(user.role)) return null
 
+  // The Eggs screen shows good and cracked egg counts together.
   const rows = history.pendingCounts.filter((a) => !only || (only === 'eggs' ? a.item === 'eggs' || a.item === 'cracked_eggs' : a.item === only))
   if (!rows.length) return null
 
+  // The item's name and how to write its quantity: bags, the medication's unit, or eggs as crates to one decimal.
   const describe = (a: (typeof rows)[number]) => {
     if (a.item === 'feed') return { name: catalog.feedTypes.find((f) => f.id === a.feed_type_id)?.name ?? 'Feed', fmt: (n: number) => `${formatNumber(n)} ${Math.abs(n) === 1 ? 'bag' : 'bags'}` }
     if (a.item === 'medication') {

@@ -3,9 +3,12 @@ import { cn } from '../../lib/cn'
 import { Sparkline } from '../charts/Sparkline'
 import { InfoTip } from './InfoTip'
 
+/** Which way the figure moved against the comparison period. */
 export type Trend = 'up' | 'down' | 'flat'
+/** Whether that move is good or bad for the farm; sets the colour, independent of the arrow. */
 export type Sentiment = 'good' | 'bad' | 'neutral'
 
+/** One dashboard figure: value, change against before, and a short trend line. */
 export type Kpi = {
   label: string
   value: string
@@ -39,6 +42,7 @@ const sparkColor: Record<Sentiment, string> = {
 
 const trendIcon = { up: ArrowUpRight, down: ArrowDownRight, flat: Minus }
 
+/** Dashboard card for one KPI, with an info tip explaining how it's worked out. */
 export function KpiCard({ kpi }: { kpi: Kpi }) {
   const TrendIcon = trendIcon[kpi.trend]
   return (

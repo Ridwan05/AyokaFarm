@@ -24,6 +24,7 @@ import { formatNumber, formatShortDate, formatSignedPct } from '../lib/format'
 import { explain } from '../data/explain'
 import { farmSettings } from '../data/farmSettings'
 
+/** The entry form as typed: text fields, so a half-typed number survives in the draft. */
 type Draft = {
   died: string
   feedType: string
@@ -39,20 +40,22 @@ type Draft = {
 /** A typed count, or null while the field is empty. */
 const num = (s: string) => (s.trim() === '' || Number.isNaN(Number(s)) ? null : Number(s))
 
+/** One draft per pen per farm day, so yesterday's unsaved draft doesn't come back today. */
 const draftKey = (penId: number) => `ayk:entry:${penId}:${todayISO()}`
 
 // Unsaved entries survive a dropped connection or a closed tab (BRD §10).
 function loadDraft(penId: number): Draft | null {
   try {
     const raw = localStorage.getItem(draftKey(penId))
-    // Drafts saved before notes existed have none.
     if (!raw) return null
+    // Drafts saved before notes existed have none.
     const d = JSON.parse(raw) as Partial<Draft> & Omit<Draft, 'notes'>
     return { ...d, notes: d.notes ?? '' }
   } catch {
     return null
   }
 }
+/** Keeps the draft on this phone, or clears it when given null. */
 function saveDraft(penId: number, draft: Draft | null) {
   try {
     if (draft) localStorage.setItem(draftKey(penId), JSON.stringify(draft))
@@ -62,6 +65,7 @@ function saveDraft(penId: number, draft: Draft | null) {
   }
 }
 
+/** The phone's time as HH:MM, stamped on the entry. */
 const clockTime = (d = new Date()) => `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
 
 /** − value + for whole-number counts: big targets for a thumb in the pen. */
@@ -93,6 +97,7 @@ export default function ProductionEntry() {
   )
 }
 
+/** The entry form itself: new entry for today (or a past day, owner only), or a correction of a saved one. */
 function EntryScreen() {
   const { penId: param } = useParams<{ penId: string }>()
   const penId = Number(param)
@@ -102,6 +107,7 @@ function EntryScreen() {
   const { productionRecords, addProductionRecord, updateProductionRecord, stockOf, history, catalog } = useTrade()
   const ctx = entryContext(penId, catalog, history)
   const found = editId ? savedEntry(history, catalog, editId) : null
+  // Ignore an ?entry= id that belongs to a different pen.
   const editing = found && found.row.penId === penId ? found : null
 
   const blank: Draft = editing
@@ -156,6 +162,7 @@ function EntryScreen() {
       live = false
     }
   }, [editId])
+  // Only keep a draft once something has been typed.
   const touched = JSON.stringify(draft) !== JSON.stringify(blank)
   // Drafts are for today's entry only; a past day is typed in one go.
   useEffect(() => {
@@ -202,6 +209,7 @@ function EntryScreen() {
         : flockBirdsOn(history, flock, addDays(entryDate, -1))
       : ctx.opening
   const died = num(draft.died)
+  // Closing = opening − died. Mortality % = died ÷ opening birds.
   const closing = opening - (died ?? 0)
   const mortalityPct = died !== null && opening ? (died / opening) * 100 : 0
   const overMortality = mortalityPct > farmSettings.mortalityAlertPct
@@ -209,9 +217,11 @@ function EntryScreen() {
   // Each feed type has its own bag weight (Settings → Feed); the saved figure uses the same.
   const bagKg = bagKgOf(catalog, draft.feedType)
   const feedKg = (bags ?? 0) * bagKg
+  // Expected feed = closing birds × grams a bird a day for this age. Variance = (used − expected) ÷ expected.
   const expectedKg = (closing * ctx.gramsPerBird) / 1000
   const variance = bags !== null && expectedKg ? ((feedKg - expectedKg) / expectedKg) * 100 : null
   const varianceOff = variance !== null && Math.abs(variance) > farmSettings.feedVariancePct
+  // Eggs = crates × eggs a crate + loose eggs; layer pens only.
   const eggs = layers ? (num(draft.crates) ?? 0) * farmSettings.eggsPerCrate + (num(draft.pieces) ?? 0) : null
   const cracked = layers ? num(draft.cracked) ?? 0 : null
   const layingRate = eggs !== null && closing ? (eggs / closing) * 100 : null
@@ -239,6 +249,7 @@ function EntryScreen() {
   const bagsError =
     bags !== null ? undefined : draft.feedBags.trim() !== '' ? 'Enter a number, e.g. 5.5' : tried ? 'Enter the bags used, 0 if none' : undefined
   const eggsError = (s: string) => (layers && tried && num(s) === null ? 'Enter 0 if none' : undefined)
+  // Every required count filled in and no field showing an error.
   const valid =
     !dateError &&
     died !== null &&
@@ -280,6 +291,7 @@ function EntryScreen() {
       notes: draft.notes.trim() || undefined,
     }
     setSaving(true)
+    // Stay on the form, with what was typed, if the save failed.
     if (!(await (editing ? updateProductionRecord(editing.row.id, record) : addProductionRecord(record)).finally(() => setSaving(false)))) return
     if (!editing && !past) saveDraft(penId, null)
     setSaved(true)
@@ -291,6 +303,7 @@ function EntryScreen() {
     } else {
       toast.success(editing ? `${name} entry for ${weekdayDayMonth(editing.row.date)} corrected` : past ? `${name} recorded for ${weekdayDayMonth(entryDate)}` : `${name} recorded for today`)
     }
+    // Leave a moment for the "Saved" tick before going back.
     window.setTimeout(() => router.push(backTo), 700)
   }
 
@@ -357,6 +370,7 @@ function EntryScreen() {
           save()
         }}
       >
+        {/* Birds: opening, died, closing */}
         <Card>
           <CardHeader title="Birds" />
           <div className="grid grid-cols-1 gap-4 px-5 pb-5 sm:grid-cols-3">
@@ -379,6 +393,7 @@ function EntryScreen() {
           )}
         </Card>
 
+        {/* Feed used against expected */}
         <Card>
           <CardHeader title="Feed" meta={<span className="type-body-sm text-fg-tertiary">{bagKg} kg bags</span>} />
           <div className="grid grid-cols-1 gap-4 px-5 pb-5 sm:grid-cols-2">
@@ -446,6 +461,7 @@ function EntryScreen() {
           </Card>
         )}
 
+        {/* Medication lines, each checked against store stock */}
         <Card>
           <CardHeader title="Medication" meta={<span className="type-body-sm text-fg-tertiary">{draft.meds.length ? `${draft.meds.length} given` : 'None today'}</span>} />
           <div className="flex flex-col gap-4 px-5 pb-5">

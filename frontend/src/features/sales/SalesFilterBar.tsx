@@ -4,6 +4,7 @@ import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { Select } from '../../components/ui/Select'
 import { PERIODS, PRODUCT_FILTERS, type useSalesFilter } from './filters'
 
+/** Period, product and customer filters with a search box, above a sales list. */
 export function SalesFilterBar({ f }: { f: ReturnType<typeof useSalesFilter> }) {
   return (
     <div className="flex flex-wrap items-center gap-3">

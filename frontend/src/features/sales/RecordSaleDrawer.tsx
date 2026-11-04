@@ -24,6 +24,10 @@ const KINDS = ['Eggs', 'Birds', 'Droppings'] as const
 const METHODS = ['Cash', 'Transfer', 'POS'] as const
 const num = (v: string) => Number(v.replace(/,/g, '')) || 0
 
+/**
+ * Record a sale of eggs, birds or droppings to a customer or a one-off buyer. A price below the
+ * minimum sends the sale for approval; only the owner may date a sale in the past.
+ */
 export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
   const currentUser = useCurrentUser()
   const trade = useTrade()
@@ -58,6 +62,7 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
   const total = num(qty) * num(price)
   const paidNow = num(paid)
   const belowMin = num(price) > 0 && num(price) < product.minPrice
+  // One-off buyers have no account to owe on, so they must pay the full total now.
   const oneOffUnpaid = !customer && paidNow < total
   const errors = {
     qty: num(qty) > 0 ? undefined : 'Enter a quantity',
@@ -65,6 +70,7 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
     paid: paidNow > total ? 'More than the total' : oneOffUnpaid ? 'One-off buyers pay in full' : undefined,
     date: saleDate && saleDate <= todayISO() ? undefined : 'Pick a date up to today',
   }
+  // "crates" → "crate" for "Price per crate".
   const unit = product.unit.replace(/s$/, '')
   const choices = penChoices(trade, product.id)
   const needsPens = kind === 'Birds'
@@ -96,12 +102,14 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
     if (saving) return
     setSubmitted(true)
     if (errors.qty || errors.price || errors.paid || errors.date || portionProblem) return
+    // A provisional receipt number: one after the highest so far.
     const next = Math.max(...sales.map((s) => Number(s.receipt.slice(2)))) + 1
     const receipt = `S-${next}`
     const m: PaymentMethod = method === 'POS' ? 'POS' : method === 'Cash' ? 'cash' : 'transfer'
     setSaving(true)
     const ok = await addSale({
       receipt,
+      // A past sale has no time of day; today's carries the time now.
       date: `${dm(saleDate)} ${past ? '' : nowHM()}`.trim(),
       iso: saleDate,
       customerId: customer?.id ?? ONE_OFF.id,
@@ -202,6 +210,7 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
             )}
           </Field>
         </div>
+        {/* Which pens the sale came from: required for birds, optional split for eggs and droppings */}
         <section aria-label="From pens" className="flex flex-col gap-2">
           <div className="flex items-center gap-2">
             <span className="flex-1 type-label-md text-fg-primary">From pens</span>
@@ -250,6 +259,7 @@ export function RecordSaleDrawer({ onClose }: { onClose: () => void }) {
           )}
         </Field>
         <SegmentedControl fullWidth label="Payment method" options={METHODS} value={method} onChange={setMethod} />
+        {/* The customer's balance before and after this sale */}
         {customer && (
           <SummaryBox>
             <KeyValueRow label={`${customer.short} owes now`} calculated={explainMoney.balanceNow()}>

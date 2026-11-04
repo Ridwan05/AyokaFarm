@@ -47,6 +47,7 @@ type TextInputProps = Omit<InputHTMLAttributes<HTMLInputElement>, 'size' | 'pref
   size?: 'md' | 'lg'
 }
 
+/** Text or number box with optional prefix, suffix or icon. Other props go to the <input>. */
 export function TextInput({ prefix, suffix, leadingIcon: Icon, invalid, size = 'lg', className, ...props }: TextInputProps) {
   return (
     <div className={cn(box, size === 'lg' ? 'h-12' : 'h-10', invalid && 'border-line-danger', className)}>
@@ -62,12 +63,12 @@ export function TextInput({ prefix, suffix, leadingIcon: Icon, invalid, size = '
   )
 }
 
+/** Date picker using the browser's own date input. */
 export function DateInput(props: Omit<TextInputProps, 'type' | 'leadingIcon'>) {
   return <TextInput type="date" leadingIcon={CalendarDays} {...props} />
 }
 
-/** Read-only computed value. */
-/** A value the form works out. `info` says how; it's shown from the icon. */
+/** Read-only value the form works out. `info` says how; it's shown from the icon. */
 export function AutoInput({ id, value, prefix, info, label = 'This value' }: { id?: string; value: string; prefix?: string; info?: string; label?: string }) {
   return (
     <div className="flex h-12 w-full items-center gap-2 rounded-md bg-subtle px-3">
@@ -127,6 +128,7 @@ export function SearchInput({ label, width = 260, ...props }: Omit<TextInputProp
   )
 }
 
+/** Checkbox with its label; clicking the label ticks it too. */
 export function Checkbox({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
     <label className="flex cursor-pointer items-center gap-2 type-body-md text-fg-primary">

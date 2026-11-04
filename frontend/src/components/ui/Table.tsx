@@ -2,6 +2,7 @@ import type { CSSProperties, ReactNode } from 'react'
 import { cn } from '../../lib/cn'
 import { Avatar } from './Avatar'
 
+/** One table column: its header and how to draw each row's cell. */
 export type Column<Row> = {
   key: string
   header: string
@@ -31,6 +32,10 @@ const FLEX_COLUMN_MIN = 200
 // so each row keeps its name in view.
 const stickyFirst = 'max-lg:sticky max-lg:left-0 max-lg:z-[1] max-lg:bg-surface'
 
+/**
+ * Data table for lists like sales or pens. Rows can open a detail on click and carry a "…" menu.
+ * On narrow screens it scrolls sideways with the first column pinned.
+ */
 export function Table<Row>({ columns, rows, rowKey, onRowClick, rowActions, rowClassName, actionsWidth = 64 }: TableProps<Row>) {
   const minWidth = columns.reduce((n, c) => n + (c.width ?? FLEX_COLUMN_MIN), rowActions ? actionsWidth : 0)
   return (

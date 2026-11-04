@@ -17,9 +17,11 @@ type Props = {
   onVoid?: (sale: Sale) => void
 }
 
+/** The sales list. Sales waiting for or just given approval are highlighted; Correct and Void show only for those allowed. */
 export function SalesTable({ sales, onOpen, onRecordPayment, onEdit, onVoid }: Props) {
   const user = useCurrentUser()
   const { customers, catalog, saleLeft, history } = useTrade()
+  // The saved row tells the edit rule who recorded the sale and when.
   const row = (s: Sale) => history.sales.find((x) => x.ref === s.receipt)
   const toast = useToast()
 
@@ -52,6 +54,7 @@ export function SalesTable({ sales, onOpen, onRecordPayment, onEdit, onVoid }: P
       header: 'Paid',
       align: 'right',
       width: 112,
+      // No payment is shown while the price waits for approval, or once approved before anything was paid.
       render: (s) =>
         s.pendingApproval || (s.approvedAt && !s.paid) ? <NumberCell tone="muted">—</NumberCell> : <NumberCell>{formatNaira(s.paid)}</NumberCell>,
     },
@@ -84,6 +87,7 @@ export function SalesTable({ sales, onOpen, onRecordPayment, onEdit, onVoid }: P
             { label: 'View details', onSelect: () => onOpen(s) },
             { label: 'Receipt PDF', onSelect: () => window.open(`/print/receipt/${encodeURIComponent(s.receipt)}`, '_blank'), disabled: s.pendingApproval },
             { label: 'Send on WhatsApp', onSelect: () => toast('WhatsApp isn’t connected yet — open the receipt PDF and share it instead'), disabled: s.pendingApproval },
+            // One-off buyers pay in full at the sale, so there is nothing to collect later.
             { label: 'Record a payment', onSelect: () => onRecordPayment(s), disabled: saleLeft(s.receipt) <= 0 || s.pendingApproval || s.customerId === 'one-off' },
             ...(onEdit && canEditRecord(user, 'sales', row(s)) ? [{ label: 'Correct sale…', onSelect: () => onEdit(s) }] : []),
             ...(onVoid && canVoidRecord(user, 'sales') ? [{ label: 'Void sale…', danger: true, onSelect: () => onVoid(s) }] : []),

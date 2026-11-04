@@ -20,6 +20,7 @@ type Props = {
 
 /** The items behind one figure on a pen's Costs & profit card. */
 export function PenMoneyItemsModal({ title, penName, range, items, total, note, onClose }: Props) {
+  // File name like "pen-2-feed-2026-10-01-2026-10-31", safe for any computer.
   const exportCsv = () =>
     downloadCsv(
       `${penName}-${title}-${range.from}-${range.to}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-'),

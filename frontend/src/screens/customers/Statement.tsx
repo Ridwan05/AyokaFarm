@@ -26,8 +26,13 @@ import { InfoTip } from '../../components/ui/InfoTip'
 import { explain } from '../../data/explain'
 import { explainMoney } from '../../data/explainMoney'
 
+/** YYYY-MM-DD → DD/MM/YYYY. */
 const dmy = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
 
+/**
+ * One customer's statement: balance owed, aging, totals since go-live and every sale and
+ * payment line. Edit shows only for roles that may edit Customers & suppliers.
+ */
 export default function Statement() {
   const { customerId = '' } = useParams<{ customerId: string }>()
   const { customers, customerBalance, customerOpenBills, customerStatement, payments } = useTrade()
@@ -43,6 +48,7 @@ export default function Statement() {
   const lines = customerStatement(c.id)
   const sales = lines.reduce((n, l) => n + (l.charged ?? 0), 0)
   const paid = lines.reduce((n, l) => n + (l.paid ?? 0), 0)
+  // "Last payment" is whichever is newer: a separate payment, or money paid at the time of a sale.
   const lastPayment = payments.filter((p) => p.direction === 'in' && p.partyId === c.id).sort((x, y) => y.date.localeCompare(x.date))[0]
   const lastSalePaid = [...lines].reverse().find((l) => l.charged !== null && (l.paid ?? 0) > 0)
   const latest = lastPayment && (!lastSalePaid || lastPayment.date >= lastSalePaid.date) ? { amount: lastPayment.amount, date: lastPayment.date } : lastSalePaid ? { amount: lastSalePaid.paid!, date: lastSalePaid.date } : null

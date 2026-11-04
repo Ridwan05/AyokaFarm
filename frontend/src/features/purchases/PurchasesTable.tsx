@@ -16,6 +16,7 @@ type Props = {
   onVoid?: (p: Purchase) => void
 }
 
+/** The purchases list. Correct and Void appear in a row's menu only for those allowed. */
 export function PurchasesTable({ purchases, onOpen, onPay, onEdit, onVoid }: Props) {
   const { suppliers, purchasePaid, history } = useTrade()
   const user = useCurrentUser()
@@ -62,6 +63,7 @@ export function PurchasesTable({ purchases, onOpen, onPay, onEdit, onVoid }: Pro
         <RowMenu
           items={[
             { label: 'View details', onSelect: () => onOpen(p) },
+            // Nothing left to pay once it is paid in full.
             { label: 'Record a payment', onSelect: () => onPay(p), disabled: totalOf(p) <= purchasePaid(p.ref) },
             { label: 'Supplier statement (PDF)', onSelect: () => window.open(`/print/statement/supplier/${p.supplierId}`, '_blank') },
             ...(onEdit && canEditRecord(user, 'purchases', history.purchases.find((x) => x.ref === p.ref)) ? [{ label: 'Correct purchase…', onSelect: () => onEdit(p) }] : []),

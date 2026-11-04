@@ -24,6 +24,7 @@ export function EditPenModal({ pen, onClose }: Props) {
   // A second tap while saving would save the pen twice.
   const [busy, setBusy] = useState(false)
 
+  // A pen with a live flock can't be taken out of use.
   const flock = history.flocks.find((f) => f.pen_id === pen.id && f.status === 'active')
   const capacityNum = Number(capacity.replace(/,/g, ''))
   const errors = {

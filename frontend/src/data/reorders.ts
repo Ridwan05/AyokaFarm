@@ -8,9 +8,11 @@ import type { Database } from '../lib/supabase/database.types'
 // "Ask to reorder" requests (reorder_requests): the store keeper asks, whoever buys marks them
 // ordered or dismisses them. Loaded by the screens that show them, not with the farm's records.
 
+/** A reorder request row. */
 export type ReorderRequest = Database['public']['Tables']['reorder_requests']['Row']
 type NewRequest = Database['public']['Tables']['reorder_requests']['Insert']
 
+// Database errors in words the store keeper can act on.
 const friendly = (message: string) =>
   /does not exist|schema cache/i.test(message)
     ? 'Reorder requests aren’t set up yet (run the latest database migration).'
@@ -58,7 +60,7 @@ export function useReorderRequests() {
   return { open, error, reload, decide }
 }
 
-/** Save a new request. Resolves to an error message, or null when it saved. */
+/** Save a new request. Resolves to an error message, or null when it saved. A double tap sends it once. */
 export const askToReorder = once('reorder-ask', async (request: NewRequest): Promise<string | null> => {
   const { error } = await createClient().from('reorder_requests').insert(request)
   return error ? friendly(error.message) : null

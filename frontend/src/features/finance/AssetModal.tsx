@@ -30,6 +30,7 @@ export function AssetModal({ asset, save, onClose }: Props) {
   const [submitted, setSubmitted] = useState(false)
   const [saving, setSaving] = useState(false)
 
+  // Land isn't depreciated, so it has no useful life or end value.
   const land = category === 'land'
   const lifeMonths = land ? null : lifeUnit === 'Years' ? Math.round(num(life) * 12) : Math.round(num(life))
   const errors = {
@@ -53,6 +54,7 @@ export function AssetModal({ asset, save, onClose }: Props) {
       cost: num(cost),
       useful_life_months: lifeMonths,
       salvage_value: land ? 0 : num(salvage),
+      // "Already owned" has no account: no money left the farm, it counts as owner's capital.
       paid_from: paid === 'Cash' ? 'cash' : paid === 'Bank' ? 'bank' : null,
       notes: notes.trim() || null,
     }
@@ -140,15 +142,18 @@ export function DisposeModal({ asset, save, onClose }: { asset: FixedAsset; save
   const [amount, setAmount] = useState('0')
   const [account, setAccount] = useState<'Cash' | 'Bank'>('Bank')
   const [saving, setSaving] = useState(false)
+  // It can't leave the farm before it arrived.
   const tooEarly = date < asset.acquired_on
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    // A second tap while saving would send the disposal twice.
     if (saving || tooEarly) return
     setSaving(true)
     const ok = await save((db) =>
       db
         .from('fixed_assets')
+        // A scrapped asset brings in nothing, so it has no account to pay into.
         .update({ disposed_on: date, disposal_amount: num(amount), disposal_account: num(amount) > 0 ? account.toLowerCase() : null })
         .eq('id', asset.id),
     ).finally(() => setSaving(false))

@@ -26,12 +26,18 @@ import { InfoTip } from '../../components/ui/InfoTip'
 import { explain } from '../../data/explain'
 import { explainMoney } from '../../data/explainMoney'
 
+/** A date some days after an ISO date, as a local Date. */
 const addDays = (iso: string, days: number) => {
   const d = parseISODate(iso)
   d.setDate(d.getDate() + days)
   return d
 }
 
+/**
+ * One supplier's statement: what we owe (or the credit they hold for us), when it is due,
+ * aging, totals since go-live and every purchase and payment line. Edit shows only for roles
+ * that may edit Customers & suppliers.
+ */
 export default function SupplierStatement() {
   const { supplierId = '' } = useParams<{ supplierId: string }>()
   const { suppliers, supplierBalance, supplierOpenBills, supplierStatement, payments } = useTrade()
@@ -47,6 +53,7 @@ export default function SupplierStatement() {
   const lines = supplierStatement(s.id)
   const bought = lines.reduce((n, l) => n + (l.charged ?? 0), 0)
   const paid = lines.reduce((n, l) => n + (l.paid ?? 0), 0)
+  // Due date = the oldest unpaid purchase + the supplier's payment terms; payments clear oldest first.
   const due = bills[0] ? addDays(bills[0].date, s.termsDays) : null
   const overdue = due ? daysBetween(TODAY_ISO, due.toISOString().slice(0, 10)) < 0 : false
   const last = payments.filter((p) => p.direction === 'out' && p.partyId === s.id).sort((x, y) => y.date.localeCompare(x.date))[0]
@@ -68,6 +75,7 @@ export default function SupplierStatement() {
             <Button leadingIcon={Printer} onClick={() => window.open(`/print/statement/supplier/${s.id}`, '_blank')}>
               Statement PDF
             </Button>
+            {/* Nothing to pay while we owe nothing or they hold credit for us. */}
             <Button variant="primary" leadingIcon={Banknote} disabled={balance <= 0} onClick={() => setPaying(true)}>
               Pay supplier
             </Button>

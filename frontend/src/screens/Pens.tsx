@@ -28,15 +28,18 @@ import { Presence } from '../components/ui/Overlay'
 
 const SORTS = ['Needs attention first', 'Pen number', 'Most birds'] as const
 
+/** Sort order for each choice in the sort menu. Lower attention = more urgent. */
 const sorters: Record<(typeof SORTS)[number], (a: Pen, b: Pen) => number> = {
   'Needs attention first': (a, b) => a.attention - b.attention,
   'Pen number': (a, b) => a.id - b.id,
   'Most birds': (a, b) => b.liveBirds - a.liveBirds,
 }
 
+/** Every pen as a tile with its flock and key figures, plus closed flocks and (for the owner) pens out of use. */
 export default function Pens() {
   const trade = useTrade()
   const user = useCurrentUser()
+  // Only the owner edits pens or sees pens taken out of use.
   const owner = user.role === 'owner'
   const closedFlocks = closedFlockRows(trade)
   // The flock decides what a pen holds; empty pens count under All only.
@@ -84,6 +87,7 @@ export default function Pens() {
         <Select label="Sort pens" leadingIcon={ListFilter} width={240} options={SORTS} value={sort} onChange={setSort} />
       </div>
 
+      {/* Pen tiles */}
       <div className="grid grid-cols-3 gap-x-4 gap-y-6">
         {visible.map((pen) => (
           <PenTile key={pen.id} pen={pen} onEdit={owner ? () => setEditing(pen.id) : undefined} />
@@ -131,12 +135,15 @@ export default function Pens() {
   )
 }
 
+/** Text colour for a pen stat's tone. */
 const statTone = { default: 'text-fg-primary', warning: 'text-fg-warning', danger: 'text-fg-danger' }
 
+/** One pen: flock, status, live birds against capacity, key stats. Links to the pen; the owner also gets an edit button. */
 function PenTile({ pen, onEdit }: { pen: Pen; onEdit?: () => void }) {
   const { catalog } = useTrade()
   const empty = pen.flock === '—'
   const Icon = !empty && pen.type === 'Layers' ? Egg : Bird
+  // Capacity bar, capped at full if the pen is over capacity.
   const fill = Math.min(pen.liveBirds / pen.capacity, 1) * 100
   const description = catalog.pens.find((p) => p.id === pen.id)?.description
   return (
@@ -203,6 +210,7 @@ function PenTile({ pen, onEdit }: { pen: Pen; onEdit?: () => void }) {
   )
 }
 
+/** One small stat on a pen tile; a missing value shows as a dash. */
 function StatBlock({ stat }: { stat: Stat }) {
   return (
     <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -222,6 +230,7 @@ function StatBlock({ stat }: { stat: Stat }) {
   )
 }
 
+/** One row of the closed flocks table. */
 type ClosedFlock = {
   code: string
   initials: string
@@ -252,6 +261,7 @@ function closedFlockRows({ history, catalog }: Trade): ClosedFlock[] {
       const placedIn = birdsPlacedIn(history, f)
       const lays = catalog.birdTypes.find((b) => b.id === f.bird_type_id)?.lays_eggs
       const closed = f.closed_on ?? rows.at(-1)?.date ?? f.placed_on
+      // Money is only worked out when the whole flock life is inside the loaded records; otherwise it would be part-life.
       const m = f.placed_on >= history.since ? penMoney(history, catalog, { from: f.placed_on, to: closed }).find((x) => x.penId === f.pen_id) : undefined
       const rear = rearingCost(history, catalog, f)
       return {
@@ -264,7 +274,9 @@ function closedFlockRows({ history, catalog }: Trade): ClosedFlock[] {
         closed: `${dayMonth(closed)} ${closed.slice(0, 4)}`,
         birdsIn: placedIn,
         birdsOut: flockBirdsOn(history, f, closed),
+        // Mortality = all deaths recorded over the flock's life ÷ birds placed.
         mortalityPct: (rows.reduce((n, d) => n + d.mortality, 0) * 100) / placedIn,
+        // Margin = the pen's revenue over the flock's life − its costs (feed, medication, birds, its own expenses and its share of overhead).
         margin: m ? m.revenue - penCost(m) : null,
         reason: CLOSE_REASONS.find((r) => r.value === f.close_reason)?.label ?? '—',
         rearing: f.placed_on >= history.since ? rear.total : null,
@@ -273,6 +285,7 @@ function closedFlockRows({ history, catalog }: Trade): ClosedFlock[] {
     })
 }
 
+/** Columns of the closed flocks table. */
 const flockColumns: Column<ClosedFlock>[] = [
   {
     key: 'flock',

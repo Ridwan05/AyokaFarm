@@ -21,8 +21,11 @@ import type { Catalog, History } from './remote'
 // outside the records) shows as an "Unreconciled difference", never hidden.
 
 type Tables = Database['public']['Tables']
+/** A fixed asset (land, buildings, equipment, machinery, vehicles). */
 export type FixedAsset = Tables['fixed_assets']['Row']
+/** Opening cash, capital, drawings, loans and other income (Finance → Capital & loans). */
 export type FinanceEntry = Tables['finance_entries']['Row']
+/** Everything the Finance screens load beyond the farm's records. */
 export type FinanceData = { assets: FixedAsset[]; entries: FinanceEntry[] }
 
 const emptyFinance: FinanceData = { assets: [], entries: [] }
@@ -58,6 +61,7 @@ export function useFinance() {
     void reload()
   }, [reload])
 
+  /** Run a write; on error show it, otherwise reload. Resolves true when it saved. */
   const save = useCallback(
     async (run: (database: typeof db) => PromiseLike<{ error: { message: string } | null }>) => {
       const { error: e } = await run(db)
@@ -76,6 +80,7 @@ export function useFinance() {
 
 // ── Shared pieces ───────────────────────────────────────────────────
 
+/** One line of a financial statement, with the records that add up to it. */
 export type Line = {
   key: string
   label: string
@@ -89,6 +94,7 @@ export type Line = {
 type Range = { from: string; to: string }
 type Inputs = { history: History; catalog: Catalog; finance: FinanceData; payroll: Payroll | null; today?: string }
 
+/** Expense lines on the Income Statement; each expense category maps to one (Settings → Lists). */
 export const STATEMENT_LINES = {
   labour: 'Labour (wages and salaries)',
   utilities: 'Utilities and power',
@@ -100,6 +106,7 @@ export const STATEMENT_LINES = {
   permits: 'Permits, licences and levies',
   misc: 'Miscellaneous',
 } as const
+/** An Income Statement expense line. */
 export type StatementLine = keyof typeof STATEMENT_LINES
 const OPERATING: StatementLine[] = ['labour', 'utilities', 'supplies', 'healthcare', 'maintenance']
 const OVERHEAD: StatementLine[] = ['transport', 'marketing', 'permits', 'misc']
@@ -109,10 +116,12 @@ export const openingDate = (history: History) => farmSettings.goLiveDate ?? hist
 
 const money = (n: number | string | null | undefined) => Number(n ?? 0)
 const total = (p: { total: number | null; quantity: number; unit_price: number }) => money(p.total ?? p.quantity * p.unit_price)
+// Transfers and POS land in the bank; everything else is cash in hand.
 const accountOf = (method: string | null | undefined): 'cash' | 'bank' => (method === 'transfer' || method === 'pos' ? 'bank' : 'cash')
 const item = (key: string, date: string, title: string, detail: string, amount: number): MoneyItem => ({ key, date, title, detail, amount })
 const line = (key: string, label: string, items: MoneyItem[], info: string): Line => ({ key, label, amount: sum(items, (i) => i.amount), info, items })
 
+/** The statement line for an expense category: the one saved in Settings, else guessed from its name. */
 function categoryLine(catalog: Catalog, categoryId: number): StatementLine {
   const c = catalog.categories.find((x) => x.id === categoryId) as (Catalog['categories'][number] & { statement_line?: string }) | undefined
   const saved = c?.statement_line as StatementLine | undefined
@@ -131,6 +140,7 @@ function categoryLine(catalog: Catalog, categoryId: number): StatementLine {
 
 // ── Payroll pieces (posted months only) ─────────────────────────────
 
+/** Approved payroll months that posted a Labour expense, dated by that expense. Empty when payroll isn't visible. */
 function payrollMonths(history: History, payroll: Payroll | null) {
   if (!payroll) return []
   return payroll.runs
@@ -169,6 +179,7 @@ function stockValue(history: History, d: string, G: string) {
   }
   return items
 }
+// Feed and medication names, cached per catalog so the statement helpers needn't pass it around.
 const names = { feed: new Map<number, string>(), med: new Map<number, string>() }
 let namesFor: Catalog | null = null
 function feedNameOf(_h: History, id: number) {
@@ -219,6 +230,7 @@ export function flockValues(history: History, catalog: Catalog, d: string): Mone
     const layStart = layer ? (f.laying_started_on ?? suggestedLayStart(history, f)) : null
     if (layStart && layStart <= d) {
       const rear = rearingCost(history, catalog, f, d)
+      // Share of the laying period gone by d, never more than all of it.
       const used = Math.min(1, (daysFrom(layStart, d) + 1) / days)
       const hens = rear.hens ?? placedBirds
       const value = rear.total * (1 - used) * Math.min(1, hens ? alive / hens : 1)
@@ -252,10 +264,12 @@ export function eggValue(history: History, catalog: Catalog, d: string): MoneyIt
 
 // ── Fixed assets ────────────────────────────────────────────────────
 
+// Average days in a month (365.25 ÷ 12).
 const DAYS_A_MONTH = 30.4375
 
 /** Depreciation of one asset between two dates (inclusive), straight-line, never below salvage. */
 export function depreciation(a: FixedAsset, from: string, to: string) {
+  // No useful life (land) means no depreciation.
   if (!a.useful_life_months) return 0
   const start = from > a.acquired_on ? from : a.acquired_on
   const lifeEnd = addDays(a.acquired_on, Math.round(a.useful_life_months * DAYS_A_MONTH) - 1)
@@ -274,6 +288,7 @@ export function bookValue(a: FixedAsset, d: string) {
 
 // ── Income Statement ────────────────────────────────────────────────
 
+/** The Income Statement for a period, line by line with totals. */
 export type IncomeStatement = {
   range: Range
   revenue: Line[]
@@ -286,6 +301,7 @@ export type IncomeStatement = {
   netProfit: number
 }
 
+/** Revenue, operating costs and overheads for a period, on an accrual basis, from go-live at the earliest. */
 export function incomeStatement({ history, catalog, finance, payroll }: Inputs, r: Range): IncomeStatement {
   rememberNames(catalog)
   const G = openingDate(history)
@@ -316,6 +332,7 @@ export function incomeStatement({ history, catalog, finance, payroll }: Inputs, 
       .map((d) => item(`f${d.id}`, d.date, `${catalog.pens.find((p) => p.id === d.penId)?.name ?? `Pen ${d.penId}`} · ${d.feedBags.toFixed(1)} bags`, `× ${Math.round(avg).toLocaleString('en-NG')} average a bag`, d.feedBags * avg))
     operating.push(line(`feed-${id}`, `Feed · ${feedNameOf(history, id)}`, its, 'Bags used in daily entries × the average price paid a bag (received purchases). Feed bought but not used is stock on the Balance Sheet.'))
   }
+  // Birds with no cost (none typed, not from a purchase) add nothing.
   const placed = history.placements.filter((p) => inR(p.placed_on) && money(p.cost_per_bird) > 0)
   operating.push(
     line(
@@ -340,6 +357,7 @@ export function incomeStatement({ history, catalog, finance, payroll }: Inputs, 
       .filter((e) => categoryLine(catalog, e.category_id) === l)
       .map((e) => item(`e${e.id}`, e.spent_on, `${e.ref} · ${e.description}`, catalog.categories.find((c) => c.id === e.category_id)?.name ?? '', money(e.amount)))
   for (const l of OPERATING) operating.push(line(`exp-${l}`, STATEMENT_LINES[l], byLine(l), `Expenses in categories mapped to “${STATEMENT_LINES[l]}” (Settings → Lists), dated in the period.${l === 'labour' ? ' Includes approved payroll at gross pay.' : ''}`))
+  // A shortfall on a count is a cost; stock found over reduces costs.
   const losses = history.adjustments
     .filter((a) => !a.is_opening && (a.feed_type_id || a.medication_id) && inR(a.adjusted_on))
     .map((a) => {
@@ -362,7 +380,7 @@ export function incomeStatement({ history, catalog, finance, payroll }: Inputs, 
     items: [...endVal.map((i) => ({ ...i, key: `end-${i.key}`, title: `${i.title} · end`, amount: -i.amount })), ...startVal.map((i) => ({ ...i, key: `start-${i.key}`, title: `${i.title} · start` }))],
   })
 
-  // 4. Overheads.
+  // 3. Gross profit is revenue − operating costs (worked out below). 4. Overheads.
   const overheads: Line[] = OVERHEAD.map((l) => line(`exp-${l}`, STATEMENT_LINES[l], byLine(l), `Expenses in categories mapped to “${STATEMENT_LINES[l]}” (Settings → Lists), dated in the period.`))
   overheads.push(
     line(
@@ -397,6 +415,7 @@ export function incomeStatement({ history, catalog, finance, payroll }: Inputs, 
 
 // ── Balance Sheet ───────────────────────────────────────────────────
 
+/** The Balance Sheet at a date, line by line with totals and any unreconciled difference. */
 export type BalanceSheet = {
   asAt: string
   openingDate: string
@@ -418,6 +437,10 @@ export type BalanceSheet = {
   payrollIncluded: boolean
 }
 
+/**
+ * Assets, liabilities and equity at the end of `asAt`. Movements count from go-live; what was
+ * held or owed before then comes in as opening equity.
+ */
 export function balanceSheet(inputs: Inputs, asAt: string): BalanceSheet {
   const { history, catalog, finance, payroll } = inputs
   rememberNames(catalog)
@@ -426,10 +449,12 @@ export function balanceSheet(inputs: Inputs, asAt: string): BalanceSheet {
   const upToD = (x: string | null | undefined) => Boolean(x) && x! <= d
   const afterOpening = (x: string) => x >= G && x <= d
   const months = payrollMonths(history, payroll).filter((m) => m.date <= d)
+  // The posted payroll expense is paid through payslips (net pay), so its own expense row moves no cash.
   const payrollExpenseIds = new Set(payrollMonths(history, payroll).map((m) => m.run.expense_id))
 
   // ── Cash and bank: opening + money in − money out.
   const flows: (MoneyItem & { account: 'cash' | 'bank' })[] = []
+  // Amounts under half a kobo are rounding, not money.
   const flow = (account: 'cash' | 'bank', key: string, date: string, title: string, detail: string, amount: number) => {
     if (Math.abs(amount) > 0.004) flows.push({ ...item(key, date, title, detail, amount), account })
   }
@@ -521,6 +546,7 @@ export function balanceSheet(inputs: Inputs, asAt: string): BalanceSheet {
   const longTermLiabilities: Line[] = [line('long-loans', 'Long-term loans and partner notes', loanItems('long'), 'Loans due after a year: received − repaid (Finance → Capital & loans).')]
 
   // ── Equity.
+  // Birds and assets the owner brought in without a purchase are capital, at the value typed.
   const birdsGiven = history.placements.filter((p) => !p.purchase_id && money(p.cost_per_bird) > 0 && upToD(p.placed_on))
   const assetsGiven = finance.assets.filter((a) => !a.paid_from && upToD(a.acquired_on))
   const openingStock = history.adjustments.filter((a) => a.is_opening && (a.feed_type_id || a.medication_id) && upToD(a.adjusted_on))
@@ -544,6 +570,7 @@ export function balanceSheet(inputs: Inputs, asAt: string): BalanceSheet {
     ...assetsGiven.map((a) => item(`ag${a.id}`, a.acquired_on, `${a.name} · brought into the farm`, a.acquired_on < G ? 'Value at go-live' : 'Contributed', money(a.cost) - (a.acquired_on < G ? depreciation(a, a.acquired_on, before) : 0))),
     ...birdsGiven.map((p) => item(`bg${p.id}`, p.placed_on, `${history.flocks.find((f) => f.id === p.flock_id)?.code ?? 'Flock'} · birds not from a purchase`, `${p.birds} × ${money(p.cost_per_bird)}`, p.birds * money(p.cost_per_bird))),
   ]
+  // Retained earnings: every profit since go-live, from the same Income Statement, so the two reconcile.
   const profit = d >= G ? incomeStatement(inputs, { from: G, to: d }) : null
   const equity: Line[] = [
     line('opening-equity', 'Opening equity at go-live', opening, 'What the farm owned less what it owed at go-live: opening cash and bank, customer and supplier balances, loans, opening stock and live birds.'),
@@ -584,6 +611,7 @@ export function balanceSheet(inputs: Inputs, asAt: string): BalanceSheet {
   }
 }
 
+/** What the "Unreconciled difference" line means and its usual causes (info icon). */
 export const unreconciledInfo = () =>
   'Assets − (liabilities + equity). It is zero when every record is in the app. Common causes: opening cash, bank, stock or balances at go-live not entered; money paid in or out that wasn’t recorded; a purchase received short or returned; payroll not visible to your role.'
 

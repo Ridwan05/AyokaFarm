@@ -14,6 +14,7 @@ import { BUYS, buysKinds, friendlyError } from './partyRules'
 const TYPES = ['Regular customer', 'One-off buyer'] as const
 const CONSENT = ['Yes, they agreed', 'Not yet'] as const
 
+/** Add a regular customer with their phone, what they buy, WhatsApp consent and any opening balance. One-off buyers are not added here. */
 export function AddCustomerModal({ onClose }: { onClose: () => void }) {
   const trade = useTrade()
   const toast = useToast()
@@ -29,6 +30,7 @@ export function AddCustomerModal({ onClose }: { onClose: () => void }) {
   const [submitted, setSubmitted] = useState(false)
   const regular = type === 'Regular customer'
   const openingValue = Number(opening.replace(/,/g, '')) || 0
+  // Errors only show after the first save attempt (see `submitted`).
   const errors = {
     name: name.trim() ? undefined : 'Enter a name',
     phone: phone.replace(/\D/g, '').length >= 10 ? undefined : 'Enter an 11-digit phone number',
@@ -49,12 +51,14 @@ export function AddCustomerModal({ onClose }: { onClose: () => void }) {
         .from('customers')
         .insert({
           name: trimmed,
+          // The first two words of the name, for tight spaces like table rows.
           short_name: trimmed.split(' ').slice(0, 2).join(' '),
           phone: phone.trim(),
           area: area.trim() || null,
           buys: buysKinds(buys),
           whatsapp_opt_in: consent === CONSENT[0],
           opening_balance: openingValue,
+          // An opening balance always records where it came from, so it can be traced later.
           opening_balance_source: openingValue ? source.trim() || 'Entered when the customer was added' : null,
         })
       if (error) return void errorToast.error(friendlyError(error.message))

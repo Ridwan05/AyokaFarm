@@ -20,6 +20,7 @@ import { Presence } from '../components/ui/Overlay'
 
 const TABS = ['All', 'Feed', 'Medication'] as const
 
+/** A table row: an order still due (pending) or a delivery that has arrived. */
 type Row = (Delivery & { pending?: false }) | (Order & { pending: true })
 
 /** ST-D52 · what's been ordered and what's arrived. Prices and payments stay with the owner and accounts. */
@@ -28,14 +29,18 @@ export default function Deliveries() {
   const [tab, setTab] = useState<(typeof TABS)[number]>('All')
   const [receiving, setReceiving] = useState(false)
   const match = (k: string) => tab === 'All' || k === tab.toLowerCase()
+  // Orders still due come first so the store keeper sees what to expect.
   const rows: Row[] = [...orders.map((o) => ({ ...o, pending: true as const })), ...deliveries].filter((r) => match(r.kind))
   // Received stock purchases (feed and medication) with the day they arrived.
   const received = history.purchases.filter((p) => p.received_on && p.kind !== 'birds')
   const receivedIn = (r: { from: string; to: string }) => received.filter((p) => inRange(p.received_on!, r))
   const week = weekSpans()
   const month = monthSpans()
+  // Bags of feed in, counting what actually arrived rather than what was ordered.
   const feedIn = (r: { from: string; to: string }) => receivedIn(r).filter((p) => p.kind === 'feed').reduce((n, p) => n + Number(p.received_quantity ?? p.quantity), 0)
+  // Items returned to suppliers this month so far.
   const sentBack = receivedIn(month.now).reduce((n, p) => n + Number(p.returned_quantity), 0)
+  // First names of whoever signed for deliveries this week.
   const receivers = [...new Set(receivedIn(week.now).map((p) => catalog.profiles.find((x) => x.id === p.received_by)?.full_name.split(' ')[0]).filter(Boolean))]
   const accounts = [roleWithName(catalog, 'owner', 'the owner'), roleWithName(catalog, 'sales_accounts', 'accounts')].join(' and ')
 

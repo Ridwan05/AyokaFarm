@@ -27,8 +27,13 @@ import { formatNaira } from '../../lib/format'
 const FLAT = [0, 0]
 const year = (iso: string) => iso.slice(0, 4)
 
+/** One register row: the asset with its depreciation to date, book value today and status. */
 type Row = { asset: FixedAsset; deprec: number; book: number; status: 'In use' | 'Disposed' | 'Fully depreciated' }
 
+/**
+ * The fixed asset register with cost, depreciation and book value totals. Adding needs
+ * Finance "add"; editing and disposing need "edit"; deleting needs "all" delete access.
+ */
 export default function FixedAssets() {
   const user = useCurrentUser()
   const toast = useToast()
@@ -45,6 +50,7 @@ export default function FixedAssets() {
   const rows: Row[] = data.assets.map((a) => {
     const deprec = depreciation(a, a.acquired_on, a.disposed_on ?? today)
     const book = bookValue(a, today)
+    // Land has no useful life, so it is never "fully depreciated". The ₦0.50 allows for rounding.
     const status = a.disposed_on && a.disposed_on <= today ? 'Disposed' : a.useful_life_months && book <= Number(a.salvage_value) + 0.5 ? 'Fully depreciated' : 'In use'
     return { asset: a, deprec, book, status }
   })
@@ -52,6 +58,7 @@ export default function FixedAssets() {
   const totalCost = held.reduce((n, r) => n + Number(r.asset.cost), 0)
   const totalDeprec = held.reduce((n, r) => n + r.deprec, 0)
   const totalBook = held.reduce((n, r) => n + r.book, 0)
+  // Includes assets disposed of this year, for the months they were still owned.
   const thisYear = data.assets.reduce((n, a) => n + depreciation(a, `${year(today)}-01-01`, today), 0)
 
   const kpis = [
@@ -90,6 +97,7 @@ export default function FixedAssets() {
       rows.map((r) => [r.asset.name, CATEGORY_LABEL[r.asset.category], r.asset.acquired_on, Number(r.asset.cost), r.asset.useful_life_months, Number(r.asset.salvage_value), r.asset.paid_from ?? 'already owned', Math.round(r.deprec), Math.round(r.book), r.asset.disposed_on, r.asset.disposal_amount]),
     )
 
+  /** Delete an asset entered by mistake. One that was sold or scrapped should be disposed of instead, so its history stays. */
   const remove = async (a: FixedAsset) => {
     if (saving || !window.confirm(`Delete ${a.name}? Use Dispose instead if it was sold or scrapped.`)) return
     setSaving(true)

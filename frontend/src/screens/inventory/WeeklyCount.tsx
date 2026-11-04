@@ -23,6 +23,7 @@ import { formatNumber } from '../../lib/format'
 /** A flat line for KPIs with no daily trend to show. */
 const FLAT = [0, 0]
 
+/** One line on the count sheet: what the app expects, and what was counted and why it differs. */
 type Item = {
   name: string
   /** Eggs aren't named stock items; they're saved against the egg store. */
@@ -39,6 +40,7 @@ type Item = {
   at: string
 }
 
+/** A typed number, ignoring thousands commas. */
 const num = (v: string) => Number(v.replace(/,/g, ''))
 
 /** ST-D51 · Weekly blind count. Each item starts empty; the expected figure shows once it is counted. */
@@ -50,9 +52,12 @@ export default function WeeklyCount() {
   // Who decides the big differences: the farm manager(s), or the owner when there's none.
   const deciders = staffWithRole(catalog, 'farm_manager').concat(staffWithRole(catalog, 'farm_manager').length ? [] : staffWithRole(catalog, 'owner'))
   const manager = deciders.length ? deciders.join(' or ') : 'the farm manager'
+  // Opening-stock reasons are for go-live only, not for a weekly count.
   const reasons = catalog.reasons.filter((r) => r.is_active && !/opening/i.test(r.name)).map((r) => r.name)
   const eggsOnHand = (item: 'eggs' | 'cracked_eggs') => catalog.levels.find((l) => l.item === item)?.onHand ?? 0
 
+  // The sheet is built once, from stock as it stands when the screen opens.
+  // Approval limits: 2 bags of feed, 100 g or 1 unit of medication, 1 crate of eggs.
   const [items, setItems] = useState<Item[]>(() => {
     const blank = { counted: '', reason: '', note: '', at: '' }
     const feeds: Item[] = feedTypes.map((f) => ({
@@ -74,11 +79,13 @@ export default function WeeklyCount() {
   const [showSent, setShowSent] = useState(true)
   const [saving, setSaving] = useState(false)
 
+  // Count − expected to one decimal; null until something is typed.
   const diffOf = (i: Item) => (i.counted.trim() === '' ? null : Math.round((num(i.counted) - i.expected) * 10) / 10)
   const counted = items.filter((i) => diffOf(i) !== null)
   const differences = items.filter((i) => (diffOf(i) ?? 0) !== 0)
   const missingReason = differences.filter((i) => !i.reason)
   const bigger = differences.filter((i) => Math.abs(diffOf(i)!) > i.limit)
+  // Gains and losses both add to the value adjusted; eggs have no unit cost here.
   const value = differences.reduce((n, i) => n + Math.abs(diffOf(i)!) * i.unitCost, 0)
   // The time is stamped when an item is first counted.
   const update = (name: string, patch: Partial<Item>) => setItems((list) => list.map((i) => (i.name === name ? { ...i, ...patch, at: i.at || ('counted' in patch ? nowHM() : '') } : i)))
@@ -86,6 +93,7 @@ export default function WeeklyCount() {
   const span = times.length ? (times[0] === times[times.length - 1] ? times[0] : `${times[0]}–${times[times.length - 1]}`) : 'not started'
   const unitText = (i: Item, n: number) => `${formatNumber(Math.abs(n))} ${i.unit === 'bags' && Math.abs(n) === 1 ? 'bag' : i.unit === 'crates' && Math.abs(n) === 1 ? 'crate' : i.unit}`
 
+  /** Save every counted line as a stock adjustment. Once saved, the sheet locks. */
   const send = async () => {
     // A second tap while saving would save the count twice.
     if (saving) return
@@ -235,6 +243,7 @@ export default function WeeklyCount() {
           <KpiCard key={k.label} kpi={k} />
         ))}
       </div>
+      {/* After saving: what changed stock now and what waits for approval */}
       {sentAt && showSent && (
         <Alert tone="success" icon={CircleCheck} title={`Count saved at ${sentAt}`} onDismiss={() => setShowSent(false)}>
           {differences.length

@@ -13,6 +13,7 @@ type SelectProps<T extends string> = {
   format?: (value: T) => string
 }
 
+/** Dropdown picker for a short list of options. Closes on a click outside or Escape. */
 export function Select<T extends string>({
   options,
   value,
@@ -32,6 +33,7 @@ export function Select<T extends string>({
       if (!ref.current?.contains(e.target as Node)) setOpen(false)
     }
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false)
+    // mousedown, not click, so the list closes before another control reacts to the same press.
     document.addEventListener('mousedown', close)
     document.addEventListener('keydown', onKey)
     return () => {

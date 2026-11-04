@@ -40,6 +40,7 @@ export function BarChart({ values, yTicks, xLabels, colorFor, threshold, labelLa
                 <div
                   className="absolute bottom-0 w-full rounded-t-[3px]"
                   style={
+                    // A zero day still gets a thin grey stub, so it reads as "none" rather than missing.
                     v === 0
                       ? { height: 2, background: 'var(--ayk-color-border-default)', borderRadius: 0 }
                       : { height: (v / max) * height, background: colorFor(v, i) }

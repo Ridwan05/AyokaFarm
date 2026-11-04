@@ -16,9 +16,14 @@ import { dayMonth } from '../purchases/purchaseView'
 
 const naira = (n: number) => `₦${formatNumber(n)}`
 
+/**
+ * One expense: what it was for, how it was paid, any amount still owed to the supplier,
+ * the receipt, and how it is charged to the pens. Correct and Void show only to those allowed.
+ */
 export function ExpenseDrawer({ expense: e, onClose, onEdit, onVoid }: { expense: Expense; onClose: () => void; onEdit?: () => void; onVoid?: () => void }) {
   const user = useCurrentUser()
   const { history, catalog, receiptUrl } = useTrade()
+  // The saved row tells the edit rule who recorded it and when.
   const row = history.expenses.find((x) => x.ref === e.id)
   const mayEdit = Boolean(onEdit) && canEditRecord(user, 'expenses', row)
   const mayVoid = Boolean(onVoid) && canVoidRecord(user, 'expenses')
@@ -35,6 +40,7 @@ export function ExpenseDrawer({ expense: e, onClose, onEdit, onVoid }: { expense
     else tab?.close()
   }
   const supplier = suppliers.find((s) => s.id === e.supplierId)
+  // A whole-farm expense is shown split by today's live birds in each pen.
   const totalBirds = pens.reduce((n, p) => n + p.liveBirds, 0)
   const byPen = [...pens].sort((a, b) => a.id - b.id)
 

@@ -25,15 +25,22 @@ import { formatNaira, formatNumber } from '../../lib/format'
 // Finance → Opening balances: the cash, bank and loans the farm had at go-live. Everything after is
 // worked out from the records; the Balance Sheet starts from these.
 
+/** "09 Oct 2026" */
 const fullDate = (iso: string) => `${dayMonth(iso)} ${iso.slice(0, 4)}`
 
+/**
+ * Opening balances: cash and bank at go-live, loans owed then, and a summary of the
+ * opening figures set in Go-live setup. Changing them needs Finance "add" and "edit".
+ */
 export default function OpeningBalances() {
   const user = useCurrentUser()
   const toast = useToast()
   const { history, catalog } = useTrade()
   const { data, loaded, error, reload, save } = useFinance()
   const [addingLoan, setAddingLoan] = useState(false)
+  // Falls back to the start of the loaded records when no go-live date is set (see the warning below).
   const goLive = openingDate(history)
+  // Opening figures are dated the day before go-live, so they sit before every real record.
   const day = openingDay(goLive)
   const canEdit = can(user, 'finance', 'edit') && can(user, 'finance', 'add')
 
@@ -63,6 +70,7 @@ export default function OpeningBalances() {
       ) : (
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
           <div className="flex min-w-0 flex-1 flex-col gap-4">
+            {/* Keyed on the saved entries so the inputs reset when the saved amounts change. */}
             <CashCard
               key={`${opening('cash')?.id}-${opening('cash')?.amount}-${opening('bank')?.id}-${opening('bank')?.amount}`}
               cash={opening('cash')}
@@ -128,6 +136,7 @@ export default function OpeningBalances() {
 
 type Entry = ReturnType<typeof useFinance>['data']['entries'][number]
 
+/** Cash in hand and bank balance at go-live, edited together and saved as two opening entries. */
 function CashCard({ cash, bank, day, canEdit, save, onSaved }: { cash?: Entry; bank?: Entry; day: string; canEdit: boolean; save: ReturnType<typeof useFinance>['save']; onSaved: () => void }) {
   const [cashText, setCashText] = useState(cash ? formatNumber(Number(cash.amount)) : '')
   const [bankText, setBankText] = useState(bank ? formatNumber(Number(bank.amount)) : '')

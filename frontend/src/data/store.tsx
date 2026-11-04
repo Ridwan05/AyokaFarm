@@ -20,8 +20,10 @@ import { TradeContext, type BirdSource, type Trade } from './tradeContext'
 // goes to the database (where triggers calculate refs, stock, bird counts and approvals) and then
 // the records are reloaded. Row-level security decides what each person can see and change.
 
+// Bird sources in the shape the place_flock / add_birds_to_flock functions take.
 const toSources = (sources: BirdSource[]) => sources.map((x) => ({ purchase_id: x.purchaseId, birds: x.birds, cost_per_bird: x.costPerBird ?? null }))
 
+// The screens say 'POS'; the database stores 'pos'.
 const dbMethod = (m: PaymentMethod | undefined) => (m === 'POS' ? 'pos' : m) ?? null
 
 const RECEIPTS = 'receipts'
@@ -48,6 +50,10 @@ function friendly(message: string) {
   return message.replace(/^.*?ERROR:\s*/, '')
 }
 
+/**
+ * Loads the farm's records and provides them, with every write action, to the screens below.
+ * Shows a splash until the first load finishes, or a retry screen if it fails.
+ */
 export function TradeProvider({ children }: { children: ReactNode }) {
   const user = useCurrentUser()
   const db = useMemo(() => createClient(), [])
@@ -69,6 +75,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
     void reload()
   }, [reload])
 
+  // A failed reload keeps showing the records already loaded; only a failed first load blocks the app.
   if (loadError && !data) {
     return (
       <Splash>
@@ -83,6 +90,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
   if (!data) return <Splash>Loading the farm’s records…</Splash>
 
   const { sales, purchases, payments, customers, suppliers, lookups } = data
+  // The farm day (Lagos) for deliveries and payments recorded now.
   const today = farmTodayISO()
 
   /** Run a write, show a toast if it fails, then reload. Resolves true when it saved. */
@@ -97,6 +105,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
   }
 
   const books = { purchases, expenses: data.expenses, payments }
+  /** Run something for a supplier by id, or return `none` if there's no such supplier. */
   function withSupplier<T>(id: string, run: (s: (typeof suppliers)[number]) => T, none: T): T {
     const s = suppliers.find((x) => x.id === id)
     return s ? run(s) : none
@@ -126,10 +135,12 @@ export function TradeProvider({ children }: { children: ReactNode }) {
   function saleLeft(receipt: string) {
     const sale = sales.find((s) => s.receipt === receipt)
     if (!sale) return 0
+    // Pending and walk-in sales aren't on a customer's ledger, so only their own payment counts.
     if (sale.pendingApproval || sale.customerId === 'one-off') return Math.max(0, amountOf(sale) - sale.paid)
     return customerOpenBills(sale.customerId).find((b) => b.ref === receipt)?.left ?? 0
   }
 
+  // A daily entry as save_daily_entry takes it. Feed type only when feed was used; the flock is only sent for a new entry.
   const entryPayload = (r: ProductionRecord, flock: number | null) => ({
     pen_id: r.penId,
     flock_id: flock,
@@ -215,6 +226,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
               medication_id: med ?? null,
               quantity_change: m.qty,
               counted_quantity: m.counted ?? null,
+              // An unknown reason falls back to Recount. Pending moves wait for a manager before stock changes.
               reason_id: lookups.reasonId.get(m.reason ?? 'Recount') ?? lookups.reasonId.get('Recount')!,
               note: m.source,
               status: m.pending ? 'pending' : 'applied',
@@ -287,6 +299,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
     },
 
     receiptUrl: async (path) => {
+      // The receipts bucket is private; a signed link works for 10 minutes.
       const { data: link, error } = await db.storage.from(RECEIPTS).createSignedUrl(path, 600)
       if (error) toast.error(receiptError(error.message))
       return link?.signedUrl ?? null
@@ -295,6 +308,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
     voidRecord: (kind, ref, reason) => {
       const id = recordId(kind, ref)
       if (!id) return Promise.resolve(false)
+      // Voiding is a soft delete with a reason; RLS lets only the owner do it.
       const voided = { deleted_at: new Date().toISOString(), delete_reason: reason.trim() }
       const query =
         kind === 'sales'
@@ -342,6 +356,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
       return write(() => db.rpc('save_daily_entry', { entry: entryPayload(r, flock), medications: medicationPayload(r) }))
     },
 
+    // The database checks the edit window and replaces the entry's medication lines.
     updateProductionRecord: (recordId, r) =>
       write(() => db.rpc('save_daily_entry', { entry: entryPayload(r, null), medications: medicationPayload(r), entry_id: recordId })),
 
@@ -380,6 +395,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
         }),
       ),
 
+    // Only the owner or farm manager can approve or reject (RLS).
     approveSale: (receipt) => write(() => db.from('sales').update({ approval: 'approved' }).eq('id', lookups.saleId.get(receipt)!)),
     rejectSale: (receipt) => write(() => db.from('sales').update({ approval: 'rejected' }).eq('id', lookups.saleId.get(receipt)!)),
 
@@ -465,6 +481,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
 
     async recordPayment(p) {
       const bills = p.direction === 'in' ? customerOpenBills(p.partyId) : withSupplier(p.partyId, (s) => supplierBills(s, books), [])
+      // Saved as the payment's note: which bills it clears, oldest first, or credit when nothing is owed.
       const cleared = describeAllocation(allocate(bills, p.amount)) || 'Held as credit'
       const saved = await write(() =>
         db.from('payments').insert({
@@ -494,6 +511,7 @@ export function TradeProvider({ children }: { children: ReactNode }) {
     addBirdsToFlock: (flockId, placedOn, sources) =>
       write(() => db.rpc('add_birds_to_flock', { flock_id: flockId, placed_on: placedOn, sources: toSources(sources) })),
 
+    // The database places the flock and draws its birds from bird stock in one go.
     placeFlock: (f) =>
       write(() =>
         db.rpc('place_flock', {

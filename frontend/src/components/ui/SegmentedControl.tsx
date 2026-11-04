@@ -12,6 +12,7 @@ type SegmentedControlProps<T extends string> = {
 
 const segment = 'flex h-8 items-center justify-center rounded-sm px-3 whitespace-nowrap'
 
+/** Pill switch between a few short options, e.g. Day / Week / Month. Acts as a radio group. */
 export function SegmentedControl<T extends string>({
   options,
   value,

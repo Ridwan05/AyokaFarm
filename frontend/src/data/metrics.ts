@@ -8,12 +8,15 @@ import { farmTodayISO } from './session'
 
 // ── Dates and periods ───────────────────────────────────────────────
 
+/** Today on the farm (Lagos), as YYYY-MM-DD. Read fresh on every call. */
 export const todayISO = () => farmTodayISO()
 
+/** An ISO date n days later (or earlier). Worked in UTC so daylight saving never shifts the day. */
 export function addDays(iso: string, n: number) {
   return new Date(Date.parse(`${iso}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10)
 }
 
+/** Whole days from one ISO date to another. */
 export const daysFrom = (fromISO: string, toISO: string) => Math.round((Date.parse(toISO) - Date.parse(fromISO)) / 86_400_000)
 
 /** Every date from `from` to `to`, inclusive, oldest first. */
@@ -32,10 +35,13 @@ export function weekStart(iso: string) {
   return addDays(iso, -((dow + 6) % 7))
 }
 
+/** A date range, both ends included, with its name for the screen. */
 export type Range = { from: string; to: string; label: string }
 
+/** The period choices on dashboards and reports. */
 export type PeriodKey = 'today' | 'yesterday' | 'week' | 'last-week' | 'month' | 'last-month' | 'quarter' | 'ytd' | '7d' | '30d' | '90d'
 
+/** The date range for a period choice, ending today for periods still running. Weeks start on Monday. */
 export function period(key: PeriodKey, today = todayISO()): Range {
   const y = Number(today.slice(0, 4))
   const m = Number(today.slice(5, 7))
@@ -81,6 +87,7 @@ export function period(key: PeriodKey, today = todayISO()): Range {
 /** The same length of time just before r. Month periods compare with the same days of the previous month. */
 export function previous(r: Range): Range {
   const len = daysFrom(r.from, r.to)
+  // Starts on the 1st: compare with the same days of last month, cut short at that month's end.
   if (r.from.endsWith('-01') && len >= 1 && len < 31) {
     const prevMonthEnd = addDays(r.from, -1)
     const from = prevMonthEnd.slice(0, 8) + '01'
@@ -91,12 +98,15 @@ export function previous(r: Range): Range {
   return { from: addDays(to, -len), to, label: 'previous period' }
 }
 
+/** Whether an ISO date falls in the range, both ends included. */
 export const inRange = (iso: string, r: { from: string; to: string }) => iso >= r.from && iso <= r.to
 
+// Dates are formatted as UTC midnight so the device's time zone can't move them to another day.
 const utc = (iso: string) => new Date(`${iso}T00:00:00Z`)
+/** "October" */
 export const monthName = (iso: string) => new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'UTC' }).format(utc(iso))
-/** "09 Oct" */
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+/** "09 Oct" */
 export const dayMonth = (iso: string) => `${iso.slice(8, 10)} ${MONTHS[Number(iso.slice(5, 7)) - 1]}`
 /** "Fri 09/10" */
 export const weekdayDm = (iso: string) => `${new Intl.DateTimeFormat('en-GB', { weekday: 'short', timeZone: 'UTC' }).format(utc(iso))} ${iso.slice(8, 10)}/${iso.slice(5, 7)}`
@@ -119,7 +129,9 @@ export function relativeDay(iso: string, today = todayISO()) {
 
 // ── Number formatting ───────────────────────────────────────────────
 
+/** A number with Nigerian grouping and a fixed number of decimals. */
 export const num = (n: number, digits = 0) => n.toLocaleString('en-NG', { minimumFractionDigits: digits, maximumFractionDigits: digits })
+/** "₦620,000", rounded to the naira. */
 export const naira = (n: number) => `₦${Math.round(n).toLocaleString('en-NG')}`
 
 /** ₦1.24M, ₦845k, ₦900 */
@@ -164,7 +176,9 @@ export function kpi(opts: {
   let trend: Kpi['trend'] = 'flat'
   if (current !== null && prev !== null) {
     const diff = points ? current - prev : prev ? ((current - prev) / Math.abs(prev)) * 100 : null
+    // No % change from zero last period.
     if (diff !== null) {
+      // Trend follows the rounded figure, so a change too small to show reads as "No change".
       const digits = opts.digits ?? (points ? 2 : 1)
       const rounded = Number(diff.toFixed(digits))
       trend = rounded > 0 ? 'up' : rounded < 0 ? 'down' : 'flat'
@@ -172,6 +186,7 @@ export function kpi(opts: {
     }
   }
   const sentiment: Kpi['sentiment'] = trend === 'flat' || goodWhen === 'neither' ? 'neutral' : (trend === goodWhen) ? 'good' : 'bad'
+  // A sparkline needs two points; a single value is drawn flat.
   return { label: opts.label, value: opts.value, unit: opts.unit, delta, trend, sentiment, context: opts.context, info: opts.info, spark: opts.spark.length > 1 ? opts.spark : [opts.spark[0] ?? 0, opts.spark[0] ?? 0] }
 }
 
@@ -189,6 +204,7 @@ export function niceTicks(min: number, max: number, count = 4): number[] {
   const lo = Math.floor(min / step) * step
   const hi = Math.ceil(max / step) * step
   const out: number[] = []
+  // toFixed clears floating-point dust such as 0.30000000000000004.
   for (let v = lo; v <= hi + step / 2; v += step) out.push(Number(v.toFixed(6)))
   return out
 }
@@ -198,7 +214,9 @@ export function niceTicks(min: number, max: number, count = 4): number[] {
 type PenFilter = (penId: number) => boolean
 const allPens: PenFilter = () => true
 
+/** Daily rows for one date, optionally for some pens only. */
 export const rowsOn = (daily: DailyRow[], date: string, pen: PenFilter = allPens) => daily.filter((d) => d.date === date && pen(d.penId))
+/** Daily rows in a date range, optionally for some pens only. */
 export const rowsIn = (daily: DailyRow[], r: { from: string; to: string }, pen: PenFilter = allPens) => daily.filter((d) => inRange(d.date, r) && pen(d.penId))
 
 /** Eggs ÷ hens in layer pens, %. null when no layer entries. */
@@ -213,19 +231,20 @@ export function mortalityPct(rows: DailyRow[]) {
   return safeDiv(rows.reduce((n, d) => n + d.mortality, 0) * 100, rows.reduce((n, d) => n + d.opening, 0))
 }
 
-/** Feed used vs expected, % (positive = more than expected). */
+/** Feed used vs expected, % (positive = more than expected). Days with no feed target are left out. */
 export function feedVariance(rows: DailyRow[]) {
   const withTarget = rows.filter((d) => d.expectedKg)
   const expected = withTarget.reduce((n, d) => n + (d.expectedKg ?? 0), 0)
   return safeDiv((withTarget.reduce((n, d) => n + d.feedKg, 0) - expected) * 100, expected)
 }
 
+/** Adds up f over the rows. */
 export const sum = <T>(rows: T[], f: (r: T) => number) => rows.reduce((n, r) => n + f(r), 0)
 
 type Flock = History['flocks'][number]
 type BirdInputs = Pick<History, 'placements' | 'sales' | 'saleAllocations' | 'purchases'>
 
-/** Every bird put into a flock: the first placement plus birds added later. */
+/** Every bird put into a flock: the first placement plus birds added later. Flocks without placement rows use birds_placed. */
 export const birdsPlacedIn = (history: Pick<History, 'placements'>, flock: Flock) =>
   sum(history.placements.filter((p) => p.flock_id === flock.id), (p) => p.birds) || flock.birds_placed
 
@@ -236,7 +255,9 @@ export const birdsPlacedIn = (history: Pick<History, 'placements'>, flock: Flock
  */
 export function flockBirdsAfter(h: BirdInputs, flock: Flock, latest: { date: string; closing: number } | undefined, date = '9999-12-31', exceptSaleId?: number) {
   const from = latest?.date ?? flock.placed_on
+  // Only additions after the counted day: the first placement is already in birds_placed or the closing count.
   const after = (d: string | null) => Boolean(d && d > flock.placed_on && d > from && d <= date)
+  // Placements, plus bird purchases received straight into this flock (less any sent back).
   const added =
     sum(h.placements.filter((p) => p.flock_id === flock.id && after(p.placed_on)), (p) => p.birds) +
     sum(
@@ -244,6 +265,7 @@ export function flockBirdsAfter(h: BirdInputs, flock: Flock, latest: { date: str
       (p) => Number(p.received_quantity ?? p.quantity) - Number(p.returned_quantity ?? 0),
     )
   const sales = new Map(h.sales.map((s) => [s.id, s]))
+  // Birds sold from this flock: its sale portions, pending sales included, rejected ones not.
   const sold = sum(
     h.saleAllocations.filter((a) => {
       const s = a.flock_id === flock.id && a.sale_id !== exceptSaleId ? sales.get(a.sale_id) : undefined
@@ -270,7 +292,7 @@ export function liveBirdsByPen(history: History, pen: PenFilter = allPens) {
   return out
 }
 
-/** One value per day for a sparkline or chart. */
+/** One value per day for a sparkline or chart; days with no value plot as 0. */
 export const series = (dates: string[], f: (date: string) => number | null) => dates.map((d) => f(d) ?? 0)
 
 // ── Costs ───────────────────────────────────────────────────────────
@@ -278,16 +300,17 @@ export const series = (dates: string[], f: (date: string) => number | null) => d
 type PurchaseRow = History['purchases'][number]
 const purchaseTotal = (p: PurchaseRow) => Number(p.total ?? p.quantity * p.unit_price)
 
-/** Weighted average cost of one stock unit (a bag of feed, a gram/vial of medication) from purchases. */
 /** Stock units that actually arrived on a purchase (received less sent back). */
 export const receivedUnits = (p: PurchaseRow) =>
   (Number(p.received_quantity ?? p.quantity) - Number(p.returned_quantity ?? 0)) * Number(p.stock_units_per_unit || 1)
 
+/** Weighted average cost of one stock unit (a bag of feed, a gram/vial of medication) from purchases. */
 export function unitCost(history: History, item: { feedTypeId?: number | null; medicationId?: number | null }) {
   const all = history.purchases.filter((p) => (item.feedTypeId ? p.feed_type_id === item.feedTypeId : p.medication_id === item.medicationId))
   // What was paid ÷ what arrived, over received purchases (orders not yet received don't count).
   const received = all.filter((p) => p.status === 'received')
   if (received.length) return safeDiv(sum(received, purchaseTotal), sum(received, receivedUnits)) ?? 0
+  // Nothing received yet: fall back to what was ordered.
   return safeDiv(sum(all, purchaseTotal), sum(all, (p) => Number(p.quantity) * Number(p.stock_units_per_unit || 1))) ?? 0
 }
 
@@ -297,6 +320,7 @@ export function medicationUnitCost(history: History, medicationId: number, purch
   return p && receivedUnits(p) > 0 ? purchaseTotal(p) / receivedUnits(p) : unitCost(history, { medicationId })
 }
 
+/** One pen's money over a period: revenue, each kind of cost, and the bird-days and eggs behind the shares. */
 export type PenMoney = { penId: number; revenue: number; feed: number; medication: number; birds: number; overhead: number; direct: number; birdDays: number; eggs: number; feedKg: number }
 
 /**
@@ -356,6 +380,7 @@ export function penMoney(history: History, catalog: Catalog, r: { from: string; 
     if (split?.length) for (const a of split) get(a.pen_id).revenue += Number(a.quantity) * Number(s.unit_price)
     else storeRevenue += Number(s.total ?? s.quantity * s.unit_price)
   }
+  // With no eggs collected in the period, unsplit sales go to no pen.
   for (const m of out.values()) if (totalEggs) m.revenue += (storeRevenue * m.eggs) / totalEggs
 
   const expenses = history.expenses.filter((e) => inRange(e.spent_on, r))
@@ -363,11 +388,14 @@ export function penMoney(history: History, catalog: Catalog, r: { from: string; 
   const general = sum(expenses.filter((x) => !x.pen_id), (e) => Number(e.amount))
   const birdDays = sum([...out.values()], (m) => m.birdDays)
   for (const m of out.values()) m.overhead = birdDays ? (general * m.birdDays) / birdDays : 0
+  // Pens with nothing in the period are left out.
   return [...out.values()].filter((m) => m.birdDays || m.revenue || m.feed || m.direct || m.birds)
 }
 
+/** Everything a pen cost in the period. */
 export const penCost = (m: PenMoney) => m.feed + m.medication + m.birds + m.overhead + m.direct
 
+/** One line behind a pen money figure. */
 export type MoneyItem = { key: string; date: string; title: string; detail: string; amount: number }
 
 /**
@@ -438,6 +466,7 @@ export function penMoneyItems(history: History, catalog: Catalog, r: { from: str
 
 // ── Medication ──────────────────────────────────────────────────────
 
+/** A pen in a medication withdrawal period: what was given, when, and the day it's clear. `dayOf` counts days since the dose. */
 export type Withdrawal = { penId: number; medication: string; lastDose: string; days: number; clearFrom: string; dayOf: number }
 
 /** Pens whose eggs or birds can't be sold yet: last dose + withdrawal days. */
@@ -447,8 +476,10 @@ export function withdrawals(history: History, catalog: Catalog, today = todayISO
   for (const l of history.medLines) {
     const days = meds.get(l.medicationId)?.withdrawal_days ?? 0
     if (!days) continue
+    // Sellable from the day after the withdrawal days run out.
     const clearFrom = addDays(l.date, days + 1)
     if (clearFrom <= today) continue
+    // A pen with several doses is held until the latest one clears.
     const prev = byPen.get(l.penId)
     if (!prev || clearFrom > prev.clearFrom) byPen.set(l.penId, { penId: l.penId, medication: meds.get(l.medicationId)!.name, lastDose: l.date, days, clearFrom, dayOf: daysFrom(l.date, today) })
   }
@@ -464,9 +495,10 @@ export function medicationOnHand(catalog: Catalog) {
 
 // ── Money owed ──────────────────────────────────────────────────────
 
+/** Money owed in one age band. */
 export type AgeBucket = { label: string; amount: number; overdue: boolean }
 
-/** Splits open bills into 0–30, 31–overdue and overdue+ days. */
+/** Splits open bills into 0–30, 31–overdue and over-overdue days (two bands when the overdue limit is 30 days or less). */
 export function ageBills(bills: { date: string; left: number }[], today = todayISO()): AgeBucket[] {
   const over = farmSettings.overdueDebtDays
   const mid = Math.min(30, over)
@@ -484,6 +516,7 @@ export function ageBills(bills: { date: string; left: number }[], today = todayI
 
 // ── Entries ─────────────────────────────────────────────────────────
 
+/** A pen's missing daily entry; late when it's for yesterday. */
 export type MissingEntry = { penId: number; date: string; late: boolean }
 
 /** Active pens with no entry yesterday (late), or none today once the cut-off has passed. */
@@ -492,6 +525,7 @@ export function missingEntries(history: History, today = todayISO(), now = nowHM
   const has = new Set(history.daily.map((d) => `${d.penId}|${d.date}`))
   const out: MissingEntry[] = []
   for (const f of history.flocks.filter((x) => x.status === 'active')) {
+    // A flock placed today owes nothing for yesterday. One alert per pen: yesterday's gap comes first.
     if (f.placed_on <= yesterday && !has.has(`${f.pen_id}|${yesterday}`)) out.push({ penId: f.pen_id, date: yesterday, late: true })
     else if (now >= farmSettings.missingEntryCutoff && !has.has(`${f.pen_id}|${today}`)) out.push({ penId: f.pen_id, date: today, late: false })
   }
@@ -516,14 +550,14 @@ export function roleWithName(catalog: Catalog, roleId: string, label: string) {
 
 // ── Feed reorder ────────────────────────────────────────────────────
 
-/** Feed bags used per day over the last 7 days of entries. */
+/** Feed bags used per day over the 7 full days before today (today's entries may not all be in). Null when none used. */
 export function bagsPerDay(history: History, feedTypeId: number, today = todayISO()) {
   const days = history.stockDays.filter((d) => d.item === 'feed' && d.feedTypeId === feedTypeId && inRange(d.date, { from: addDays(today, -7), to: addDays(today, -1) }))
   const used = sum(days, (d) => d.used)
   return used ? used / 7 : null
 }
 
-/** Last purchase of a feed type: supplier, price and date. */
+/** Latest purchase of a feed type or medication (received or not): supplier, price and date. */
 export function lastPurchaseOf(history: History, item: { feedTypeId?: number; medicationId?: number }) {
   return history.purchases
     .filter((p) => (item.feedTypeId ? p.feed_type_id === item.feedTypeId : p.medication_id === item.medicationId))

@@ -13,6 +13,7 @@ import { dayMonth, formatQty, purchaseStatus } from './purchaseView'
 
 const naira = (n: number) => `₦${formatNumber(n)}`
 
+/** One purchase: what was bought, what's been paid and left to pay, and its payment history. */
 export function PurchaseDrawer({ purchase: p, onClose, onPay, onEdit, onVoid }: { purchase: Purchase; onClose: () => void; onPay: () => void; onEdit?: () => void; onVoid?: () => void }) {
   const { suppliers, supplierBalance, purchasePaid, payments, history } = useTrade()
   const user = useCurrentUser()
@@ -23,6 +24,7 @@ export function PurchaseDrawer({ purchase: p, onClose, onPay, onEdit, onVoid }: 
   const paid = purchasePaid(p.ref)
   const left = total - paid
   const balance = supplierBalance(supplier.id)
+  // Supplier payments that cleared part of this purchase, newest first.
   const paymentEvents = payments
     .filter((x) => x.direction === 'out' && x.cleared.includes(p.ref))
     .sort((a, b) => b.date.localeCompare(a.date))

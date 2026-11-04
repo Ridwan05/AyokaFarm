@@ -13,6 +13,7 @@ import { formatNumber } from '../../lib/format'
 import { createClient } from '../../lib/supabase/client'
 import { friendlyError, REFUSED, SUPPLIER_KINDS, supplierKind, TERMS } from '../customers/partyRules'
 
+// The stored kind back to its label; unknown kinds show as Feed.
 const kindLabel = (k: string | undefined) => SUPPLIER_KINDS.find((x) => x.toLowerCase() === k) ?? 'Feed'
 
 /** Edit a supplier's details. The opening balance is the owner's. */
@@ -45,6 +46,7 @@ export function EditSupplierModal({ supplierId, onClose }: { supplierId: string;
     setSubmitted(true)
     if (!row || errors.name) return
     setSaving(true)
+    // Only the owner may touch the opening balance; other roles leave those columns out.
     const openingChanged = owner && openingValue !== Number(row.opening_balance)
     try {
       const { data, error } = await createClient()
@@ -61,6 +63,7 @@ export function EditSupplierModal({ supplierId, onClose }: { supplierId: string;
             ? {
                 opening_balance: openingValue,
                 opening_balance_source: source.trim() || null,
+                // A changed opening balance needs checking again (Go-live step).
                 ...(openingChanged ? { opening_balance_checked: false } : {}),
               }
             : {}),
@@ -68,6 +71,7 @@ export function EditSupplierModal({ supplierId, onClose }: { supplierId: string;
         .eq('id', row.id)
         .select('id')
       if (error) return void errorToast.error(friendlyError(error.message))
+      // No row back means row-level security quietly refused the update.
       if (!data?.length) return void errorToast.error(REFUSED)
       await trade.reload()
       toast(`${name.trim()} saved`)
@@ -77,6 +81,7 @@ export function EditSupplierModal({ supplierId, onClose }: { supplierId: string;
     }
   }
 
+  // Keep an unusual saved term (e.g. 21 days) in the list so it isn't lost on save.
   const termOptions = TERMS.some((t) => t.value === terms) ? TERMS : [...TERMS, { value: terms, label: `${terms} days after delivery` }]
 
   return (

@@ -9,6 +9,7 @@ import { useTrade } from '../../data/tradeContext'
 
 type Props = { open: boolean; onClose: () => void }
 
+/** Add an empty pen with its name, capacity and an optional description. */
 export function AddPenModal({ open, onClose }: Props) {
   const toast = useToast()
   const { addPen, catalog } = useTrade()
@@ -31,10 +32,12 @@ export function AddPenModal({ open, onClose }: Props) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    // A second tap while saving would add the pen twice.
     if (saving) return
     setSubmitted(true)
     if (errors.name || errors.capacity) return
     setSaving(true)
+    // Collapse double spaces so "Pen  3" and "Pen 3" can't both exist.
     const ok = await addPen({ name: name.trim().replace(/\s+/g, ' '), capacity: capacityNum, description: description.trim() }).finally(() => setSaving(false))
     if (!ok) return
     toast(`${name} added`)

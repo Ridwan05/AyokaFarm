@@ -20,6 +20,7 @@ import { accessOf } from '../../lib/access'
 import { downloadCsv } from '../../lib/export'
 import { ReportHeader } from './ReportHeader'
 
+/** Current lines with last month's figure beside each, plus lines that only existed last month (shown at nil now). */
 const lines = (now: Line[], before: Sheet | null, pick: (b: Sheet) => Line[]): StatementRow[] => {
   const prev = before ? new Map(pick(before).map((l) => [l.key, l.amount])) : null
   const rows: StatementRow[] = now.map((line) => ({ type: 'line', line, prev: prev ? (prev.get(line.key) ?? 0) : null }))
@@ -27,6 +28,7 @@ const lines = (now: Line[], before: Sheet | null, pick: (b: Sheet) => Line[]): S
   return rows
 }
 
+/** The balance sheet's rows in order: assets, liabilities, equity, and the check total. */
 function rowsFor(s: Sheet, p: Sheet | null): StatementRow[] {
   return [
     { type: 'heading', label: 'Current assets' },
@@ -57,6 +59,10 @@ function rowsFor(s: Sheet, p: Sheet | null): StatementRow[] {
   ]
 }
 
+/**
+ * Balance sheet as at a chosen date (from go-live to today), compared with the end of the month before,
+ * with a check that assets equal liabilities plus equity.
+ */
 export default function BalanceSheet() {
   const { history, catalog } = useTrade()
   const user = useCurrentUser()
@@ -67,15 +73,18 @@ export default function BalanceSheet() {
   const [asAt, setAsAt] = useState(today)
   const [open, setOpen] = useState<Line | null>(null)
 
+  // No future dates, and nothing before go-live (opening balances start there).
   const date = asAt && asAt <= today ? (asAt < G ? G : asAt) : today
   // Compare with the end of the month before.
   const prevDate = addDays(`${date.slice(0, 8)}01`, -1)
+  // Payroll figures only for roles that can see payroll; otherwise the sheet leaves them out and says so.
   const payrollData = accessOf(user, 'payroll') !== 'none' && payroll.loaded && !payroll.error ? payroll.data : null
   const ready = finance.loaded && (payroll.loaded || payroll.error !== null)
   const inputs = { history, catalog, finance: finance.data, payroll: payrollData }
   const s = ready ? balanceSheet(inputs, date) : null
   const p = ready && prevDate >= G ? balanceSheet(inputs, prevDate) : null
   const rows = s ? rowsFor(s, p) : []
+  // Treat anything under ₦1 as rounding.
   const balanced = s ? Math.abs(s.difference) < 1 : false
   const currentLabel = `As at ${dayMonth(date)} ${date.slice(0, 4)}`
   const prevLabel = p ? `${dayMonth(prevDate)} ${prevDate.slice(0, 4)}` : undefined
@@ -114,6 +123,7 @@ export default function BalanceSheet() {
 
       {finance.error ? (
         <Alert tone="danger" title="Financial records aren’t available">
+          {/* A missing-table error means the finance migrations haven't been run yet. */}
           {/fixed_assets|finance_entries|does not exist|schema cache/i.test(finance.error)
             ? 'The finance tables haven’t been set up yet. Run the finance migrations in the Supabase SQL Editor, then reload.'
             : finance.error}

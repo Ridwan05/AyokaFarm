@@ -21,6 +21,7 @@ type Props = {
 }
 
 const num = (v: string) => Number(v.replace(/,/g, '')) || 0
+// Loan repayments aren't added by hand: they come from the employee's advances and loans.
 const ADDABLE = [
   { value: 'earning', label: 'Extra pay (overtime, bonus)' },
   { value: 'deduction', label: 'Deduction' },
@@ -44,9 +45,11 @@ export function LineDrawer({ line, employee, period, items, save, onClose }: Pro
   const [busy, setBusy] = useState(false)
 
   const workedNum = num(worked)
+  // Monthly staff are stored as a share of the month (1 = full month), never more than a full month.
   const units = monthly ? Math.min(1, workedNum / days) : workedNum
   const unitWord = line.pay_basis === 'weekly' ? 'weeks' : 'days'
   const workedError = monthly && workedNum > days ? `${monthLabel(period)} has ${days} days` : undefined
+  // Units are saved to 4 decimals, so tiny differences don't count as a change.
   const changedPay = Math.abs(units - Number(line.units)) > 0.00005 || num(rate) !== Number(line.rate)
 
   // One change at a time: a second tap while saving would apply it twice.
@@ -105,6 +108,7 @@ export function LineDrawer({ line, employee, period, items, save, onClose }: Pro
           </KeyValueRow>
         </section>
 
+        {/* Days or weeks worked and this month's rate */}
         <form onSubmit={savePay} className="flex flex-col gap-3">
           <h3 className="type-label-lg text-fg-primary">Pay this month</h3>
           <div className="grid grid-cols-2 gap-3">
@@ -130,6 +134,7 @@ export function LineDrawer({ line, employee, period, items, save, onClose }: Pro
           </div>
         </form>
 
+        {/* Repayments due this month: change the amount or skip one this month */}
         <section className="flex flex-col gap-2">
           <h3 className="type-label-lg text-fg-primary">Advance and loan repayments</h3>
           {loans.length ? (
@@ -160,6 +165,7 @@ export function LineDrawer({ line, employee, period, items, save, onClose }: Pro
           {loans.length > 0 && <p className="type-body-sm text-fg-tertiary">{explainPayroll.loanRepayment()}</p>}
         </section>
 
+        {/* Extra pay, deductions and statutory items, with a form to add one */}
         <section className="flex flex-col gap-2">
           <h3 className="type-label-lg text-fg-primary">Extras and deductions</h3>
           {others.map((i) => (
@@ -198,6 +204,7 @@ export function LineDrawer({ line, employee, period, items, save, onClose }: Pro
   )
 }
 
+/** Small bin button for taking an item off the payslip. */
 function RemoveButton({ label, disabled, onClick }: { label: string; disabled?: boolean; onClick: () => void }) {
   return (
     <button

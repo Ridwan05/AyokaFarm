@@ -26,6 +26,7 @@ const PERIODS = ['Last 7 days', 'Last 30 days', 'Last 90 days', 'All time'] as c
 type Period = (typeof PERIODS)[number]
 const PERIOD_DAYS: Record<Period, number | null> = { 'Last 7 days': 7, 'Last 30 days': 30, 'Last 90 days': 90, 'All time': null }
 
+/** The plain-language action shown for a log row. */
 type AuditAction = 'Created' | 'Edited' | 'Deleted' | 'Restored' | 'Setting changed' | 'Adjusted' | 'Approval asked' | 'Approved' | 'Rejected'
 const auditTone: Record<AuditAction, Tone> = {
   'Approval asked': 'warning',
@@ -40,17 +41,23 @@ const auditTone: Record<AuditAction, Tone> = {
 }
 const ACTIONS = ['All actions', ...(Object.keys(auditTone) as AuditAction[])]
 
+/** Tables whose changes are shown as "Setting changed". */
 const SETTINGS_TABLES = new Set(['roles', 'role_permissions', 'farm_settings', 'bird_types', 'feed_types', 'feed_targets', 'medications', 'products', 'expense_categories', 'adjustment_reasons', 'profiles', 'staff_pens', 'pens'])
 /** Columns that change as a side effect, or are ids — not worth showing as a change. */
 const QUIET = new Set(['updated_at', 'created_at', 'id', 'opening_birds', 'closing_birds', 'recorded_by', 'created_by', 'deleted_by', 'approved_by', 'approved_at'])
 
 type Row = Tables<'audit_log'>
+/** A log row turned into what the table shows. */
 type Entry = { id: number; at: string; when: string; whoId: string | null; action: AuditAction; record: string; change: string; reason: string | null }
 
+/** A JSON row snapshot as a plain object ({} when missing). */
 const obj = (j: Json | null) => (j && typeof j === 'object' && !Array.isArray(j) ? (j as Record<string, Json>) : {})
+/** A logged value as text; empty values show as a dash. */
 const show = (v: Json | undefined) => (v === null || v === undefined || v === '' ? '—' : typeof v === 'object' ? JSON.stringify(v) : String(v))
+/** A column name as words, e.g. "pen_id" → "pen". */
 const label = (key: string) => key.replace(/_id$/, '').replace(/_/g, ' ')
 
+/** Audit log: who created, edited, deleted, restored or approved what, filtered by period, person and action. */
 export default function AuditLog() {
   const { catalog } = useTrade()
   const [period, setPeriod] = useState<Period>('Last 7 days')
@@ -68,6 +75,7 @@ export default function AuditLog() {
     async (from: number) => {
       const days = PERIOD_DAYS[period]
       let q = createClient().from('audit_log').select('*', { count: 'exact' }).order('occurred_at', { ascending: false }).order('id', { ascending: false })
+      // Periods count whole farm days, starting at midnight Lagos time (UTC+1, no daylight saving).
       if (days) q = q.gte('occurred_at', `${addDays(todayISO(), -(days - 1))}T00:00:00+01:00`)
       if (personId) q = q.eq('actor_id', personId)
       return q.range(from, from + PAGE - 1)
@@ -92,6 +100,7 @@ export default function AuditLog() {
     }
   }, [fetchPage])
 
+  /** Fetches the next page and adds it to the list. */
   async function loadMore() {
     setState('more')
     const { data, error } = await fetchPage(rows.length)
@@ -100,6 +109,7 @@ export default function AuditLog() {
     setState('ready')
   }
 
+  // Turns a raw log row into a readable entry: what record it was, what kind of action, and what changed.
   const describe = useMemo(() => {
     const penName = (id: Json | undefined) => (id === undefined || id === null ? `Pen ${show(id)}` : nameOfPen(catalog, Number(id)))
     const name = (table: string, d: Record<string, Json>) => {
@@ -143,6 +153,7 @@ export default function AuditLog() {
     return (r: Row): Entry => {
       const before = obj(r.old_data)
       const after = obj(r.new_data)
+      // A hard delete only has the old row; everything else is described from the new one.
       const d = r.action === 'delete' ? before : after
       let action: AuditAction = SETTINGS_TABLES.has(r.table_name) ? 'Setting changed' : r.action === 'insert' ? 'Created' : r.action === 'delete' ? 'Deleted' : 'Edited'
       let change = ''
@@ -156,6 +167,7 @@ export default function AuditLog() {
       } else if (r.action === 'delete') {
         change = 'Removed'
       } else {
+        // Records are soft-deleted: setting or clearing deleted_at is a delete or restore.
         if (!before.deleted_at && after.deleted_at) {
           action = 'Deleted'
           reason = show(after.delete_reason)
@@ -172,17 +184,20 @@ export default function AuditLog() {
           change = keys.slice(0, 3).map((k) => `${label(k)} ${show(before[k])} → ${show(after[k])}`).join(' · ') + (keys.length > 3 ? ` · +${keys.length - 3} more` : '') || 'No visible change'
         }
       }
+      // The day on the farm (en-CA gives yyyy-mm-dd).
       const date = new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Lagos' }).format(new Date(r.occurred_at))
       return { id: r.id, at: r.occurred_at, when: `${dm(date)} ${timeOf(r.occurred_at)}`, whoId: r.actor_id, action, record: name(r.table_name, d), change, reason }
     }
   }, [catalog, people])
 
+  // No actor means a database job; an unknown id is someone no longer on the staff list.
   const person = (id: string | null) => {
     const p = people.find((x) => x.id === id)
     return p ? { name: p.full_name, initials: initialsOf(p.full_name), role: p.role_id?.replace(/_/g, ' ') ?? '—' } : { name: id ? 'Former staff' : 'System', initials: id ? '?' : 'SY', role: id ? '' : 'Automatic' }
   }
 
   const q = query.trim().toLowerCase()
+  // Action and search filter only the rows loaded so far; period and person are filtered in the database.
   const entries = rows
     .map(describe)
     .filter((e) => action === 'All actions' || e.action === action)

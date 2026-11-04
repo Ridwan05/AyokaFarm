@@ -24,6 +24,7 @@ function ranges() {
   ]
 }
 
+// "2026-10-09" → "09/10/2026".
 const dmy = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
 const dash = <NumberCell tone="muted">—</NumberCell>
 
@@ -45,8 +46,10 @@ export function StatementCard({ lines, side, balance, onDownload, exportName }: 
   const RANGES = ranges()
   const [rangeLabel, setRangeLabel] = useState(RANGES[0].label)
   const range = RANGES.find((r) => r.label === rangeLabel) ?? RANGES[0]
+  // The newest entry is highlighted in the table.
   const lastRef = lines[lines.length - 1]?.ref
 
+  // Payments are lines with nothing charged, except the opening balance, which shows only under All.
   const visible = lines
     .filter((l) => (!range.from || l.date >= range.from) && (!range.to || l.date <= range.to))
     .filter((l) => (view === 'All' ? true : view === 'Payments' ? l.charged === null && l.entry !== 'Opening balance' : l.charged !== null))

@@ -1,5 +1,6 @@
 import { LinkTabs } from '../../components/ui/Tabs'
 
+/** The Feed · Medication · Eggs · Birds tabs at the top of each stock screen. */
 export function InventoryTabs() {
   return (
     <LinkTabs

@@ -40,6 +40,10 @@ import Placeholder from './Placeholder'
 
 const TABS = ['Overview', 'Production', 'Sales', 'Medication', 'Costs & profit'] as const
 
+/**
+ * One pen: its current (or last) flock, a mortality-spike banner, and tabs for overview, production,
+ * sales, medication and costs. Attendants come back to their home rather than the pens list.
+ */
 export default function PenDetail() {
   const { penId } = useParams<{ penId: string }>()
   const id = Number(penId)
@@ -57,6 +61,7 @@ export default function PenDetail() {
   const { rows } = penFlock(history, id)
   const latest = rows.at(-1)
   const today = todayISO()
+  // Spike banner: only for the latest entry if it's from today or yesterday and above the mortality alert %.
   const spike =
     latest && latest.date >= addDays(today, -1) && (latest.mortalityPct ?? 0) > farmSettings.mortalityAlertPct
       ? {
@@ -106,6 +111,7 @@ export default function PenDetail() {
 
       <Tabs label="Pen sections" tabs={TABS} value={tab} onChange={setTab} />
 
+      {/* Sales, medication and costs show history even for an empty pen; overview and production need a flock. */}
       {tab === 'Costs & profit' ? (
         <CostsTab penId={id} />
       ) : tab === 'Sales' ? (
@@ -127,6 +133,7 @@ export default function PenDetail() {
   )
 }
 
+/** Overview tab: start-of-lay prompt, KPIs, daily mortality chart, flock facts and actions, rearing cost and the last 7 entries. */
 function Overview({ penId }: { penId: number }) {
   const { history, catalog, reload } = useTrade()
   const user = useCurrentUser()
@@ -140,6 +147,7 @@ function Overview({ penId }: { penId: number }) {
   const active = flock.status === 'active'
   const layer = catalog.birdTypes.find((b) => b.id === flock.bird_type_id)?.lays_eggs ?? false
   const layingSince = flock.laying_started_on ?? null
+  // Suggest the first day eggs were recorded as the start of lay until someone marks it.
   const firstEggs = layer ? suggestedLayStart(history, flock) : null
   const suggested = layingSince ? null : firstEggs
   // Managers mark the start of lay; only the owner closes a flock (the database enforces both).
@@ -148,6 +156,7 @@ function Overview({ penId }: { penId: number }) {
   const canEditFlock = user.role === 'owner'
   const canAddBirds = active && (user.role === 'owner' || user.role === 'farm-manager')
   const placements = history.placements.filter((p) => p.flock_id === flock.id).sort((a, b) => a.placed_on.localeCompare(b.placed_on) || a.id - b.id)
+  // What the birds cost across every placement into this flock.
   const birdsCost = placements.reduce((n, p) => n + p.birds * Number(p.cost_per_bird ?? 0), 0)
 
   const markSuggested = async () => {
@@ -164,6 +173,7 @@ function Overview({ penId }: { penId: number }) {
   }
   const { rows } = penFlock(history, penId)
   const m = mortalitySeries(rows)
+  // Bars from here on are part of the current rising run and get their own colour.
   const firstRising = m.risingDays ? m.birds.length - m.risingDays : m.birds.length
 
   // "% of flock" rescales each day against the birds at the start of that day.
@@ -191,6 +201,7 @@ function Overview({ penId }: { penId: number }) {
         </Alert>
       )}
 
+      {/* KPI row */}
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
         {penKpis(history, catalog, penId).map((kpi) => (
           <KpiCard key={kpi.label} kpi={kpi} />
@@ -311,9 +322,9 @@ function Overview({ penId }: { penId: number }) {
   )
 }
 
+/** Close reason value → its label. */
 const CLOSE_LABEL: Record<string, string> = Object.fromEntries(CLOSE_REASONS.map((r) => [r.value, r.label]))
 
-/** What the flock cost from placement to point of lay (layers) or to date (broilers). */
 /** Roles that only see their own expenses (RLS) get totals that leave out farm costs; say so. */
 function PartialCostsNote() {
   const user = useCurrentUser()
@@ -321,6 +332,7 @@ function PartialCostsNote() {
   return <p className="type-body-sm text-fg-warning">Your role only sees expenses you recorded, so farm costs and other people’s expenses are left out of these totals.</p>
 }
 
+/** What the flock cost from placement to point of lay (layers), or to date or close (broilers). */
 function RearingCard({ penId }: { penId: number }) {
   const { history, catalog } = useTrade()
   const flock = flockFacts(history, catalog, penId)!.flock
@@ -379,6 +391,7 @@ function RearingCard({ penId }: { penId: number }) {
   )
 }
 
+/** Columns for the daily entries table. Deaths above the alert threshold are red, above a typical day amber. */
 function entryColumns(threshold: number, typicalMax: number): Column<DailyEntry>[] {
   const dash = <NumberCell tone="muted">—</NumberCell>
   return [
@@ -406,6 +419,7 @@ function entryColumns(threshold: number, typicalMax: number): Column<DailyEntry>
   ]
 }
 
+/** Production tab: this flock's daily entries for the last 30 days, with CSV export. */
 function ProductionTab({ penId }: { penId: number }) {
   const { history, catalog } = useTrade()
   const { rows } = penFlock(history, penId)
@@ -437,6 +451,7 @@ function ProductionTab({ penId }: { penId: number }) {
   )
 }
 
+/** One sale (or this pen's part of it) in the pen's sales tab. */
 type SaleRow = { id: number; date: string; ref: string; product: string; qty: string; price: number; total: number; buyer: string; status: string }
 
 const saleColumns: Column<SaleRow>[] = [
@@ -450,6 +465,7 @@ const saleColumns: Column<SaleRow>[] = [
   { key: 'status', header: 'Status', width: 110, render: (s) => <TextCell tone={s.status === 'Approved' ? 'secondary' : 'info'}>{s.status}</TextCell> },
 ]
 
+/** Sales tab: this pen's share of every sale that was split by pen. */
 function SalesTab({ penId }: { penId: number }) {
   const { history, catalog } = useTrade()
   // This pen's portion of each sale split by pen: its quantity × the sale price.
@@ -491,6 +507,7 @@ function SalesTab({ penId }: { penId: number }) {
   )
 }
 
+/** One medication dose given to this pen. */
 type DoseRow = { id: number; date: string; medication: string; qty: string; mode: string; purpose: string; by: string; clear: string | null }
 
 const doseColumns: Column<DoseRow>[] = [
@@ -503,6 +520,7 @@ const doseColumns: Column<DoseRow>[] = [
   { key: 'by', header: 'Recorded by', width: 140, render: (d) => <TextCell>{d.by}</TextCell> },
 ]
 
+/** Medication tab: whether the pen is in withdrawal (no selling eggs or birds) and every dose given. */
 function MedicationTab({ penId }: { penId: number }) {
   const { history, catalog } = useTrade()
   const meds = new Map(catalog.medications.map((m) => [m.id, m]))
@@ -521,6 +539,7 @@ function MedicationTab({ penId }: { penId: number }) {
         mode: modeLabel(l.mode),
         purpose: l.purpose.charAt(0).toUpperCase() + l.purpose.slice(1),
         by: l.recordedBy,
+        // Withdrawal ends the day after the last withdrawal day.
         clear: days ? `${dayMonth(addDays(l.date, days + 1))}${addDays(l.date, days + 1) > today ? '' : ' · cleared'}` : null,
       }
     })
@@ -551,11 +570,13 @@ function MedicationTab({ penId }: { penId: number }) {
 
 const COST_PERIODS = ['This month', 'Last month', 'Flock to date'] as const
 
+/** Costs & profit tab: the pen's sales, costs and margin for a period, and unit costs. */
 function CostsTab({ penId }: { penId: number }) {
   const { history, catalog } = useTrade()
   const [which, setWhich] = useState<(typeof COST_PERIODS)[number]>('This month')
   const { flock } = penFlock(history, penId)
   const today = todayISO()
+  // Flock to date starts at placement, or at the oldest loaded records if the flock is older.
   const range: Range =
     which === 'This month'
       ? period('month', today)

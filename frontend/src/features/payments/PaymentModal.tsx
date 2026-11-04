@@ -56,6 +56,7 @@ export function PaymentModal({ direction: initialDirection = 'in', partyId, onCl
   const current = parties.find((p) => p.id === party)!
   const oldest = bills[0]
 
+  // Switching between customers and suppliers picks the first of the new list and its balance.
   const switchDirection = (label: (typeof DIRECTIONS)[number]) => {
     const d = label === DIRECTIONS[0] ? 'in' : 'out'
     setDirection(d)
@@ -90,6 +91,7 @@ export function PaymentModal({ direction: initialDirection = 'in', partyId, onCl
     e.preventDefault()
     if (saving) return
     if (value <= 0) return setError('Enter the amount')
+    // The app writes POS in capitals; the rest in lower case.
     const m: PaymentMethod = method === 'POS' ? 'POS' : method === 'Cash' ? 'cash' : 'transfer'
     const payment: NewPayment = { direction, partyId: party, amount: value, method: m, reference: reference.trim() || null, date }
     if (!online) {
@@ -103,6 +105,7 @@ export function PaymentModal({ direction: initialDirection = 'in', partyId, onCl
     void save(payment)
   }
 
+  // A negative supplier balance means we paid ahead and they hold credit for us.
   const hint = isIn
     ? `Owes ₦${formatNumber(balance)}${oldest ? ` · oldest bill ${formatDayMon(oldest.date)} (${daysBetween(oldest.date)} days)` : ''}`
     : balance > 0
@@ -178,6 +181,7 @@ export function PaymentModal({ direction: initialDirection = 'in', partyId, onCl
           </Field>
         )}
 
+        {/* Which bills this payment clears, oldest first */}
         <div className="flex flex-col rounded-lg bg-canvas px-4 pt-3 pb-2">
           <p className="flex items-center gap-1.5 pb-1 type-overline text-fg-tertiary">
             {isIn ? 'Clears the oldest bills first' : 'Pays the oldest bills first'}

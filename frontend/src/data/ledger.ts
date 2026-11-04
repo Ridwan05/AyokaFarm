@@ -9,6 +9,7 @@ import type { Supplier } from './suppliers'
 
 // Balances are always derived — never stored or typed.
 
+/** Today on the farm (Lagos), fixed when the app loads. */
 export const TODAY_ISO = farmTodayISO()
 
 /** An unpaid (or part-paid) charge. */
@@ -20,10 +21,12 @@ const goLive = () => farmSettings.goLiveDate ?? '2000-01-01'
 /** "09/10 15:10" → ISO date; falls back to this year for sales without one. */
 export const saleISODate = (s: Sale) => s.iso ?? `${TODAY_ISO.slice(0, 4)}-${s.date.slice(3, 5)}-${s.date.slice(0, 2)}`
 
+/** Whole days from one ISO date to another (today by default). */
 export function daysBetween(fromISO: string, toISO = TODAY_ISO) {
   return Math.round((Date.parse(toISO) - Date.parse(fromISO)) / 86_400_000)
 }
 
+/** One line of a customer or supplier statement, with the balance after it. */
 export type StatementLine = {
   date: string
   entry: string
@@ -35,6 +38,7 @@ export type StatementLine = {
 
 type Charge = { ref: string; date: string; entry: string; amount: number; paidAtSale: number }
 
+/** What a customer has been charged, oldest first. Sales waiting for approval don't count yet. */
 function charges(c: Customer, sales: Sale[]): Charge[] {
   const list: Charge[] = []
   if (c.opening) list.push({ ref: 'Opening balance', date: goLive(), entry: 'Opening balance', amount: c.opening, paidAtSale: 0 })
@@ -74,6 +78,7 @@ export function customerBills(c: Customer, sales: Sale[], payments: Payment[]): 
   return bills.filter((b) => b.left > 0)
 }
 
+/** Total still owed on a list of bills. */
 export const sumLeft = (bills: Bill[]) => bills.reduce((n, b) => n + b.left, 0)
 
 /** Every sale and payment with a running balance. */
@@ -89,6 +94,7 @@ export function customerStatement(c: Customer, sales: Sale[], payments: Payment[
     rows.push({ date: p.date, entry: `Payment received · ${how}`, ref: p.ref, charged: null, paid: p.amount })
   }
   rows.sort((a, b) => a.date.localeCompare(b.date) || (a.entry === 'Opening balance' ? -1 : 0))
+  // The opening balance is the starting point, not a charge, so its line doesn't add to it.
   let balance = c.opening
   return rows.map((r) => {
     if (r.entry !== 'Opening balance') balance += (r.charged ?? 0) - (r.paid ?? 0)
@@ -96,8 +102,10 @@ export function customerStatement(c: Customer, sales: Sale[], payments: Payment[
   })
 }
 
+/** Money owed split by age: up to 30 days, 31–60 days, and over 60. */
 export type Aging = { current: number; days31to60: number; over60: number }
 
+/** Group open bills by how many days old they are today (fixed 30/60-day buckets). */
 export function aging(bills: Bill[]): Aging {
   const a = { current: 0, days31to60: 0, over60: 0 }
   for (const b of bills) {
@@ -113,6 +121,7 @@ export function aging(bills: Bill[]): Aging {
 export type SupplierBooks = { purchases: Purchase[]; expenses: Expense[]; payments: Payment[] }
 type SupplierCharge = { ref: string; date: string; entry: string; amount: number; paidAtStart: number }
 
+// An expense booked to a supplier counts as paid in full unless it says otherwise.
 function supplierCharges(s: Supplier, { purchases, expenses }: SupplierBooks): SupplierCharge[] {
   const list: SupplierCharge[] = []
   if (s.opening) list.push({ ref: 'Opening balance', date: goLive(), entry: 'Opening balance', amount: s.opening, paidAtStart: 0 })
@@ -151,6 +160,7 @@ export function supplierBalance(s: Supplier, books: SupplierBooks) {
   return owed - supplierPaymentsOf(s.id, books.payments).reduce((n, p) => n + p.amount, 0)
 }
 
+/** A supplier's unpaid (or part-paid) charges, oldest first. */
 export function supplierBills(s: Supplier, books: SupplierBooks): Bill[] {
   return supplierCharged(s, books)
     .filter((x) => x.amount > x.paid)
@@ -169,6 +179,7 @@ export function supplierStatement(s: Supplier, books: SupplierBooks): StatementL
     const how = { cash: 'cash', transfer: 'transfer', POS: 'POS' }[p.method]
     rows.push({ date: p.date, entry: `Payment made · ${how}`, ref: p.ref, charged: null, paid: p.amount })
   }
+  // On the same day: opening balance, then charges, then payments.
   const rank = (r: Row) => (r.entry === 'Opening balance' ? 0 : r.charged !== null ? 1 : 2)
   rows.sort((a, b) => a.date.localeCompare(b.date) || rank(a) - rank(b))
   let balance = s.opening ?? 0
@@ -178,6 +189,7 @@ export function supplierStatement(s: Supplier, books: SupplierBooks): StatementL
   })
 }
 
+/** How much of a payment goes to one bill, and what the bill owed before it. */
 export type Allocation = { ref: string; date: string; before: number; applied: number }
 
 /** Spread a payment over bills, oldest first. */
@@ -193,6 +205,7 @@ export function allocate(bills: Bill[], amount: number): Allocation[] {
   return out
 }
 
+/** "S-0012 in full · S-0015 part" for a payment's allocation. */
 export function describeAllocation(a: Allocation[]) {
   return a.map((x) => `${x.ref} ${x.applied >= x.before ? 'in full' : 'part'}`).join(' · ')
 }

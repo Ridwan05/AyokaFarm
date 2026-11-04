@@ -7,22 +7,27 @@ import { formatNaira } from '../../lib/format'
 /** "₦85,000 a month", "₦3,000 a day". */
 export const payText = (e: Pick<Employee, 'pay_rate' | 'pay_basis'>) => `${formatNaira(Number(e.pay_rate))} ${PAY_UNIT[e.pay_basis]}`
 
+/** Badge for an employee: Left, Inactive or Active. Having left wins over inactive. */
 export function employeeStatus(e: Employee): { tone: Tone; label: string } {
   if (e.left_on) return { tone: 'neutral', label: 'Left' }
   if (!e.is_active) return { tone: 'neutral', label: 'Inactive' }
   return { tone: 'success', label: 'Active' }
 }
 
+/** Still on the payroll: active and not marked as having left. */
 export const isWorking = (e: Employee) => e.is_active && !e.left_on
 
 /** What an employee still owes on advances and loans being repaid. */
 export const owedBy = (balances: LoanBalance[], employeeId: number) =>
   balances.filter((b) => b.employee_id === employeeId && b.status === 'active').reduce((n, b) => n + Math.max(0, Number(b.balance ?? 0)), 0)
 
+/** The repayment balance row for one loan, if there is one. */
 export const balanceOf = (balances: LoanBalance[], loanId: number) => balances.find((b) => b.loan_id === loanId)
 
+/** How each kind of loan reads on screen. */
 export const LOAN_KIND_LABEL: Record<Loan['kind'], string> = { advance: 'Salary advance', loan: 'Loan' }
 
+/** Badge colour for a loan: waiting for approval, being repaid, repaid, or anything else. */
 export function loanTone(status: Loan['status']): Tone {
   return status === 'pending' ? 'warning' : status === 'active' ? 'info' : status === 'repaid' ? 'success' : 'neutral'
 }
@@ -35,14 +40,16 @@ export const shortMonth = (iso: string) => `${MONTHS[Number(iso.slice(5, 7)) - 1
 export function addMonths(iso: string, n: number) {
   const y = Number(iso.slice(0, 4))
   const m = Number(iso.slice(5, 7)) - 1 + n
+  // The double modulo keeps the month right when n is negative.
   return `${y + Math.floor(m / 12)}-${String((((m % 12) + 12) % 12) + 1).padStart(2, '0')}-01`
 }
 
-/** "₦20,000 a month, Nov 2026 – Apr 2027 (6 months)" for an amount repaid from first month. */
+/** "₦20,000 a month, Nov 2026 – Apr 2027 · 6 months" (or "₦20,000 off the Nov 2026 payslip") for an amount repaid from firstMonth. */
 export function scheduleText(amount: number, monthly: number, firstMonth: string) {
   if (!(amount > 0) || !(monthly > 0) || !firstMonth) return ''
   const months = Math.ceil(amount / monthly)
   const last = addMonths(firstMonth, months - 1)
+  // The last month takes whatever is left, which can be less than the monthly amount.
   const lastAmount = amount - monthly * (months - 1)
   const tail = months > 1 && lastAmount !== monthly ? ` (last month ${formatNaira(lastAmount)})` : ''
   return months === 1
@@ -55,7 +62,9 @@ export function nextRepayment(b: LoanBalance, todayIso: string) {
   const balance = Number(b.balance ?? 0)
   if (b.status !== 'active' || balance <= 0 || !b.first_month) return null
   const thisMonth = `${todayIso.slice(0, 7)}-01`
+  // Repayments that haven't started yet come off their first month, not this one.
   const month = b.first_month > thisMonth ? b.first_month : thisMonth
+  // Never take more than what is still owed.
   return { month, amount: Math.min(Number(b.monthly_repayment ?? 0), balance) }
 }
 

@@ -9,20 +9,24 @@ import { PrintSheet } from '../../features/print/PrintSheet'
 import { dmy, money } from '../../features/print/printFormat'
 import Placeholder from '../Placeholder'
 
+/** Payment method as printed on the receipt. */
 const METHOD = { cash: 'Cash', transfer: 'Transfer', POS: 'POS' } as const
 
 /** A printable receipt for one sale (Sales › ··· › Receipt PDF). */
 export default function ReceiptPrint() {
   const { ref = '' } = useParams<{ ref: string }>()
   const { sales, customers, customerBalance, catalog, saleLeft } = useTrade()
+  // Receipt numbers can hold characters that are encoded in the URL.
   const sale = sales.find((s) => s.receipt === decodeURIComponent(ref))
   if (!sale) return <Placeholder title="Receipt not found" />
 
   const product = productOf(sale)
   const { name, customer } = customerView(sale, customers)
   const total = amountOf(sale)
+  // Left = total − what was paid at the sale. Later payments show in the status and the customer's balance.
   const left = Math.max(0, total - sale.paid)
   const status = saleStatus(sale, saleLeft(sale.receipt))
+  // sale.date carries the time after a space, when there is one.
   const time = sale.date.split(' ')[1] ?? ''
 
   return (
@@ -76,6 +80,7 @@ export default function ReceiptPrint() {
   )
 }
 
+/** A small label over a value, for the receipt's header facts. */
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="flex flex-col">
@@ -85,6 +90,7 @@ function Fact({ label, children }: { label: string; children: React.ReactNode })
   )
 }
 
+/** One line of the totals block: label and amount. */
 function Row({ label, strong, children }: { label: string; strong?: boolean; children: React.ReactNode }) {
   return (
     <div className="flex items-baseline gap-3">

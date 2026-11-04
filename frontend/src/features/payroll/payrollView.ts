@@ -2,6 +2,7 @@ import type { Employee, Payroll, PayrollLine, PayslipItem } from '../../data/pay
 
 // Small helpers shared by the payroll screen, its drawers and the payslip print page.
 
+/** Each kind of payslip item in plain words. */
 export const ITEM_KIND_LABEL: Record<PayslipItem['kind'], string> = {
   earning: 'Extra pay',
   deduction: 'Deduction',
@@ -9,11 +10,13 @@ export const ITEM_KIND_LABEL: Record<PayslipItem['kind'], string> = {
   statutory: 'Statutory',
 }
 
+/** How a stored payment method reads on screen. */
 export const METHOD_LABEL = { cash: 'Cash', transfer: 'Transfer', pos: 'POS' } as const
 
 /** Days in the month that starts on period (YYYY-MM-01). */
 export function daysInMonth(period: string) {
   const [y, m] = period.split('-').map(Number)
+  // Day 0 of the next month is the last day of this one.
   return new Date(Date.UTC(y, m, 0)).getUTCDate()
 }
 

@@ -26,6 +26,7 @@ const RANGES = ['7 days', '30 days', 'This month', '90 days'] as const
 const PEN_FILTERS = ['All pens', 'Layers', 'Broilers'] as const
 const dash = <NumberCell tone="muted">—</NumberCell>
 
+/** One pen's figures over the period. `days` = days a flock was in it; `flag` = any day above the mortality alert %. */
 type PenRow = {
   pen: number
   name: string
@@ -45,6 +46,7 @@ type PenRow = {
   flag: boolean
 }
 
+/** Columns of the by-pen table. Layer pens show laying rate; broiler pens show the flock's age instead. */
 const columns: Column<PenRow>[] = [
   { key: 'pen', header: 'Pen', render: (p) => <PrimaryCell initials={`P${p.pen}`} title={p.name} subtitle={[p.flock, p.weeks].filter(Boolean).join(' · ')} /> },
   { key: 'recorded', header: 'Recorded', align: 'right', width: 110, render: (p) => <NumberCell tone={p.recorded < p.days ? 'danger' : 'default'}>{p.recorded} / {p.days}</NumberCell> },
@@ -69,6 +71,7 @@ const columns: Column<PenRow>[] = [
   { key: 'late', header: 'Late', align: 'right', width: 64, render: (p) => <NumberCell>{p.late}</NumberCell> },
 ]
 
+/** Daily production report: eggs, laying, mortality, feed and entry timeliness over a period, by pen and for the farm. */
 export default function DailyProductionReport() {
   const { history, catalog } = useTrade()
   const [rangeName, setRangeName] = useState<(typeof RANGES)[number]>('30 days')
@@ -124,14 +127,17 @@ export default function DailyProductionReport() {
   const late = rows.reduce((n, p) => n + p.late, 0)
   const expected = rows.reduce((n, p) => n + p.days, 0)
   const recorded = rows.reduce((n, p) => n + p.recorded, 0)
+  // Missing = pen-days with a flock but no entry.
   const missing = Math.max(0, expected - recorded)
 
   const dates = datesBetween(range.from, range.to)
+  // Only days with layer entries are plotted, so a day nobody recorded isn't drawn as 0%.
   const layingDates = dates.filter((d) => rowsOn(history.daily, d, (id) => lays(id) && penOk(id)).some((x) => x.eggs !== null))
   const laying = series(layingDates, (d) => layingRate(rowsOn(history.daily, d, (id) => lays(id) && penOk(id))))
   const yTicks = ticksFor(laying)
   const last = laying[laying.length - 1]
   const eggsPrev = prevEntries.reduce((n, d) => n + (d.eggs ?? 0), 0) / farmSettings.eggsPerCrate
+  // The two pens with the highest mortality %, named in the KPI.
   const worst = [...rows].sort((a, b) => b.mortalityPct - a.mortalityPct).filter((r) => r.died > 0).slice(0, 2)
   const spark = (f: (d: string) => number | null) => series(dates.slice(-8), f)
   const layerPens = rows.filter((r) => r.layers).length
@@ -161,12 +167,14 @@ export default function DailyProductionReport() {
           {dayMonth(range.from)} – {dayMonth(range.to)} · {rangeName === 'This month' ? 'includes today' : 'complete days only'}
         </span>
       </div>
+      {/* KPI row */}
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
         {kpis.map((k) => (
           <KpiCard key={k.label} kpi={k} />
         ))}
       </div>
 
+      {/* Laying-rate chart, hidden when only broilers are shown */}
       {pens !== 'Broilers' && (
         <Card className="gap-4 px-5 pt-4 pb-5">
           <div className="flex items-baseline gap-2">
@@ -179,6 +187,7 @@ export default function DailyProductionReport() {
           {laying.length > 1 ? (
             <div className="relative">
               <LineChart series={[{ label: 'Farm', values: laying, color: 'var(--ayk-color-chart-1)', endDot: true }]} yTicks={yTicks} formatY={(v) => `${v}%`} xLabels={axisLabels(layingDates)} />
+              {/* Latest value beside the line's end; 200 is the chart's plot height in px. */}
               <span className="absolute right-2 type-label-sm text-fg-success" style={{ top: `${((Math.max(...yTicks) - last) / (Math.max(...yTicks) - Math.min(...yTicks))) * 200 + 8}px` }}>
                 {last.toFixed(1)}%
               </span>
@@ -190,6 +199,7 @@ export default function DailyProductionReport() {
         </Card>
       )}
 
+      {/* By-pen table with the farm total */}
       <Card>
         <CardHeader title={`By pen · ${range.label.toLowerCase()}`} meta={<span className="type-body-sm text-fg-tertiary">Broiler rows show the flock’s age at its latest entry (no weights are recorded)</span>} action={{ label: 'Export', onClick: exportRows }} />
         <Table columns={columns} rows={rows} rowKey={(p) => String(p.pen)} />

@@ -4,6 +4,7 @@ import { penName } from '../../data/farmViews'
 import type { Catalog } from '../../data/remote'
 import { products, saleStatus, type Sale, type SaleStatus } from '../../data/sales'
 
+/** Badge colour and words for each sale status. */
 export const statusBadge: Record<SaleStatus, { tone: Tone; label: string }> = {
   'needs-approval': { tone: 'warning', label: 'Needs approval' },
   'on-credit': { tone: 'neutral', label: 'On credit' },
@@ -11,14 +12,17 @@ export const statusBadge: Record<SaleStatus, { tone: Tone; label: string }> = {
   paid: { tone: 'success', label: 'Paid' },
 }
 
+/** The product a sale is for. */
 export const productOf = (s: Sale) => products.find((p) => p.id === s.productId)!
 
+/** Name, initials and subtitle for a sale's buyer; one-off buyers have no customer record. */
 export function customerView(s: Sale, customers: Customer[]) {
   const c = customers.find((x) => x.id === s.customerId)
   if (!c) return { name: ONE_OFF.name, initials: ONE_OFF.initials, subtitle: 'Paid in full', customer: undefined }
   return { name: c.name, initials: c.initials, subtitle: `Regular · ${c.buys}`, customer: c }
 }
 
+/** The sale was priced below the minimum and still waits for approval. */
 export const isNeedsApproval = (s: Sale) => saleStatus(s) === 'needs-approval'
 
 /** "P1 25 · P3 15" (pen names in full with `full`), or "Auto-split" when the sale isn't split by pen. */

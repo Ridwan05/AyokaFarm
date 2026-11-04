@@ -21,6 +21,7 @@ const METHOD_OF = { Cash: 'cash', Transfer: 'transfer', POS: 'POS' } as const
 const LABEL_OF: Record<PaymentMethod, (typeof METHODS)[number]> = { cash: 'Cash', transfer: 'Transfer', POS: 'POS' }
 const DB_METHOD: Record<PaymentMethod, 'cash' | 'transfer' | 'pos'> = { cash: 'cash', transfer: 'transfer', POS: 'pos' }
 const num = (v: string) => Number(v.replace(/,/g, '')) || 0
+// Receipts over 10 MB are refused before upload.
 const MAX_RECEIPT = 10 * 1024 * 1024
 
 /** Add one day's expenses, or correct one (`expense`). Supplier expenses can be part-paid: the rest is owed to them. */
@@ -46,6 +47,7 @@ function NewExpensesModal({ onClose }: { onClose: () => void }) {
   const lastMethod = history.expenses.find((x) => x.recorded_by === currentUser.id)?.payment_method
   const [date, setDate] = useState(todayISO())
   const [method, setMethod] = useState<(typeof METHODS)[number]>(lastMethod === 'cash' ? 'Cash' : lastMethod === 'pos' ? 'POS' : 'Transfer')
+  // A new line copies the category and pen of the line before it; attendants start on their first pen.
   const blank = (key: number, from?: Line): Line => ({
     key,
     category: from?.category ?? categories[0] ?? 'Other',
@@ -73,12 +75,14 @@ function NewExpensesModal({ onClose }: { onClose: () => void }) {
     paid: paidOf(l) > num(l.amount) ? 'More than the amount' : undefined,
     file: l.file && l.file.size > MAX_RECEIPT ? 'The file is over 10 MB' : undefined,
   })
+  // No expenses in the future; todayISO is the farm's day in Lagos.
   const dateError = date && date <= todayISO() ? undefined : 'Pick a date up to today'
   const total = lines.reduce((n, l) => n + num(l.amount), 0)
   const valid = !dateError && lines.every((l) => !Object.values(lineErrors(l)).some(Boolean))
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    // A second tap while saving would save the whole batch twice.
     if (saving) return
     setSubmitted(true)
     if (!valid) {
@@ -138,6 +142,7 @@ function NewExpensesModal({ onClose }: { onClose: () => void }) {
       }
     >
       <form id="add-expense" ref={formRef} noValidate onSubmit={submit} className="flex flex-col gap-5">
+        {/* Shared by every line: the day and how it was paid */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Date" hint="For every expense below" error={submitted ? dateError : undefined}>
             {(id) => <DateInput id={id} value={date} max={todayISO()} invalid={submitted && !!dateError} onChange={(e) => setDate(e.target.value)} />}
@@ -148,6 +153,7 @@ function NewExpensesModal({ onClose }: { onClose: () => void }) {
           </div>
         </div>
 
+        {/* One card per expense line */}
         {lines.map((l, i) => {
           const err: Partial<ReturnType<typeof lineErrors>> = submitted ? lineErrors(l) : {}
           const amount = num(l.amount)
@@ -261,11 +267,12 @@ function NewExpensesModal({ onClose }: { onClose: () => void }) {
   )
 }
 
-/** Correct one saved expense. */
+/** Correct one saved expense. It can also add a single expense when given none, though AddExpenseModal only opens it to correct. */
 function CorrectExpenseModal({ onClose, expense }: { onClose: () => void; expense?: Expense }) {
   const currentUser = useCurrentUser()
   const { addExpense, updateExpense, catalog, suppliers, history } = useTrade()
   const editing = Boolean(expense)
+  // Keep the expense's own category in the list even if it has since been retired.
   const categories = catalog.categories.filter((c) => c.is_active || c.name === expense?.category).map((c) => c.name)
   // Attendants add pen expenses only, for the pens they work on (BRD §4); everyone else can pick any pen or the whole farm.
   const ownPensOnly = isAttendant(currentUser.role)
@@ -280,6 +287,7 @@ function CorrectExpenseModal({ onClose, expense }: { onClose: () => void; expens
   const [category, setCategory] = useState<ExpenseCategory>(expense?.category ?? ((categories[0] ?? 'Other') as ExpenseCategory))
   const [amount, setAmount] = useState(expense ? formatNumber(expense.amount) : '')
   const [paid, setPaid] = useState(expense ? formatNumber(expense.amountPaid ?? expense.amount) : '')
+  // When correcting, keep the saved amount paid instead of following the amount.
   const [paidTouched, setPaidTouched] = useState(editing)
   const [date, setDate] = useState(expense?.date ?? todayISO())
   const [method, setMethod] = useState<(typeof METHODS)[number]>(

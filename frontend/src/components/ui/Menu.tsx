@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent } f
 import { createPortal } from 'react-dom'
 import { cn } from '../../lib/cn'
 
+/** One action in a row's "…" menu. */
 export type MenuItem = {
   label: string
   onSelect: () => void
@@ -40,6 +41,7 @@ export function RowMenu({ items, label = 'Row actions' }: { items: MenuItem[]; l
   function toggle() {
     if (open) return setPlace(null)
     const r = trigger.current!.getBoundingClientRect()
+    // Open upwards when there isn't room below the row but there is above it.
     const height = items.length * ITEM_HEIGHT + 24
     const above = r.bottom + height + 8 > window.innerHeight && r.top > height
     const right = Math.max(8, window.innerWidth - r.right)
@@ -83,6 +85,7 @@ export function RowMenu({ items, label = 'Row actions' }: { items: MenuItem[]; l
   )
 
   return (
+    // Clicks here must not reach the row underneath, which opens its own detail drawer.
     <div className="relative inline-flex" onClick={(e) => e.stopPropagation()}>
       <button
         ref={trigger}

@@ -28,9 +28,12 @@ export function feedTargetFor(catalog: Catalog, flock: { bird_type_id: number; b
   )
 }
 
+/** Ways a medication can be given, as the entry form lists them. */
 export const MEDICATION_MODES = ['Water', 'Feed', 'Injection', 'Spray', 'Eye/nose drop'] as const
+/** Why a medication was given. */
 export const MEDICATION_PURPOSES = ['Treatment', 'Prevention', 'Vaccination', 'Vitamin'] as const
 
+/** One medication given in a daily entry. */
 export type MedicationLine = {
   medication: string
   qty: number
@@ -61,6 +64,7 @@ export type ProductionRecord = {
   notes?: string
 }
 
+/** Today on the farm (Lagos) as YYYY-MM-DD, from the date fixed when the app loaded. */
 export const todayISO = () => {
   const d = farm.today
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
@@ -73,6 +77,7 @@ export function entryContext(penId: number, catalog?: Catalog, history?: History
   if (!pen || !today) return null
   const flock = history?.flocks.find((f) => f.pen_id === penId && f.status === 'active')
   // Age today from the flock's placement (as the database counts it); week 1 is days 0–6.
+  // Without the flock, estimate from the pen card's week (mid-week).
   const ageDays = flock ? daysBetween(flock.placed_on, farmTodayISO()) + flock.age_at_placement_days : (pen.ageDays ?? pen.week * 7 - 3)
   const week = Math.floor(ageDays / 7) + 1
   const target = catalog && flock ? feedTargetFor(catalog, flock, week) : null
@@ -88,11 +93,12 @@ export function entryContext(penId: number, catalog?: Catalog, history?: History
     opening: today.died === null ? today.birds : today.birds + today.died,
     gramsPerBird: target ? Number(target.grams_per_bird_day) : band.grams,
     feedType: recommended ?? band.feed,
-    /** Already recorded today in the mock data (before this session). */
+    /** Time today's entry was saved, when the pen already has one; null if not yet recorded. */
     recordedAt: today.died === null ? null : today.entry.label.replace('Recorded ', ''),
   }
 }
 
+/** "12 wk 3 d" from an age in days. */
 export const formatAge = (days: number) => `${Math.floor(days / 7)} wk ${days % 7} d`
 
 // ── Correcting a saved entry ────────────────────────────────────────
@@ -131,6 +137,7 @@ const savedOn = (row: DailyRow) => (row.createdAt ? farmTodayISO(new Date(row.cr
  */
 export function canCorrectEntry(user: User, row: DailyRow) {
   if (user.role === 'owner' || user.role === 'farm-manager') return true
+  // Matched on the recorder's name, as that is what the row carries.
   if (accessOf(user, 'production', 'edit') === 'none' || row.recordedBy !== user.name) return false
   const days = Math.round((Date.parse(farmTodayISO()) - Date.parse(savedOn(row))) / 86_400_000)
   return days <= farmSettings.editWindowDays

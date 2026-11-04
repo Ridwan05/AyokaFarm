@@ -41,6 +41,7 @@ export function EditCustomerModal({ customerId, onClose }: { customerId: string;
     setSubmitted(true)
     if (!row || errors.name) return
     setSaving(true)
+    // Only the owner may touch the opening balance; other roles leave those columns out.
     const openingChanged = owner && openingValue !== Number(row.opening_balance)
     try {
       const { data, error } = await createClient()
@@ -66,6 +67,7 @@ export function EditCustomerModal({ customerId, onClose }: { customerId: string;
         .eq('id', row.id)
         .select('id')
       if (error) return void errorToast.error(friendlyError(error.message))
+      // No row back means row-level security quietly refused the update.
       if (!data?.length) return void errorToast.error(REFUSED)
       await trade.reload()
       toast(`${name.trim()} saved`)

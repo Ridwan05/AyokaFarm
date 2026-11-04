@@ -8,6 +8,7 @@ type CardProps = {
   className?: string
 }
 
+/** White bordered panel that groups one topic on a screen. */
 export function Card({ children, className }: CardProps) {
   return (
     <section className={cn('flex flex-col rounded-xl border border-line bg-surface', className)}>
@@ -26,6 +27,7 @@ type CardHeaderProps = {
   className?: string
 }
 
+/** Card title row with an optional info tip, meta and a link or button on the right. */
 export function CardHeader({ title, meta, info, action, className }: CardHeaderProps) {
   return (
     <header className={cn('flex items-center gap-2 px-5 pt-4 pb-3', className)}>
@@ -45,6 +47,7 @@ export function CardHeader({ title, meta, info, action, className }: CardHeaderP
   )
 }
 
+/** Small brand-coloured link, e.g. "View all" in a card header. */
 export function CardLink({ to, children }: { to: string; children: ReactNode }) {
   return (
     <Link href={to} className="type-label-sm text-fg-brand hover:underline">

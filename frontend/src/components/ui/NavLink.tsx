@@ -16,6 +16,7 @@ type NavLinkProps = {
 /** A link that knows whether it points at the current page. */
 export function NavLink({ href, end, className, children, onClick }: NavLinkProps) {
   const pathname = usePathname()
+  // Parent links stay active on child pages (e.g. Pens on a pen's detail); Home only on '/' itself.
   const isActive = pathname === href || (!end && href !== '/' && pathname.startsWith(href + '/'))
   return (
     <Link

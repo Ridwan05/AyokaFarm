@@ -8,6 +8,7 @@ const icon = (Icon: typeof CircleCheck) => <Icon size={18} strokeWidth={1.5} />
 
 /** Mount once in the root layout; call `toast()` from anywhere. */
 export function Toaster() {
+  // Bottom-right on desktop; top-centre on phones, where the bottom is taken by the thumb and keyboard.
   const wide = useMediaQuery('(min-width: 1024px)')
   return (
     <Sonner

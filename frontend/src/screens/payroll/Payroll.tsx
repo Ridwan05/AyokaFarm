@@ -38,8 +38,14 @@ function monthChoices(today: string) {
   return out
 }
 
+/** A payslip line with the employee's name and job, and its items split into extras, loan repayments and other deductions. */
 type Row = PayrollLine & { name: string; job: string; extras: number; loans: number; other: number }
 
+/**
+ * Monthly payroll. Roles with payroll "add" prepare (and refresh) a month's draft; roles with
+ * "edit" adjust payslips; only the owner approves, which posts the month to Expenses as Labour
+ * and locks it. After approval, "edit" roles tick payslips and mark them paid.
+ */
 export default function Payroll() {
   const user = useCurrentUser()
   const toast = useToast()
@@ -96,10 +102,12 @@ export default function Payroll() {
     if (ok) toast(run ? 'Added anyone new and this month’s repayments' : `${monthLabel(period)} prepared`)
   }
 
+  // Paying happens after approval and can be done a few payslips at a time.
   const unpaid = rows.filter((r) => !r.paid_on)
   const toggle = (id: number) => setSelected((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]))
   const selectedRows = rows.filter((r) => selected.includes(r.id))
 
+  // The tick column shows only once approved, and only on payslips not yet paid.
   const columns: Column<Row>[] = [
     ...(approved && canEdit
       ? [
@@ -177,6 +185,7 @@ export default function Payroll() {
           value={period}
           onChange={(p) => {
             setPeriod(p)
+            // Ticks belong to one month's payslips.
             setSelected([])
           }}
           format={(p) => {
@@ -269,6 +278,7 @@ export default function Payroll() {
               columns={columns}
               rows={rows}
               rowKey={(r) => String(r.id)}
+              // Approved payslips are locked, so a click opens the printable payslip instead of the editor.
               onRowClick={(r) => (approved ? window.open(`/print/payslip/${r.id}`, '_blank') : canEdit && setEditing(r.id))}
               rowActions={(r) => (
                 <Link

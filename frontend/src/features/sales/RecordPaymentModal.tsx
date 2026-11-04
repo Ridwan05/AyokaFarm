@@ -13,6 +13,7 @@ import { customerView } from './saleView'
 
 const METHODS = ['Cash', 'Transfer', 'POS'] as const
 
+/** Record money received later against one sale. It can't be more than what is left on the sale. */
 export function RecordPaymentModal({ sale, onClose }: { sale: Sale; onClose: () => void }) {
   const { customers, recordSalePayment, customerBalance, saleLeft } = useTrade()
   const toast = useToast()
@@ -31,6 +32,7 @@ export function RecordPaymentModal({ sale, onClose }: { sale: Sale; onClose: () 
     if (saving) return
     if (value <= 0) return setError('Enter the amount received')
     if (value > left) return setError(`Only ₦${formatNumber(left)} is left on this sale`)
+    // The app writes POS in capitals; the rest in lower case.
     const m: PaymentMethod = method === 'POS' ? 'POS' : method === 'Cash' ? 'cash' : 'transfer'
     setSaving(true)
     const ok = await recordSalePayment(sale.receipt, value, m).finally(() => setSaving(false))

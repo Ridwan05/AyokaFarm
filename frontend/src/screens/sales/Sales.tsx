@@ -21,6 +21,11 @@ import { canApprove } from '../../lib/access'
 import { downloadCsv } from '../../lib/export'
 import { formatNumber } from '../../lib/format'
 
+/**
+ * Sales: this week's sales with filters and KPIs. A sale priced below the product's minimum
+ * waits for the farm manager or owner; they approve or reject it from the banner here, while
+ * whoever recorded it sees that it is waiting.
+ */
 export default function Sales() {
   const currentUser = useCurrentUser()
   const trade = useTrade()
@@ -31,12 +36,15 @@ export default function Sales() {
   // A second tap while saving would approve or reject the sale twice.
   const [saving, setSaving] = useState(false)
   const pending = sales.filter((s) => s.pendingApproval)
+  // With nothing waiting, the banner shows the latest approved sale instead.
   const approved = sales.find((s) => s.approvedAt)
+  // The banner deals with one waiting sale at a time.
   const first = pending[0]
   const me = currentUser.name.split(' ')[0]
   const approver = canApprove(currentUser.role)
   const weekCount = salesIn(sales, weekSpans().now).length
 
+  /** The sale, product and customer behind a receipt, plus a one-line summary for the banner. */
   const describe = (receipt: string) => {
     const s = sales.find((x) => x.receipt === receipt)!
     const p = products.find((x) => x.id === s.productId)!
@@ -62,6 +70,7 @@ export default function Sales() {
         }
       />
 
+      {/* Below-minimum price approval: approvers decide here; everyone else waits. */}
       {first ? (
         (() => {
           const d = describe(first.receipt)

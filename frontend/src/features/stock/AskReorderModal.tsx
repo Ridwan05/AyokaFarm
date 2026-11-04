@@ -16,6 +16,7 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 export function AskReorderModal({ onClose }: { onClose: () => void }) {
   const toast = useToast()
   const { stockOf, history, catalog } = useTrade()
+  // Only feeds being fed now can be reordered; the form starts from the suggested feed and bags.
   const inUse = feedTypes.filter((f) => f.daysOfCover !== null)
   const suggestion = reorderSuggestion(history, catalog, feedTypes)
   const { manager, owner } = people(catalog)
@@ -38,6 +39,7 @@ export function AskReorderModal({ onClose }: { onClose: () => void }) {
     e.preventDefault()
     if (saving || bagsNum <= 0) return
     const feedTypeId = catalog.feedTypes.find((f) => f.name === item)?.id
+    // The feed may have been removed from Settings while the form was open.
     if (!feedTypeId) return toast('That feed isn’t in the list any more')
     setSaving(true)
     const problem = await askToReorder({ item: 'feed', feed_type_id: feedTypeId, quantity: bagsNum, unit: 'bags', needed_by: needed, note: note.trim() || null }).finally(() => setSaving(false))

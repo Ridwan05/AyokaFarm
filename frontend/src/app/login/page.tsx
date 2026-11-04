@@ -9,6 +9,7 @@ import { Field, TextInput } from '../../components/ui/Form'
 import { createClient } from '../../lib/supabase/client'
 import { loginEmailFor, normalisePhone } from '../../lib/phone'
 
+/** Phone-and-password sign-in. Staff log in with a phone number, mapped to a hidden login email. */
 function LoginForm() {
   const router = useRouter()
   const next = useSearchParams().get('next')
@@ -64,6 +65,10 @@ function LoginForm() {
   )
 }
 
+/**
+ * Sign-in screen. The form sits in Suspense because it reads the `next` search param,
+ * which Next.js requires for client-side search params.
+ */
 export default function LoginPage() {
   return (
     <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 py-10">

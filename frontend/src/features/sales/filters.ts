@@ -5,13 +5,17 @@ import { inRange, period as periodRange, type Range } from '../../data/metrics'
 import { amountOf, products, type Sale } from '../../data/sales'
 import type { Cell } from '../../lib/export'
 
+/** The periods the sales list can show. */
 export const PERIODS = ['Today', 'This week', 'This month'] as const
+/** One of PERIODS. */
 export type Period = (typeof PERIODS)[number]
+/** The product filter options; "All products" shows every kind. */
 export const PRODUCT_FILTERS = ['All products', 'Eggs', 'Birds', 'Droppings'] as const
 
 /** The dates a period covers ("This week" starts on Monday). */
 export const rangeOf = (p: Period): Range => periodRange(p === 'Today' ? 'today' : p === 'This week' ? 'week' : 'month')
 
+/** Filter state for a sales list (period, product, customer, search) and the sales that pass it. */
 export function useSalesFilter(sales: Sale[], customers: Customer[], initialPeriod: Period) {
   const [period, setPeriod] = useState<Period>(initialPeriod)
   const [product, setProduct] = useState<(typeof PRODUCT_FILTERS)[number]>('All products')
@@ -26,6 +30,7 @@ export function useSalesFilter(sales: Sale[], customers: Customer[], initialPeri
     .filter((s) => customer === 'All customers' || customers.find((c) => c.id === s.customerId)?.name === customer)
     .filter((s) => {
       if (!q) return true
+      // Sales without a customer record are searchable as "One-off buyer".
       const name = customers.find((c) => c.id === s.customerId)?.name ?? 'One-off buyer'
       return s.receipt.toLowerCase().includes(q) || name.toLowerCase().includes(q)
     })
@@ -41,6 +46,7 @@ export function useSalesFilter(sales: Sale[], customers: Customer[], initialPeri
   }
 }
 
+/** Column headings for the sales spreadsheet; matches saleCsvRows. */
 export const SALES_CSV_HEADER = ['Receipt', 'Date', 'Time', 'Customer', 'Product', 'Quantity', 'Unit', 'Price (₦)', 'Total (₦)', 'Paid at sale (₦)', 'Method', 'Status', 'Recorded by']
 
 /** One spreadsheet row per sale, for downloadCsv. */
@@ -50,6 +56,7 @@ export function saleCsvRows(sales: Sale[], customers: Customer[]): Cell[][] {
     return [
       s.receipt,
       saleISODate(s),
+      // The time is the part of the shown date after the space, when there is one.
       s.date.split(' ')[1] ?? '',
       customers.find((c) => c.id === s.customerId)?.name ?? 'One-off buyer',
       p?.name ?? s.productId,

@@ -9,6 +9,7 @@ import { dayMonth, todayISO, weekdayDayMonth, withdrawals } from '../../data/met
 import { useTrade } from '../../data/tradeContext'
 import { formatNumber } from '../../lib/format'
 
+// How each kind of stock movement reads in the history.
 const MOVED: Record<string, string> = { opening: 'Opening stock', received: 'Delivered', used: 'Used', adjusted: 'Adjusted' }
 
 /** One medication: stock, batches and every movement. */
@@ -18,15 +19,18 @@ export function MedicationDrawer({ medication: m, onClose }: { medication: Medic
   const stock = stockOf(m.name)
   const qty = (n: number) => `${formatNumber(n)} ${m.unit}`
   const batches = catalog.batches.filter((b) => b.medicationId === row?.id && b.onHand > 0)
+  // Stock not in any batch is what was on hand at go-live, before batches were recorded.
   const opening = stock - batches.reduce((n, b) => n + b.onHand, 0)
   const moves = history.medMovements.filter((x) => x.medication_id === row?.id)
   const lastUsed = moves.find((x) => x.movement === 'used')
   const lastIn = moves.find((x) => x.movement === 'received')
+  // Pens still inside this medication's withdrawal period today.
   const inForce = withdrawals(history, catalog, todayISO()).filter((w) => w.medication === m.name)
   const lastBuy = history.purchases.filter((p) => p.medication_id === row?.id).sort((a, b) => b.purchased_on.localeCompare(a.purchased_on))[0]
   const supplier = lastBuy ? catalog.suppliers.find((s) => s.id === lastBuy.supplier_id)?.name : undefined
   const batchNo = new Map(catalog.batches.map((b) => [b.purchaseId, b.batchNo]))
 
+  // The latest 30 movements are enough for the history.
   const events = moves.slice(0, 30).map((x) => {
     const q = Number(x.quantity)
     return {

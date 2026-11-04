@@ -36,6 +36,7 @@ export function ReceiveDeliveryDrawer({ onClose }: { onClose: () => void }) {
   const [batchNo, setBatchNo] = useState('')
   const [expiry, setExpiry] = useState('')
 
+  // Picking an order starts "delivered" at what was ordered.
   const pick = (r: string) => {
     setRef(r)
     const o = orders.find((x) => x.ref === r)
@@ -46,8 +47,11 @@ export function ReceiveDeliveryDrawer({ onClose }: { onClose: () => void }) {
   const med = order && medications.find((m) => m.name === order.item)
   const base = feed?.bags ?? med?.stock ?? 0
   const inStore = order ? stockOf(order.item, base) : 0
+  // What arrived less what went back, in stock units (medication packs × units in each pack).
   const intoStore = Math.max(num(delivered) - num(sentBack), 0) * (order?.perUnit ?? 1)
+  // Medication orders are counted in packs ("× 100 g"); feed in its own unit.
   const unitWord = order?.unit.startsWith('×') ? 'packs' : order?.unit ?? ''
+  // The delivery note number is required so the delivery can be traced; medication also needs its batch and an expiry still ahead.
   const errors = {
     delivered: num(delivered) > 0 ? undefined : 'Enter what arrived',
     sentBack: num(sentBack) > num(delivered) ? 'More than was delivered' : undefined,
@@ -129,6 +133,7 @@ export function ReceiveDeliveryDrawer({ onClose }: { onClose: () => void }) {
             <Field label="Sent back damaged" hint="Torn, wet or caked — the driver takes them back" error={submitted ? errors.sentBack : undefined}>
               {(id) => <TextInput id={id} inputMode="numeric" suffix={unitWord} value={sentBack} onChange={(e) => setSentBack(e.target.value)} />}
             </Field>
+            {/* Stock in the store before and after this delivery */}
             <SummaryBox>
               <KeyValueRow label={`${order.item} in store now`} calculated={explainMoney.inStoreNow()}>
                 {formatNumber(inStore)} {order.stockUnit}

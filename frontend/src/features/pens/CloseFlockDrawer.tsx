@@ -24,7 +24,9 @@ export function CloseFlockDrawer({ flock, onClose }: Props) {
   const toast = useToast()
   const { history, catalog, reload } = useTrade()
   const today = farmTodayISO()
+  // A flock can't close before its last daily entry, or the entry would belong to a closed flock.
   const lastEntry = history.daily.filter((d) => d.flockId === flock.id).reduce((m, d) => (d.date > m ? d.date : m), flock.placed_on)
+  // Start on today, or on the last entry if one is somehow dated later.
   const [date, setDate] = useState(today < lastEntry ? lastEntry : today)
   const [reason, setReason] = useState<string>('sold_out')
   const [note, setNote] = useState('')

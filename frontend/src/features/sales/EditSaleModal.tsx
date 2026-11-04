@@ -35,6 +35,7 @@ export function EditSaleModal({ sale, onClose }: { sale: Sale; onClose: () => vo
     // Walk-in buyers pay in full; a lower price would leave money taken over the total.
     paid: walkIn && sale.qty * num(price) < sale.paid ? `More than ₦${formatNumber(sale.paid)} was paid` : undefined,
   }
+  // Not an error: the save goes through, but the sale goes back for approval.
   const belowMin = num(price) < product.minPrice
 
   const submit = async (e: FormEvent) => {
@@ -44,6 +45,7 @@ export function EditSaleModal({ sale, onClose }: { sale: Sale; onClose: () => vo
     if (errors.price || errors.date || errors.paid) return
     setSaving(true)
     const ok = await updateSale(sale.receipt, {
+      // A one-off buyer has no customer record to switch to.
       ...(walkIn ? {} : { customer_id: Number(customerId) }),
       unit_price: num(price),
       sold_on: date,

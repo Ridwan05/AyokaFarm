@@ -50,6 +50,7 @@ export function LoanDrawer({ employee, save, onClose }: Props) {
   const perMonth = advance ? total : repayBy === 'Amount a month' ? num(monthly) : Math.ceil(total / Math.max(1, Math.floor(num(months))))
   const first = `${firstMonth}-01`
   const schedule = scheduleText(total, perMonth, first)
+  // A loan's monthly repayment must be above 0 and no more than the loan itself.
   const errors = {
     amount: total > 0 ? undefined : 'Enter the amount',
     repay: advance || (perMonth > 0 && perMonth <= total) ? undefined : repayBy === 'Amount a month' ? 'Enter an amount no more than the loan' : 'Enter the number of months',

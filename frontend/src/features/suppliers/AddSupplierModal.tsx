@@ -11,6 +11,7 @@ import { formatNumber } from '../../lib/format'
 import { createClient } from '../../lib/supabase/client'
 import { friendlyError, SUPPLIER_KINDS, supplierKind, TERMS } from '../customers/partyRules'
 
+/** Add a supplier with what they supply, payment terms and any opening balance the farm owed them. */
 export function AddSupplierModal({ onClose }: { onClose: () => void }) {
   const trade = useTrade()
   const toast = useToast()
@@ -39,6 +40,7 @@ export function AddSupplierModal({ onClose }: { onClose: () => void }) {
         .from('suppliers')
         .insert({
           name: trimmed,
+          // The first word of the name, for tight spaces like table rows.
           short_name: trimmed.split(' ')[0],
           // The full number: it's how staff reach the supplier.
           phone: phone.trim() || null,
@@ -46,6 +48,7 @@ export function AddSupplierModal({ onClose }: { onClose: () => void }) {
           supplies: [supplierKind(kind)],
           payment_terms_days: Number(terms),
           opening_balance: openingValue,
+          // An opening balance always records where it came from, so it can be traced later.
           opening_balance_source: openingValue ? source.trim() || 'Entered when the supplier was added' : null,
         })
       if (error) return void errorToast.error(friendlyError(error.message))

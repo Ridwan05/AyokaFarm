@@ -6,7 +6,8 @@ import { addDays, ageBills, daysFrom, dayMonth, medicationOnHand, missingEntries
 import type { Trade } from './tradeContext'
 
 // Alerts are calculated from the records each time (no alerts table): they appear when the
-// condition is true and disappear when it clears. Acknowledging is kept per device (Alerts screen).
+// condition is true and disappear when it clears. Acknowledging or resolving one is shared with
+// everyone through alert_marks (alertMarks.ts), keyed by the alert's id.
 
 /** Managers who get every alert (BRD §7): the owner and farm manager. */
 function managers(trade: Trade) {
@@ -17,6 +18,10 @@ function managers(trade: Trade) {
 
 const penName = (trade: Trade, penId: number) => nameOfPen(trade.catalog, penId)
 
+/**
+ * Every alert that's true today, most severe first. Ids are stable (kind, pen, date) so a shared
+ * acknowledgement stays attached to the same alert.
+ */
 export function deriveAlerts(trade: Trade, today = todayISO()): FarmAlert[] {
   const { history, catalog } = trade
   const out: FarmAlert[] = []
@@ -25,6 +30,7 @@ export function deriveAlerts(trade: Trade, today = todayISO()): FarmAlert[] {
 
   // Mortality and feed use: today's entries, or yesterday's for pens not recorded yet today.
   const latest = history.daily.filter((d) => d.date === today || d.date === yesterday)
+  // Newest first, so each pen is judged on its latest entry only.
   const seen = new Set<number>()
   for (const d of latest.sort((a, b) => b.date.localeCompare(a.date))) {
     if (seen.has(d.penId)) continue
@@ -36,6 +42,7 @@ export function deriveAlerts(trade: Trade, today = todayISO()): FarmAlert[] {
         .filter((x) => x.penId === d.penId && x.date <= d.date && x.date > addDays(d.date, -3))
         .sort((a, b) => a.date.localeCompare(b.date))
         .map((x) => x.mortality)
+      // Twice the alert threshold or more is critical.
       const critical = pct >= farmSettings.mortalityAlertPct * 2
       out.push({
         id: `mortality-${d.penId}-${d.date}`,
@@ -83,6 +90,7 @@ export function deriveAlerts(trade: Trade, today = todayISO()): FarmAlert[] {
 
   // Feed running low.
   for (const f of feedTypes) {
+    // Low on days of cover, or at/below the reorder level. A feed that's in store but not being used isn't flagged.
     const low = (f.daysOfCover !== null && f.daysOfCover <= farmSettings.lowStockDays) || f.bags <= f.reorderAt
     if (!low || (f.daysOfCover === null && f.bags > 0 && f.bagsPerDay === null && f.bags > f.reorderAt)) continue
     const critical = f.bags === 0 || (f.daysOfCover !== null && f.daysOfCover <= 2)
@@ -110,6 +118,7 @@ export function deriveAlerts(trade: Trade, today = todayISO()): FarmAlert[] {
   const onHand = medicationOnHand(catalog)
   for (const m of catalog.medications.filter((x) => x.is_active)) {
     const have = onHand.get(m.id) ?? 0
+    // A reorder level of 0 means "don't track".
     if (m.reorder_level > 0 && have <= m.reorder_level) {
       out.push({
         id: `stock-med-${m.id}`,
@@ -197,6 +206,7 @@ export function deriveAlerts(trade: Trade, today = todayISO()): FarmAlert[] {
         ['Total owed', naira(total)],
         ['Last payment', lastPaid ? dayMonth(lastPaid.date) : 'None yet'],
       ],
+      // Money owed is for the owner only, not the farm manager.
       notified: notify.filter((n) => catalog.profiles.some((p) => p.full_name === n.name && p.role_id === 'owner')),
       link: { label: 'Open statement', to: `/customers/${c.id}` },
     })

@@ -1,5 +1,6 @@
 // Suppliers. What we owe is calculated from purchases, supplier expenses and payments (ledger.ts).
 
+/** A supplier as the supplier screens show them. */
 export type Supplier = {
   id: string
   name: string

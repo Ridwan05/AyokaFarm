@@ -18,6 +18,7 @@ import { explainMoney } from '../../data/explainMoney'
 
 const PAGE = 50
 
+/** Every sale in the chosen period (this month to start), 50 to a page, with the same filters and actions as Sales. */
 export default function AllSales() {
   const { sales, customers } = useTrade()
   const f = useSalesFilter(sales, customers, 'This month')
@@ -26,6 +27,7 @@ export default function AllSales() {
   // 50 a page keeps long periods quick to scroll and render.
   const [page, setPage] = useState(0)
   const pages = Math.max(1, Math.ceil(f.visible.length / PAGE))
+  // Narrowing the filters can leave fewer pages than the one we were on; stay on the last.
   const current = Math.min(page, pages - 1)
   const shown = f.visible.slice(current * PAGE, current * PAGE + PAGE)
 
@@ -38,6 +40,7 @@ export default function AllSales() {
         description="Every sale with its receipt, newest first. Click a sale for its details, or ··· for more."
         actions={
           <>
+            {/* Export takes every filtered sale, not just this page. */}
             <Button leadingIcon={Download} onClick={() => downloadCsv('sales', SALES_CSV_HEADER, saleCsvRows(f.visible, customers))}>
               Export
             </Button>

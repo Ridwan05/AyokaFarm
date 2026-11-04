@@ -5,6 +5,7 @@ type AvatarProps = {
   className?: string
 }
 
+/** Round badge with a person's initials, used where there's no photo. */
 export function Avatar({ initials, className }: AvatarProps) {
   return (
     <span

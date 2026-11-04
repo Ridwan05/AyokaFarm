@@ -31,8 +31,13 @@ import { explain } from '../../data/explain'
 
 const SORTS = ['Biggest balance first', 'Oldest bill first', 'Name A–Z'] as const
 
+/** One table row: the customer plus their live balance and unpaid bills. */
 type Row = { c: Customer; balance: number; bills: Bill[] }
 
+/**
+ * Customers list: who owes the farm, how old the debt is, and quick actions to open a
+ * statement, record a payment or send statements. Opens on the Owing tab.
+ */
 export default function Customers() {
   const router = useRouter()
   const trade = useTrade()
@@ -47,8 +52,10 @@ export default function Customers() {
   const overdue = owing.filter((r) => (oldestDays(r.bills) ?? 0) > OVERDUE_DAYS)
   const tabs = [`All · ${all.length}`, `Owing · ${owing.length}`, `Overdue · ${overdue.length}`, 'One-off buyers']
   const [tab, setTab] = useState(tabs[1])
+  // Tab labels carry live counts, so match on the name before " · " — the stored label goes stale as counts change.
   const tabKey = tab.split(' · ')[0]
 
+  // Farm-wide aging across everyone who owes, for the bar under the KPIs.
   const totals = owing.reduce<Aging>(
     (t, r) => {
       const a = agingOf(r.bills)
@@ -58,6 +65,8 @@ export default function Customers() {
   )
 
   const q = query.trim().toLowerCase()
+  // One-off buyers pay at the gate and have no ledger, so that tab shows a note instead of rows.
+  // "Oldest bill first" puts customers with no open bill last (-1).
   const rows = (tabKey === 'All' ? all : tabKey === 'Owing' ? owing : tabKey === 'Overdue' ? overdue : [])
     .filter((r) => !q || r.c.name.toLowerCase().includes(q))
     .sort((a, b) =>
@@ -103,6 +112,7 @@ export default function Customers() {
         description={`${customers.length} customers. Balances are calculated from every sale and payment, never typed.`}
         actions={
           <>
+            {/* Export follows the current tab, search and sort. */}
             <Button
               leadingIcon={Download}
               onClick={() =>
@@ -131,6 +141,7 @@ export default function Customers() {
         ))}
       </div>
 
+      {/* How old the money owed is, across all customers */}
       <Card className="flex-row flex-wrap items-center gap-x-4 gap-y-2 px-5 py-4">
         <span className="flex items-center gap-1.5 type-label-md text-fg-primary">
           Aging

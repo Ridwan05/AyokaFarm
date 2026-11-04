@@ -2,8 +2,10 @@ import type { Tone } from '../components/ui/Badge'
 
 // Pens and flocks. The pens array is filled in place when the records load (remote.ts).
 
+/** What a pen keeps: egg layers or meat birds. */
 export type BirdType = 'Layers' | 'Broilers'
 
+/** One of the three figures on a pen card. */
 export type Stat = {
   label: string
   /** null renders an em dash */
@@ -13,6 +15,7 @@ export type Stat = {
   info?: string
 }
 
+/** A pen card on the Pens screen. */
 export type Pen = {
   id: number
   /** The owner can rename a pen; show this, not the number. */
@@ -36,4 +39,5 @@ export type Pen = {
 /** Every active pen with its flock and today’s figures. Filled from Supabase (remote.ts). */
 export const pens: Pen[] = []
 
+/** Kinds of flock a pen can be stocked with. */
 export type FlockKind = 'Broilers' | 'Layers' | 'Point-of-lay'

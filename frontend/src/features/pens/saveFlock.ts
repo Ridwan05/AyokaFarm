@@ -15,6 +15,7 @@ export const CLOSE_REASONS = [
 export async function saveFlock(id: number, patch: TablesUpdate<'flocks'>) {
   const { error } = await createClient().from('flocks').update(patch).eq('id', id)
   if (error) {
+    // Keep the database's own message when it names the owner rule; it says more than a bare refusal.
     toast.error(/row-level security|permission denied|42501/i.test(error.message) && !/owner/i.test(error.message) ? 'You don’t have permission to do that.' : error.message.replace(/^.*?ERROR:\s*/, ''))
     return false
   }

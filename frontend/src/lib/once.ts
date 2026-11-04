@@ -10,6 +10,7 @@ export function once<A extends unknown[], R>(name: string, fn: (...args: A) => R
     try {
       key = `${name}:${JSON.stringify(args)}`
     } catch {
+      // Arguments that can't be serialised can't be compared, so the call runs unguarded.
       return fn(...args)
     }
     const busy = running.get(key)

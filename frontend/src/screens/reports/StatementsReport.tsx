@@ -21,6 +21,7 @@ import { InfoTip } from '../../components/ui/InfoTip'
 import { explain } from '../../data/explain'
 
 const dm = dmOf
+/** dd/mm/yyyy, as printed on the statement. */
 const dmy = (iso: string) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`
 
 /** Lines from the period start, with the balance brought forward as the opening line. */
@@ -30,6 +31,10 @@ function forPeriod(lines: StatementLine[], PERIOD_FROM: string): StatementLine[]
   return [{ date: PERIOD_FROM, entry: 'Opening balance', ref: null, charged: null, paid: null, balance: opening }, ...lines.filter((l) => l.date >= PERIOD_FROM && l.entry !== 'Opening balance')]
 }
 
+/**
+ * Running-balance statements for any customer or supplier, from the start of last month to today,
+ * with a printable preview. WhatsApp sending isn't connected yet.
+ */
 export default function StatementsReport() {
   const trade = useTrade()
   const toast = useToast()
@@ -46,15 +51,18 @@ export default function StatementsReport() {
   }))
   const q = query.trim().toLowerCase()
   const visible = parties.filter((p) => !q || p.name.toLowerCase().includes(q))
+  // Falls back to the first party until one is picked.
   const party = parties.find((p) => p.id === selected) ?? parties[0]
   // Last month and this month so far.
   const from = period('last-month').from
   const today = todayISO()
   const lines = forPeriod(isCustomer ? trade.customerStatement(party.id) : trade.supplierStatement(party.id), from)
   const contact = roleWithName(trade.catalog, 'sales_accounts', 'Accounts')
+  // Customers who owe and agreed to WhatsApp reminders.
   const dueCount = trade.customers.filter((c) => c.whatsapp && trade.customerBalance(c.id) > 0).length
   const tabs = [`Customers · ${trade.customers.length}`, `Suppliers · ${trade.suppliers.length}`]
 
+  // A negative supplier balance means we paid ahead and they hold credit for us.
   const balanceLabel = (b: number) =>
     isCustomer ? (b > 0 ? `Owes ₦${formatNumber(b)}` : '₦0') : b > 0 ? `We owe ₦${formatNumber(b)}` : b < 0 ? `Credit ₦${formatNumber(-b)}` : '₦0'
 
@@ -80,6 +88,7 @@ export default function StatementsReport() {
               options={tabs}
               value={isCustomer ? tabs[0] : tabs[1]}
               onChange={(t) => {
+                // Switching side selects that side's first party.
                 const s = t.startsWith('Customers') ? 'Customers' : 'Suppliers'
                 setSide(s)
                 setSelected(s === 'Customers' ? trade.customers[0].id : trade.suppliers[0].id)
@@ -125,6 +134,7 @@ export default function StatementsReport() {
               Send on WhatsApp
             </Button>
           </div>
+          {/* The statement as it will print */}
           <div className="rounded-lg bg-canvas p-2 sm:p-6">
             <article className="mx-auto flex max-w-[640px] flex-col gap-5 bg-surface p-4 shadow-xs sm:p-8">
               <header className="flex items-start gap-3">

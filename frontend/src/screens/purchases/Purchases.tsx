@@ -20,10 +20,12 @@ import { PURCHASE_CSV_HEADER, purchaseCsvRows } from '../../features/purchases/p
 import { downloadCsv } from '../../lib/export'
 import { formatDayMon } from '../../lib/format'
 
+/** URL segment (/purchases/feed) → purchase kind. */
 const KINDS: Record<string, PurchaseKind> = { feed: 'Feed', birds: 'Birds', medication: 'Medication' }
 /** How many recent purchases the "All" overview shows. */
 const RECENT = 7
 
+/** The All · Feed · Birds · Medication tabs, as links under a base path. */
 const purchaseTabs = (base: string) => [
   { label: 'All', to: base },
   { label: 'Feed', to: `${base}/feed` },
@@ -31,6 +33,10 @@ const purchaseTabs = (base: string) => [
   { label: 'Medication', to: `${base}/medication` },
 ]
 
+/**
+ * Purchases overview (/purchases) or one type (/purchases/feed and so on): KPIs, the store
+ * keeper's reorder requests for the buyer to decide, and recent purchases.
+ */
 export default function Purchases() {
   const { kind: kindParam } = useParams<{ kind?: string }>()
   const kind = kindParam ? KINDS[kindParam] : undefined
@@ -41,6 +47,7 @@ export default function Purchases() {
   // Whoever can buy for the whole farm decides reorder requests (the database checks the same).
   const buyer = accessOf(user, 'purchases', 'add') === 'all'
 
+  // One type shows all its purchases; the overview shows only the latest few. Purchases are newest first.
   const rows = kind ? purchases.filter((p) => p.kind === kind) : purchases.slice(0, RECENT)
   const oldest = rows[rows.length - 1]
 
@@ -52,6 +59,7 @@ export default function Purchases() {
         description="Feed, birds and medication bought. Saving a purchase updates stock and the supplier’s balance, so nothing is typed twice."
         actions={
           <>
+            {/* On the overview, Export gives every purchase, not just the recent ones shown. */}
             <Button
               leadingIcon={Download}
               onClick={() =>
@@ -74,6 +82,7 @@ export default function Purchases() {
         ))}
       </div>
 
+      {/* Reorder requests are for feed and medication, so the Birds tab doesn't show them. */}
       {buyer && (!kind || kind !== 'Birds') && <ReorderRequests canDecide onRecordPurchase={() => setOverlay({ kind: 'new' })} />}
 
       <Card>

@@ -7,6 +7,7 @@ import { farmSettings as s } from './farmSettings'
 const week = 'Monday to today, compared with the same days last week.'
 const month = 'From the 1st of this month to today, compared with the same days last month.'
 
+/** Plain-words explanation of each money figure, keyed by figure. */
 export const explainMoney = {
   // ── Sales ──
   salesThisWeek: () => `Quantity × price for every approved sale (sales waiting for approval are left out). ${week}`,

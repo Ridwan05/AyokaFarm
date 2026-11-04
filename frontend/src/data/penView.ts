@@ -7,6 +7,7 @@ import { formatDayMon } from '../lib/format'
 
 // Everything the pen detail screen shows, worked out from the records for one pen.
 
+/** One row in the pen's daily entries table. */
 export type DailyEntry = {
   iso: string
   date: string
@@ -24,10 +25,12 @@ export type DailyEntry = {
 
 const MODES: Record<string, string> = { water: 'water', feed: 'feed', injection: 'injection', spray: 'spray', eye_nose_drop: 'eye/nose drop' }
 
+/** A pen's daily rows as table entries, with the medication given that day and whether it was entered late. */
 export function penEntries(history: History, catalog: Catalog, penId: number, rows: DailyRow[]): DailyEntry[] {
   const meds = new Map(catalog.medications.map((m) => [m.id, m]))
   return rows.map((d) => {
     const given = history.medLines.filter((l) => l.penId === penId && l.date === d.date)
+    // Late means saved on a later farm (Lagos) day than the day it records.
     const enteredOn = d.createdAt ? new Intl.DateTimeFormat('en-CA', { timeZone: farmSettings.timeZone }).format(new Date(d.createdAt)) : d.date
     const late = enteredOn > d.date
     const who = d.recordedBy.split(' ')[0]
@@ -47,6 +50,7 @@ export function penEntries(history: History, catalog: Catalog, penId: number, ro
   })
 }
 
+/** How a medication was given, in words ("eye/nose drop"). */
 export const modeLabel = (m: string) => MODES[m] ?? m
 
 /** The pen's current flock (or its most recent one) and its daily rows, oldest first. */
@@ -58,6 +62,7 @@ export function penFlock(history: History, penId: number) {
 }
 
 
+/** The four KPI cards on a pen: live birds, flock mortality, laying rate or feed vs expected, and margin this month. */
 export function penKpis(history: History, catalog: Catalog, penId: number): Kpi[] {
   const { flock, rows } = penFlock(history, penId)
   if (!flock) return []
@@ -66,6 +71,7 @@ export function penKpis(history: History, catalog: Catalog, penId: number): Kpi[
   const spark = lastDays(8)
   // Birds alive at the end of a day, counting birds added and sold since the last entry.
   const liveOn = (date: string) => flockBirdsOn(history, flock, date)
+  // Older flocks may have no placement rows; birds_placed stands in for them.
   const placedOn = (date: string) => sum(history.placements.filter((p) => p.flock_id === flock.id && p.placed_on <= date), (p) => p.birds) || flock.birds_placed
   const placed = birdsPlacedIn(history, flock)
   const live = liveOn(today)
@@ -164,6 +170,7 @@ export function mortalitySeries(rows: DailyRow[]) {
   // Consecutive rises ending today.
   let rising = 0
   for (let i = birds.length - 1; i > 0 && birds[i] > birds[i - 1]; i--) rising++
+  // Typical day: the 80th percentile of recorded days before today (days with no entry left out).
   const sorted = birds.slice(0, -1).filter((_, i) => byDate.has(dates[i])).sort((a, b) => a - b)
   const typicalMax = sorted.length ? sorted[Math.floor(sorted.length * 0.8)] : 0
   const labels = [0, 7, 14, 21, 29].map((i) => formatDayMon(dates[i]))
@@ -173,6 +180,7 @@ export function mortalitySeries(rows: DailyRow[]) {
     opening,
     thresholdBirds,
     thresholdLabel: `Threshold ${farmSettings.mortalityAlertPct}% ≈ ${Math.ceil(thresholdBirds)} birds`,
+    // Only two or more rises in a row count as a trend; the days include the one it rose from.
     risingDays: rising >= 2 ? rising + 1 : 0,
     xLabels: labels,
     typicalMax,
@@ -182,15 +190,18 @@ export function mortalitySeries(rows: DailyRow[]) {
 
 /** Expected grams per bird today, from the feed targets for this bird type and age. */
 export function expectedGrams(catalog: Catalog, birdTypeId: number, ageDays: number) {
+  // Week 1 is days 0–6. Unlike feedTargetFor (production.ts), this doesn't prefer a breed's own band.
   const week = Math.floor(ageDays / 7) + 1
   const band = catalog.feedTargets.find((t) => t.bird_type_id === birdTypeId && week >= t.week_from && (t.week_to === null || week <= t.week_to))
   return band ? { grams: Number(band.grams_per_bird_day), feed: catalog.feedTypes.find((f) => f.id === band.recommended_feed_type_id)?.name } : null
 }
 
+/** The flock panel on a pen: code, breed, age, birds, feed and any withdrawal. Null for a pen that never had a flock. */
 export function flockFacts(history: History, catalog: Catalog, penId: number) {
   const { flock, rows } = penFlock(history, penId)
   if (!flock) return null
   const today = todayISO()
+  // A closed flock stops ageing on its closing day.
   const ageDays = (flock.closed_on ? daysFrom(flock.placed_on, flock.closed_on) : daysFrom(flock.placed_on, today)) + flock.age_at_placement_days
   const latest = rows.at(-1)
   const target = expectedGrams(catalog, flock.bird_type_id, ageDays)
@@ -214,9 +225,9 @@ export function flockFacts(history: History, catalog: Catalog, penId: number) {
 }
 
 /**
- * Birds a flock has on record now: its latest closing count (or birds placed), less birds sold
- * since that entry, which only reach the count with the next entry. `exceptSaleId` leaves one sale
- * out, for editing it.
+ * Birds a flock has on record now: its latest closing count (or birds placed), plus birds placed or
+ * bought into it since that entry, less birds sold since (as recalc_flock counts). Those only reach
+ * the daily counts with the next entry. `exceptSaleId` leaves one sale out, for editing it.
  */
 export function birdsOnRecord(history: History, flock: History['flocks'][number], exceptSaleId?: number) {
   return flockBirdsOn(history, flock, undefined, exceptSaleId)

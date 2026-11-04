@@ -1,7 +1,8 @@
 import type { PaymentMethod } from './sales'
 
-// Mock payments matching P-D13 · Payments: money received or paid outside a sale or purchase.
+// Payments (P-D13): money received or paid outside a sale or purchase, loaded from Supabase (remote.ts).
 
+/** One payment in or out. */
 export type Payment = {
   ref: string
   /** ISO date */

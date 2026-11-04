@@ -11,6 +11,7 @@ import { PrintSheet } from '../../features/print/PrintSheet'
 import { dmy, money } from '../../features/print/printFormat'
 import Placeholder from '../Placeholder'
 
+/** A YYYY-MM-DD date, to check the ?from= and ?to= values. */
 const ISO = /^\d{4}-\d{2}-\d{2}$/
 
 /** Lines in the period, with everything before it brought forward as the opening balance. */
@@ -19,10 +20,11 @@ function forPeriod(lines: StatementLine[], from: string | null, to: string): Sta
   if (!from) return upTo
   const before = upTo.filter((l) => l.date < from)
   const opening = before.length ? before[before.length - 1].balance : 0
+  // The brought-forward line takes the place of the go-live "Opening balance" line.
   return [{ date: from, entry: 'Balance brought forward', ref: null, charged: null, paid: null, balance: opening }, ...upTo.filter((l) => l.date >= from && l.entry !== 'Opening balance')]
 }
 
-/** A printable customer or supplier statement: /print/statement/customer/<id>?from=&to= */
+/** A printable customer or supplier statement: /print/statement/<customer|supplier>/<id>?from=&to= */
 export default function StatementPrint() {
   return (
     <Suspense>
@@ -31,6 +33,7 @@ export default function StatementPrint() {
   )
 }
 
+/** The statement itself; it reads ?from=&to=, which needs the Suspense boundary above. */
 function Statement() {
   const { kind = '', id = '' } = useParams<{ kind: string; id: string }>()
   const params = useSearchParams()
@@ -42,11 +45,13 @@ function Statement() {
   const today = todayISO()
   const fromParam = params.get('from')
   const toParam = params.get('to')
+  // Bad or missing dates fall back to the whole history up to today; "to" never goes past today.
   const from = fromParam && ISO.test(fromParam) ? fromParam : null
   const to = toParam && ISO.test(toParam) && toParam < today ? toParam : today
   const all = isCustomer ? trade.customerStatement(party.id) : trade.supplierStatement(party.id)
   const lines = forPeriod(all, from, to)
   const closing = lines.length ? lines[lines.length - 1].balance : 0
+  // Aging is of the bills unpaid today, whatever period is printed.
   const bills = isCustomer ? trade.customerOpenBills(party.id) : trade.supplierOpenBills(party.id)
   const aging = agingOf(bills)
   const labels = agingLabels()

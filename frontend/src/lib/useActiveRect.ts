@@ -1,5 +1,6 @@
 import { useLayoutEffect, useRef, useState } from 'react'
 
+/** Where the active child sits, in pixels from its container's left edge. */
 export type ActiveRect = { left: number; width: number; containerWidth: number }
 
 /**

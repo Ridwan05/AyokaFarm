@@ -29,8 +29,10 @@ import { dailyLedger, feedSource, people, reorderSuggestion } from '../../data/s
 
 const dash = <NumberCell tone="muted">—</NumberCell>
 
+/** A ledger day plus where that day's bags came from or went to. */
 type LedgerRow = ReturnType<typeof dailyLedger>[number] & { source: string }
 
+/** Columns of the 14-day feed ledger. */
 const columns: Column<LedgerRow>[] = [
   { key: 'date', header: 'Date', width: 130, render: (r) => <TextCell tone="primary">{weekdayDm(r.date)}</TextCell> },
   { key: 'opening', header: 'Opening', align: 'right', width: 125, render: (r) => <NumberCell>{formatNumber(r.opening)}</NumberCell> },
@@ -47,6 +49,11 @@ const columns: Column<LedgerRow>[] = [
   { key: 'source', header: 'Source', render: (r) => <TextCell>{r.source}</TextCell> },
 ]
 
+/**
+ * Feed stock: bags on hand and days of cover per feed type, a reorder warning, and the
+ * selected feed's 14-day ledger. The store keeper receives deliveries and asks the manager to
+ * reorder; others record purchases; pen attendants only look.
+ */
 export default function FeedStock() {
   const router = useRouter()
   const user = useCurrentUser()
@@ -65,6 +72,7 @@ export default function FeedStock() {
     ? dailyLedger(history, (d) => d.item === 'feed' && d.feedTypeId === feedId, addDays(today, -13), today).map((r) => ({ ...r, source: feedSource(history, catalog, feedId, r.date) }))
     : []
   const suggestion = reorderSuggestion(history, catalog, types)
+  // Only warn once cover drops to the farm's low-stock days (Settings).
   const low = suggestion && suggestion.daysOfCover <= farmSettings.lowStockDays ? suggestion : null
   const { manager, owner } = people(catalog)
   const from = suggestion?.supplier ? ` from ${suggestion.supplier}` : ''
@@ -112,6 +120,7 @@ export default function FeedStock() {
         ))}
       </div>
 
+      {/* Reorder warning: the store keeper asks; the manager or owner buys. */}
       {showReorder && !readOnly && low && (
         <Alert
           tone="warning"
@@ -154,7 +163,9 @@ export default function FeedStock() {
   )
 }
 
+/** One feed type's bags and days of cover; tapping it shows that feed's ledger. */
 function FeedCard({ feed, selected, onSelect }: { feed: FeedType; selected: boolean; onSelect: () => void }) {
+  // Days of cover is null when the feed isn't in use.
   const inUse = feed.daysOfCover !== null
   const low = inUse && feed.daysOfCover! <= farmSettings.lowStockDays
   return (

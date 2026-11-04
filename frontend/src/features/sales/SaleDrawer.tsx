@@ -31,7 +31,10 @@ type Props = {
   onVoid?: (sale: Sale) => void
 }
 
-/** Sale detail: what was sold, how it was paid, and its history. */
+/**
+ * Sale detail: what was sold, which pens it came from, how it was paid, and its history.
+ * A sale waiting for approval shows Approve and Reject to those who may approve.
+ */
 export function SaleDrawer({ sale, onClose, onRecordPayment, onEdit, onVoid }: Props) {
   const currentUser = useCurrentUser()
   const trade = useTrade()
@@ -58,6 +61,7 @@ export function SaleDrawer({ sale, onClose, onRecordPayment, onEdit, onVoid }: P
   // One flag for every write here: a second tap while saving would run it twice.
   const [saving, setSaving] = useState(false)
   const choices = penChoices(trade, sale.productId, sale.receipt)
+  // Birds always need pens; eggs and droppings with no rows mean auto-split, which is fine.
   const problem = editing && (birds || editing.length) ? portionError(editing, choices, sale.qty, product.unit) : ''
 
   const savePortions = async (rows: PortionRow[]) => {
@@ -69,6 +73,7 @@ export function SaleDrawer({ sale, onClose, onRecordPayment, onEdit, onVoid }: P
     setEditing(null)
   }
 
+  // Waiting for approval: approvers get Reject / Approve, everyone else can only close.
   const footer = pending && !canApprove(currentUser.role) ? (
     <Button size="lg" className="flex-1" onClick={onClose}>
       Close · waiting for approval
@@ -190,6 +195,7 @@ export function SaleDrawer({ sale, onClose, onRecordPayment, onEdit, onVoid }: P
               {naira(balance)}
             </KeyValueRow>
           ) : (
+            // Shown as the balance before this sale's unpaid part → the balance now.
             <KeyValueRow label={`${customer.short}’s balance after`} strong calculated={explainMoney.balanceAfterSale()}>
               {left > 0 ? `${naira(balance - left)} → ${naira(balance)}` : naira(balance)}
             </KeyValueRow>

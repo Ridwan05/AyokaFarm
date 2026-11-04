@@ -13,6 +13,7 @@ const tabs = [
   { label: 'Audit log', to: '/settings/audit' },
 ]
 
+/** Shared header + tabs for every settings page. Only the tabs this user's role may open are shown. */
 export function SettingsHeader({ title, description, actions, sample }: { title: string; description: string; actions?: ReactNode; sample?: boolean }) {
   const user = useCurrentUser()
   return (

@@ -3,8 +3,10 @@ import type { AlertKind, AlertTone } from '../features/alerts/AlertRow'
 // Alerts are calculated from the records (derivedAlerts.ts). Acknowledging or resolving one is
 // shared with everyone through alert_marks (data/alertMarks.ts), keyed by the alert's id.
 
+/** Where an alert stands; 'new' until someone marks it. */
 export type AlertStatus = 'new' | 'acknowledged' | 'resolved'
 
+/** An alert on the Alerts screen, with the facts and link shown when it's opened. */
 export type FarmAlert = {
   id: string
   kind: AlertKind
@@ -22,6 +24,7 @@ export type FarmAlert = {
   link: { label: string; to: string }
 }
 
+/** Display name for each kind of alert, for filters and labels. */
 export const alertTypes: Record<AlertKind, string> = {
   mortality: 'Mortality',
   debt: 'Money owed',

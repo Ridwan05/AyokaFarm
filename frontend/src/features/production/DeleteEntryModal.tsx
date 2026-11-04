@@ -17,6 +17,7 @@ export function DeleteEntryModal({ row, onClose }: { row: DailyRow; onClose: () 
   // A second tap while saving would delete the entry twice.
   const [saving, setSaving] = useState(false)
   const pen = penName(catalog, row.penId)
+  // A reason of at least 3 characters, so the audit log says something useful.
   const error = reason.trim().length < 3 ? 'Say why it’s being deleted' : undefined
 
   const submit = async (e: FormEvent) => {

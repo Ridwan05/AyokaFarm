@@ -22,6 +22,7 @@ const num = (v: string) => Number(v.replace(/,/g, '')) || 0
 export function EditPurchaseModal({ purchase: p, onClose }: { purchase: Purchase; onClose: () => void }) {
   const { suppliers, updatePurchase } = useTrade()
   const toast = useToast()
+  // Older purchases may not say; birds go straight into bird stock, so they count as received.
   const received = p.isReceived ?? p.kind === 'Birds'
   const [date, setDate] = useState(p.date)
   const [supplierId, setSupplierId] = useState(p.supplierId)
@@ -48,6 +49,7 @@ export function EditPurchaseModal({ purchase: p, onClose }: { purchase: Purchase
     if (Object.values(errors).some(Boolean)) return
     setSaving(true)
     const ok = await updatePurchase(p.ref, {
+      // Stock already came in, so what came in, from whom and when can't change.
       ...(received ? {} : { purchased_on: date, supplier_id: Number(supplierId), quantity: num(qty) }),
       unit_price: num(price),
       amount_paid: paidNow,
@@ -85,6 +87,7 @@ export function EditPurchaseModal({ purchase: p, onClose }: { purchase: Purchase
                   leadingIcon={Truck}
                   value={supplierId}
                   onChange={(e) => setSupplierId(e.target.value)}
+                  // Suppliers of this kind, plus the current one even if it sells something else.
                   options={suppliers.filter((s) => s.kind === p.kind || s.id === p.supplierId).map((s) => ({ value: s.id, label: s.name }))}
                 />
               )}

@@ -11,6 +11,7 @@ import type { Catalog } from './remote'
 
 const firstName = (catalog: Catalog, id: string) => catalog.profiles.find((p) => p.id === id)?.full_name.split(' ')[0] ?? 'Someone'
 
+/** Shared alert marks keyed by alert id, with a `mark` action that saves for everyone. */
 export function useAlertMarks(catalog: Catalog, userId: string) {
   const db = useMemo(() => createClient(), [])
   const [marks, setMarks] = useState<Record<string, AlertMark>>({})
@@ -20,6 +21,7 @@ export function useAlertMarks(catalog: Catalog, userId: string) {
   const reload = useCallback(async () => {
     const { data, error: e } = await db.from('alert_marks').select('*').order('marked_at', { ascending: false }).range(0, 999)
     if (e) {
+      // A missing table means the alert_marks migration hasn't been run yet.
       setError(/does not exist|schema cache/i.test(e.message) ? 'Shared alert status isn’t set up yet (run the latest database migration).' : e.message)
     } else {
       setMarks(Object.fromEntries((data ?? []).map((m) => [m.alert_id, { status: m.status as AlertMark['status'], by: firstName(catalog, m.marked_by), at: m.marked_at, note: m.note ?? undefined }])))
@@ -43,6 +45,7 @@ export function useAlertMarks(catalog: Catalog, userId: string) {
         .upsert({ alert_id: alertId, status, note: note ?? null, marked_by: userId, marked_at: new Date().toISOString() }, { onConflict: 'alert_id' })
         .select('alert_id')
       if (e) return /row-level security|permission denied|42501/i.test(e.message) ? 'You don’t have permission to change alerts.' : e.message.replace(/^.*?ERROR:\s*/, '')
+      // RLS can quietly drop a write without an error; no row back means nothing saved.
       if (!data?.length) return 'The alert status wasn’t saved.'
       await reload()
       return null

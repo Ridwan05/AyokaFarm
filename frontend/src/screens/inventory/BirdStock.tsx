@@ -21,6 +21,7 @@ import { InventoryTabs, LedgerNote } from './InventoryTabs'
 /** A flat line for KPIs with no daily trend to show. */
 const FLAT = [0, 0]
 
+/** One bird purchase and how many of its birds have been placed. */
 type BatchRow = {
   id: number
   ref: string
@@ -40,6 +41,10 @@ type BatchRow = {
 /** "Day-old" or "16 wk" */
 const ageLabel = (days: number) => (days <= 0 ? 'Day-old' : days % 7 === 0 ? `${days / 7} wk` : `${days} days`)
 
+/**
+ * Bird stock: one row per bird purchase with birds received, placed and still waiting.
+ * Pen attendants can look but don't get the "Record bird purchase" button.
+ */
 export default function BirdStock() {
   const router = useRouter()
   const user = useCurrentUser()
@@ -47,6 +52,7 @@ export default function BirdStock() {
   const today = todayISO()
 
   const rows: BatchRow[] = catalog.birdStock.map((b) => {
+    // Every placement drawn from this purchase, by flock code.
     const went = history.placements
       .filter((p) => p.purchase_id === b.purchase_id)
       .map((p) => `${history.flocks.find((f) => f.id === p.flock_id)?.code ?? 'Flock'} · ${formatNumber(p.birds)}`)
@@ -71,6 +77,7 @@ export default function BirdStock() {
 
   const waiting = rows.filter((r) => r.inStock > 0)
   const inStock = waiting.reduce((n, r) => n + r.inStock, 0)
+  // A batch with no known cost adds nothing to the value rather than guessing.
   const value = waiting.reduce((n, r) => n + r.inStock * (r.costPerBird ?? 0), 0)
   const oldest = waiting.filter((r) => r.receivedOn).sort((a, b) => a.receivedOn!.localeCompare(b.receivedOn!))[0]
   const oldestDays = oldest ? daysFrom(oldest.receivedOn!, today) : null

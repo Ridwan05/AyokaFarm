@@ -19,17 +19,20 @@ import {
 import type { Role, User } from '../../data/session'
 import { canAccess, isAttendant } from '../../lib/access'
 
+/** One sidebar link. */
 export type NavItem = {
   label: string
   to: string
   icon: LucideIcon
 }
 
+/** A labelled section of sidebar links; the first group has no label. */
 export type NavGroup = {
   label?: string
   items: NavItem[]
 }
 
+/** Full sidebar for office roles. Each user still only sees the items their role can open. */
 export const navGroups: NavGroup[] = [
   { items: [{ label: 'Dashboard', to: '/', icon: LayoutDashboard }] },
   {
@@ -37,6 +40,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: 'Production', to: '/production', icon: Egg },
       { label: 'Pens & flocks', to: '/pens', icon: Warehouse },
+      // /inventory redirects to the feed tab (next.config.ts).
       { label: 'Inventory', to: '/inventory', icon: Package },
     ],
   },
@@ -80,12 +84,15 @@ const penAttendantNav: NavGroup[] = [
   },
 ]
 
+/** Sidebar groups for a role, before per-module permission filtering. */
 export function navFor(role: Role): NavGroup[] {
   if (isAttendant(role)) return penAttendantNav
+  // The store keeper's home is the store-today view, so their first link is renamed.
   if (role === 'store-keeper') return [{ items: [{ label: 'Store today', to: '/', icon: LayoutDashboard }] }, ...navGroups.slice(1)]
   return navGroups
 }
 
+/** Settings sits apart, at the bottom of the sidebar. */
 export const settingsItem: NavItem = { label: 'Settings', to: '/settings', icon: Settings }
 
 /** Users only see modules their role allows (BRD §4), driven by Roles & permissions. */

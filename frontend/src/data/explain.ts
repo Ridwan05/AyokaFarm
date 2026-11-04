@@ -4,6 +4,7 @@ import { farmSettings as s } from './farmSettings'
 // Functions (not constants) so thresholds read from Settings stay current. One or two sentences:
 // the formula in words, then what's included.
 
+/** Plain-words explanation of each calculated figure, keyed by figure. */
 export const explain = {
   // ── Production ──
   liveBirds: () => 'The closing count from each flock’s latest daily entry (birds placed, less every death recorded). Pens with no entry yet use the birds placed.',

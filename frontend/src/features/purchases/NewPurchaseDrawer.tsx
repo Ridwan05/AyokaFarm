@@ -43,6 +43,7 @@ const buildItems = (): Record<PurchaseKind, Item[]> => ({
   })),
 })
 
+/** Record a feed, bird or medication purchase from a supplier, and what was paid when buying. Anything unpaid is owed to them. */
 export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
   const currentUser = useCurrentUser()
   const { suppliers, purchases, supplierBalance, addPurchase, catalog } = useTrade()
@@ -54,6 +55,7 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
   const [supplierId, setSupplierId] = useState(() => defaultSupplier('Feed'))
   const [itemName, setItemName] = useState(items.Feed[0].name)
   const item = items[kind].find((i) => i.name === itemName) ?? items[kind][0]
+  // The price starts from the last time this item was bought.
   const last = purchases.find((p) => p.item === item.name)
   const [qty, setQty] = useState('')
   const [price, setPrice] = useState(last ? formatNumber(last.price) : '')
@@ -90,6 +92,7 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
     perPack: kind === 'Medication' && packUnits <= 0 ? `Enter how many ${item.stockUnit ?? 'units'} are in each pack` : undefined,
   }
 
+  // A new kind picks its usual supplier, its first item and that item's last price.
   const changeKind = (k: PurchaseKind) => {
     setKind(k)
     setSupplierId(defaultSupplier(k))
@@ -104,12 +107,14 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
     if (saving) return
     setSubmitted(true)
     if (errors.birdType || errors.qty || errors.price || errors.paid || errors.perPack || errors.date) return
+    // A provisional ref (next after the highest of this kind); the database gives the saved purchase its own.
     const prefix = refPrefix[kind]
     const next = Math.max(...purchases.filter((p) => p.ref.startsWith(prefix)).map((p) => Number(p.ref.slice(3)))) + 1
     const ref = `${prefix}-${String(next).padStart(4, '0')}`
     const me = currentUser.name.split(' ')[0]
     const purchase = {
       ref, date, supplierId, kind, item: kind === 'Birds' ? birdItem : item.name, qty: num(qty), unit: item.unit, per: item.per, price: num(price), paidAtPurchase: paidNow, method: METHOD_OF[method], recordedBy: me,
+      // How much stock one unit bought adds: the pack size for medication, 1 for bags and birds.
       unitsPerUnit: kind === 'Medication' ? packUnits : 1,
       bird: kind === 'Birds' ? { birdTypeId, breed: breed.trim() || null, ageDays: Math.round(weeks * 7) } : undefined,
       history: [{ title: 'Purchase recorded', detail: `By ${me}${paidNow ? ` · paid ₦${formatNumber(paidNow)}` : ''}`, time: dayMonth(date) }],
@@ -232,6 +237,7 @@ export function NewPurchaseDrawer({ onClose }: { onClose: () => void }) {
           </Field>
         </div>
         {paidNow > 0 && <SegmentedControl fullWidth label="Paid how" options={METHODS} value={method} onChange={setMethod} />}
+        {/* What the supplier is owed before and after this purchase */}
         <SummaryBox>
           <KeyValueRow label={`Owed to ${supplier.short} now`} calculated={explainMoney.balanceNow()}>
             ₦ {formatNumber(owed)}

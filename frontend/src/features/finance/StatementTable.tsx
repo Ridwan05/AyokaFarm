@@ -7,6 +7,7 @@ import { money } from './statementFormat'
 // One financial statement as a table: section headings, lines that open their records, and
 // subtotals. Negative amounts are shown in brackets, as accountants write them.
 
+/** A row of a statement: a section heading, a line backed by records, or a subtotal (`grand` for the bottom line). */
 export type StatementRow =
   | { type: 'heading'; label: string }
   | { type: 'line'; line: Line; prev?: number | null }
@@ -22,7 +23,9 @@ type Props = {
   onOpen: (line: Line) => void
 }
 
+/** A financial statement table; tapping a line or its amount opens the records behind it. */
 export function StatementTable({ rows, prevLabel, currentLabel, percentOf, onOpen }: Props) {
+  // With no revenue there is nothing to take a percentage of.
   const pct = (n: number) => (percentOf ? `${((n / percentOf) * 100).toFixed(1)}%` : '—')
   return (
     // The table scrolls sideways inside its card on phones; the page doesn't.

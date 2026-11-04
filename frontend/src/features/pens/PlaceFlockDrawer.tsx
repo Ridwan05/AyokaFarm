@@ -23,6 +23,7 @@ function flockDefaults(birdTypeId: number, ageDays: number, history: History, ca
   const bird = catalog.birdTypes.find((b) => b.id === birdTypeId)
   const prefix = bird?.lays_eggs ? 'L-' : 'B-'
   const top = Math.max(0, ...history.flocks.filter((f) => f.code.startsWith(prefix)).map((f) => Number(f.code.slice(2)) || 0))
+  // Age in days → week of life (day 0–6 is week 1), to find the feed band.
   const week = Math.floor(ageDays / 7) + 1
   const band = catalog.feedTargets.find((t) => t.bird_type_id === birdTypeId && week >= t.week_from && (t.week_to === null || week <= t.week_to))
   const feed = catalog.feedTypes.find((x) => x.id === band?.recommended_feed_type_id)?.name
@@ -33,6 +34,10 @@ function flockDefaults(birdTypeId: number, ageDays: number, history: History, ca
   }
 }
 
+/**
+ * Place a new flock in an empty pen, taking its birds from bird stock. Only the owner may also
+ * add birds that weren't bought (go-live flocks, own hatch).
+ */
 export function PlaceFlockDrawer({ open, onClose }: Props) {
   const toast = useToast()
   const router = useRouter()
@@ -41,6 +46,7 @@ export function PlaceFlockDrawer({ open, onClose }: Props) {
   const owner = user.role === 'owner'
   // Any active pen without a flock; the flock decides the bird type.
   const empty = catalog.pens.filter((p) => !history.flocks.some((f) => f.pen_id === p.id && f.status === 'active'))
+  // Start on the first bird type that has birds in stock.
   const withStock = catalog.birdTypes.find((b) => batchChoices(catalog, b.id).length > 0)
   const [birdTypeId, setBirdTypeId] = useState(withStock?.id ?? catalog.birdTypes[0]?.id ?? 0)
   const firstChoices = batchChoices(catalog, birdTypeId)
@@ -67,7 +73,9 @@ export function PlaceFlockDrawer({ open, onClose }: Props) {
     sources: sourcesProblem || (overCapacity ? `${pen!.name} holds ${formatNumber(pen!.capacity)} birds` : undefined),
     code: code.trim() ? undefined : `Give the flock a code, e.g. ${defaults.nextCode}`,
   }
+  // Without stock only the owner can go on, using birds not from a purchase.
   const noStock = choices.length === 0 && !owner
+  // The pen's attendant, who owes the first daily entry.
   const staff = pens.find((p) => p.id === pen?.id)?.staff
 
   /** A new bird type starts again from its first batch in stock. */
@@ -96,6 +104,7 @@ export function PlaceFlockDrawer({ open, onClose }: Props) {
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
+    // A second tap while saving would place the flock twice.
     if (saving) return
     setSubmitted(true)
     if (errors.pen || errors.sources || errors.code || !date) return
@@ -186,6 +195,7 @@ export function PlaceFlockDrawer({ open, onClose }: Props) {
         <Field label="Placement date" hint="Day 1 of the flock">
           {(id) => <DateInput id={id} value={date} onChange={(e) => setDate(e.target.value)} />}
         </Field>
+        {/* What placing the flock sets up: feed plan, day-1 feed, cost and first entry */}
         <SummaryBox>
           <KeyValueRow label="Feed plan" calculated="The feed bands set for this bird type in Settings → Feed & targets.">
             {defaults.feedPlan}

@@ -21,6 +21,7 @@ import { createClient } from '../../lib/supabase/client'
 import type { Database, Tables } from '../../lib/supabase/database.types'
 import { SettingsHeader } from './SettingsHeader'
 
+/** A product with the last price it sold at. */
 type Product = Tables<'products'> & { last: string }
 type Medication = Tables<'medications'>
 type ListId = 'products' | 'expense-categories' | 'medications' | 'adjust-reasons' | 'payment-methods' | 'customer-types'
@@ -35,9 +36,12 @@ const PRODUCT_KINDS: { value: Database['public']['Enums']['product_kind']; label
   { value: 'sacks', label: 'Empty sacks' },
 ]
 const MED_CATEGORIES: Database['public']['Enums']['medication_category'][] = ['vaccine', 'antibiotic', 'vitamin', 'dewormer', 'coccidiostat', 'disinfectant', 'other']
+/** First letter in capitals. */
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+/** Database errors → a sentence for the owner-only lists. */
 const why = (message: string) => (/row-level security|permission/i.test(message) ? 'Only the owner can change lists.' : /duplicate key/i.test(message) ? 'That name is already on the list.' : message)
 
+/** Lists: products and minimum prices, expense categories, medications and adjustment reasons. Owner edits; the rest are fixed. */
 export default function Lists() {
   const user = useCurrentUser()
   const { catalog, history, reload } = useTrade()
@@ -72,6 +76,7 @@ export default function Lists() {
   const list = lists.find((l) => l.id === selected)!
   const db = createClient()
 
+  /** Hides an item from new forms, or brings it back. Old records keep it. */
   async function toggle(table: 'products' | 'expense_categories' | 'adjustment_reasons' | 'medications', id: number, name: string, active: boolean) {
     if (saving) return
     setSaving(true)
@@ -98,6 +103,7 @@ export default function Lists() {
       setSaving(false)
     }
   }
+  // Categories without a statement line go under miscellaneous.
   const lineOf = (id: number) => ((catalog.categories.find((c) => c.id === id) as { statement_line?: string } | undefined)?.statement_line ?? 'misc') as StatementLine
 
   const priceColumns: Column<Product>[] = [
@@ -117,6 +123,7 @@ export default function Lists() {
     },
   ]
 
+  // The items for the chosen simple list. Payment methods and customer types are fixed and only shown.
   const nameItems: { id: number; name: string; is_active: boolean; detail?: string }[] =
     selected === 'expense-categories'
       ? catalog.categories
@@ -157,6 +164,7 @@ export default function Lists() {
           <p className="pt-2 type-body-sm text-fg-secondary">Hiding an item takes it off new forms; old records keep it.</p>
         </Card>
 
+        {/* The chosen list */}
         <Card className="min-w-0 flex-1 gap-4 p-5">
           <div className="flex flex-wrap items-baseline gap-x-2">
             <h2 className="type-h3 text-fg-primary">{list.name}</h2>
@@ -271,6 +279,7 @@ export default function Lists() {
   )
 }
 
+/** Cancel and save buttons shared by the list modals. */
 function Footer({ onClose, form, busy, label }: { onClose: () => void; form: string; busy: boolean; label: string }) {
   return (
     <>
@@ -284,6 +293,7 @@ function Footer({ onClose, form, busy, label }: { onClose: () => void; form: str
   )
 }
 
+/** Add or rename an item on a simple name list. Names must be unique (ignoring case). */
 function NameModal({
   table,
   listName,
@@ -331,6 +341,7 @@ function NameModal({
   )
 }
 
+/** Add a product, or change an existing product's minimum price. */
 function ProductModal({ product, onClose, onSaved }: { product: Product | null; onClose: () => void; onSaved: () => Promise<void> }) {
   const { settings } = useTrade()
   const [name, setName] = useState(product?.name ?? '')
@@ -392,6 +403,7 @@ function ProductModal({ product, onClose, onSaved }: { product: Product | null; 
   )
 }
 
+/** Add or edit a medication: category, unit, withdrawal days and reorder level. */
 function MedicationModal({ medication, onClose, onSaved }: { medication: Medication | null; onClose: () => void; onSaved: () => Promise<void> }) {
   const [name, setName] = useState(medication?.name ?? '')
   const [category, setCategory] = useState(medication?.category ?? 'vitamin')
@@ -409,6 +421,7 @@ function MedicationModal({ medication, onClose, onSaved }: { medication: Medicat
     if (!Number.isInteger(days) || days < 0) return toast.error('Withdrawal must be whole days (0 if none)')
     if (!(Number(reorder) >= 0)) return toast.error('Enter the reorder level')
     setBusy(true)
+    // Disinfectants aren't given to birds, so they have no withdrawal period.
     const row = { name: name.trim(), category, stock_unit: unit.trim(), withdrawal_days: category === 'disinfectant' ? null : days, reorder_level: Number(reorder) }
     const db = createClient()
     try {

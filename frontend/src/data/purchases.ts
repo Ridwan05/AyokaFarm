@@ -1,10 +1,13 @@
 import type { PaymentMethod } from './sales'
-// Mock purchases matching P-D10 / P-D30 and the purchase overlays.
+// Purchases (P-D10 / P-D30 and the purchase overlays), loaded from Supabase (remote.ts).
 
+/** What a purchase is for. */
 export type PurchaseKind = 'Feed' | 'Birds' | 'Medication'
 
+/** One line in a purchase's history. */
 export type PurchaseEvent = { title: string; detail: string; time: string }
 
+/** A purchase as the purchase screens and ledgers use it. */
 export type Purchase = {
   /** Birds only: what type, breed and age they arrive at (they go to bird stock until placed). */
   bird?: { birdTypeId: number; breed: string | null; ageDays: number }
@@ -33,6 +36,8 @@ export type Purchase = {
   history: PurchaseEvent[]
 }
 
+/** Purchase total: quantity × price. */
 export const totalOf = (p: Purchase) => p.qty * p.price
 
+/** Reference prefix for each kind of purchase, e.g. PF-0012 for feed. */
 export const refPrefix: Record<PurchaseKind, string> = { Feed: 'PF', Birds: 'PB', Medication: 'PM' }

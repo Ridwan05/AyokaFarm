@@ -6,8 +6,10 @@ import { formatNumber } from '../../lib/format'
 // weren't bought (go-live flocks, own hatch). Rows hold the typed text; toBirdSources() parses them.
 // The database checks the same rules when saving.
 
+/** One row of the bird source form: a bird stock batch, or (owner only) birds not from a purchase with an optional cost a bird. */
 export type SourceRow = { kind: 'stock'; purchaseId: number; birds: string } | { kind: 'none'; birds: string; cost: string }
 
+/** A bird stock batch that can be picked, with what's left and its cost a bird. */
 export type BatchChoice = {
   purchaseId: number
   ref: string
@@ -19,8 +21,10 @@ export type BatchChoice = {
   breed: string | null
 }
 
+/** A typed number like "1,200" as a number; anything unreadable is 0. */
 export const num = (v: string) => Number(v.replace(/,/g, '')) || 0
 
+// "Day-old", or the age rounded to whole weeks: "6-week".
 const ageLabel = (days: number) => (days === 0 ? 'Day-old' : `${Math.round(days / 7)}-week`)
 
 /**
@@ -67,12 +71,14 @@ export function sourceError(rows: SourceRow[], choices: BatchChoice[]): string {
     if (r.kind !== 'stock') continue
     const c = choices.find((x) => x.purchaseId === r.purchaseId)
     if (!c) return 'Pick a batch from bird stock'
+    // Add up every row taking from this batch, so two rows can't together take more than is left.
     const asked = rows.filter((x) => x.kind === 'stock' && x.purchaseId === r.purchaseId).reduce((n, x) => n + num(x.birds), 0)
     if (asked > c.left) return `Only ${formatNumber(c.left)} birds left in ${c.ref}`
   }
   return ''
 }
 
+/** The typed rows as sources to save; empty rows are dropped and a blank cost is saved as unknown. */
 export const toBirdSources = (rows: SourceRow[]): BirdSource[] =>
   rows
     .filter((r) => num(r.birds) > 0)
