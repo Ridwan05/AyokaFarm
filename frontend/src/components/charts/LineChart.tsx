@@ -117,7 +117,8 @@ export function LineChart({ series, band, yTicks, formatY, xLabels, height = 200
           {series.map((s) => {
             // Dots for days with no neighbours, and the end dot if asked for.
             const last = runs(s.values).at(-1)?.at(-1)
-            const solo = lonely(s.values).filter((p) => !(s.endDot && p === last))
+            // Compare by day index: runs() builds fresh pairs, so the same point is never the same object.
+            const solo = lonely(s.values).filter((p) => !(s.endDot && p[0] === last?.[0]))
             return [...solo.map((p) => dot(s, p, `${s.label}-${p[0]}`)), s.endDot && last ? dot(s, last, `${s.label}-end`) : null]
           })}
         </div>
