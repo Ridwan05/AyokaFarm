@@ -44,7 +44,15 @@ npm run lint
 
 ## Backend (Supabase)
 
-Migrations live in `backend/supabase/migrations/`. Run Supabase CLI commands from `backend/`:
+`backend/supabase/migrations/` holds one baseline, `20261108000000_baseline.sql`. It was generated from the live database and builds everything the app needs: types, functions, tables, views, indexes, triggers, row-level security, grants, the `receipts` storage bucket and the reference lists (roles and permissions, bird and feed types, feed targets, expense categories, medications, products, farm settings). It holds no farm records.
+
+To set up a new Supabase project:
+
+1. Run the baseline once in the Supabase SQL Editor.
+2. In the dashboard, turn on phone sign-in under Auth providers. Auth settings and API keys are not part of the migration.
+3. Create the Owner login: `node backend/scripts/setup.mjs`
+
+Add later schema changes as new migration files next to the baseline. Run Supabase CLI commands from `backend/`:
 
 ```sh
 cd backend
