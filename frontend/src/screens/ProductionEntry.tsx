@@ -109,6 +109,10 @@ function EntryScreen() {
   const found = editId ? savedEntry(history, catalog, editId) : null
   // Ignore an ?entry= id that belongs to a different pen.
   const editing = found && found.row.penId === penId ? found : null
+  // Bags of a feed in the store. A correction can reuse the bags this entry already took out.
+  const feedStock = (name: string) => stockOf(name) + (editing && editing.feedType === name ? editing.row.feedBags : 0)
+  // A new entry starts on the recommended feed if the store has some, else the first feed that's in stock.
+  const startFeed = [ctx?.feedType, ...feedTypes.map((f) => f.name)].find((n) => n && feedStock(n) > 0) ?? ctx?.feedType ?? feedTypes[0]?.name ?? ''
 
   const blank: Draft = editing
     ? {
@@ -122,7 +126,7 @@ function EntryScreen() {
         notes: '',
       }
     : // Deaths and loose eggs are usually none, so they start at 0; crates and bags must be counted.
-      { died: '0', feedType: ctx?.feedType ?? feedTypes[0]?.name ?? '', feedBags: '', crates: '', pieces: '0', cracked: '', meds: [], notes: '' }
+      { died: '0', feedType: startFeed, feedBags: '', crates: '', pieces: '0', cracked: '', meds: [], notes: '' }
   const [draft, setDraft] = useState<Draft>(blank)
   const [restored, setRestored] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -246,8 +250,14 @@ function EntryScreen() {
   const diedError =
     died !== null && died > opening ? `There are only ${formatNumber(opening)} birds in the pen` : died === null && tried ? 'Enter 0 if none died' : undefined
   // A mistyped number (e.g. "5.5.5") is flagged straight away; an empty box only after a Save tap.
+  // Like medication, a pen can't use more feed than the store holds.
+  const bagsInStore = feedStock(draft.feedType)
   const bagsError =
-    bags !== null ? undefined : draft.feedBags.trim() !== '' ? 'Enter a number, e.g. 5.5' : tried ? 'Enter the bags used, 0 if none' : undefined
+    bags === null
+      ? draft.feedBags.trim() !== '' ? 'Enter a number, e.g. 5.5' : tried ? 'Enter the bags used, 0 if none' : undefined
+      : bags > bagsInStore
+        ? `Only ${formatNumber(Math.max(0, bagsInStore))} bags of ${draft.feedType} in the store`
+        : undefined
   const eggsError = (s: string) => (layers && tried && num(s) === null ? 'Enter 0 if none' : undefined)
   // Every required count filled in and no field showing an error.
   const valid =
@@ -255,6 +265,7 @@ function EntryScreen() {
     died !== null &&
     !diedError &&
     bags !== null &&
+    !bagsError &&
     (!layers || (num(draft.crates) !== null && num(draft.pieces) !== null)) &&
     draft.meds.every((m, i) => num(m.qty) !== null && !medError(i))
 
@@ -397,13 +408,21 @@ function EntryScreen() {
         <Card>
           <CardHeader title="Feed" meta={<span className="type-body-sm text-fg-tertiary">{bagKg} kg bags</span>} />
           <div className="grid grid-cols-1 gap-4 px-5 pb-5 sm:grid-cols-2">
-            <Field label="Feed type" hint={`Recommended at this age: ${ctx.feedType}`}>
+            <Field
+              label="Feed type"
+              hint={`Recommended at this age: ${ctx.feedType}`}
+              aside={<span className={cn(bagsInStore <= 0 && 'text-fg-danger')}>{formatNumber(bagsInStore)} bags in stock</span>}
+            >
               {(id) => (
                 <SelectInput
                   id={id}
                   value={draft.feedType}
                   onChange={(e) => set('feedType', e.target.value)}
-                  options={feedTypes.map((f) => ({ value: f.name, label: f.name }))}
+                  // Feeds the store has none of are greyed out; the one already chosen stays selectable.
+                  options={feedTypes.map((f) => {
+                    const out = feedStock(f.name) <= 0 && f.name !== draft.feedType
+                    return { value: f.name, label: out ? `${f.name} — out of stock` : f.name, disabled: out }
+                  })}
                 />
               )}
             </Field>

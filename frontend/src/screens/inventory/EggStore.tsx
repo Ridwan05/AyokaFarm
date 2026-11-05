@@ -38,7 +38,7 @@ const signed = (eggs: number, sign: '+' | '−') => (eggs ? <NumberCell>{`${sign
 const cr = (eggs: number) => num(crates(eggs), 1).replace(/\.0$/, '')
 
 /**
- * Egg store: crates on hand, eggs held back for pens in medication withdrawal, and a 14-day
+ * Egg store: crates on hand, eggs held back for pens in medication withdrawal, and a 30-day
  * ledger. The store keeper gets only the stock count; other roles can also write off broken
  * eggs; pen attendants only look.
  */
@@ -56,7 +56,7 @@ export default function EggStore() {
   const held = heldEggs(history, catalog, today)
   const heldTotal = held.reduce((n, h) => n + h.eggs, 0)
   const onHand = stockOf('eggs')
-  const ledger = dailyLedger(history, (d) => d.item === 'eggs', addDays(today, -13), today)
+  const ledger = dailyLedger(history, (d) => d.item === 'eggs', addDays(today, -29), today)
   // Held on each ledger day: eggs each withdrawal pen collected from the dose date up to that day.
   const rows: Row[] = ledger.map((r) => ({
     ...r,
@@ -149,7 +149,7 @@ export default function EggStore() {
       <Card>
         <CardHeader
           title="Egg store ledger"
-          meta={<span className="type-body-sm text-fg-tertiary">Crates of {farmSettings.eggsPerCrate} · last 14 days · closing = opening + collected − sold ± broken or counted</span>}
+          meta={<span className="type-body-sm text-fg-tertiary">Crates of {farmSettings.eggsPerCrate} · last 30 days · closing = opening + collected − sold ± broken or counted</span>}
           action={{ label: 'Export', onClick: exportLedger }}
         />
         <Table columns={columns} rows={rows} rowKey={(r) => r.date} />

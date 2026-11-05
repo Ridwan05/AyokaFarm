@@ -9,12 +9,14 @@ type FieldProps = {
   error?: string
   /** Shows the "Auto" tag: the value is computed, not typed. */
   auto?: boolean
+  /** A short note beside the label, e.g. how much is in stock. */
+  aside?: ReactNode
   className?: string
   children: (id: string) => ReactNode
 }
 
 /** Label + control + hint. The control receives the generated id. */
-export function Field({ label, hint, error, auto, className, children }: FieldProps) {
+export function Field({ label, hint, error, auto, aside, className, children }: FieldProps) {
   const id = useId()
   return (
     <div className={cn('flex min-w-0 flex-col gap-1.5', className)}>
@@ -23,6 +25,7 @@ export function Field({ label, hint, error, auto, className, children }: FieldPr
           {label}
         </label>
         {auto && <span className="rounded-xs bg-muted px-1.5 py-0.5 type-label-sm text-fg-secondary">Auto</span>}
+        {aside && <span className="ml-auto type-body-sm whitespace-nowrap text-fg-tertiary">{aside}</span>}
       </div>
       {children(id)}
       {error ? (
@@ -88,7 +91,8 @@ export function AutoInput({ id, value, prefix, info, label = 'This value' }: { i
 }
 
 type SelectInputProps = Omit<SelectHTMLAttributes<HTMLSelectElement>, 'size'> & {
-  options: { value: string; label: string }[]
+  /** disabled options are greyed out in the list and can't be picked. */
+  options: { value: string; label: string; disabled?: boolean }[]
   leadingIcon?: LucideIcon
   /** md (40px) for dense settings pages; lg (48px) is the form default. */
   size?: 'md' | 'lg'
@@ -104,7 +108,7 @@ export function SelectInput({ options, leadingIcon: Icon, size = 'lg', className
         className="min-w-0 flex-1 cursor-pointer appearance-none bg-transparent pr-7 type-body-lg text-fg-primary outline-none focus-visible:shadow-none"
       >
         {options.map((o) => (
-          <option key={o.value} value={o.value}>
+          <option key={o.value} value={o.value} disabled={o.disabled}>
             {o.label}
           </option>
         ))}

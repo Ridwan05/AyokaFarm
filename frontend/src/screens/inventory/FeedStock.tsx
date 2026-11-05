@@ -32,7 +32,7 @@ const dash = <NumberCell tone="muted">—</NumberCell>
 /** A ledger day plus where that day's bags came from or went to. */
 type LedgerRow = ReturnType<typeof dailyLedger>[number] & { source: string }
 
-/** Columns of the 14-day feed ledger. */
+/** Columns of the 30-day feed ledger. */
 const columns: Column<LedgerRow>[] = [
   { key: 'date', header: 'Date', width: 130, render: (r) => <TextCell tone="primary">{weekdayDm(r.date)}</TextCell> },
   { key: 'opening', header: 'Opening', align: 'right', width: 125, render: (r) => <NumberCell>{formatNumber(r.opening)}</NumberCell> },
@@ -51,7 +51,7 @@ const columns: Column<LedgerRow>[] = [
 
 /**
  * Feed stock: bags on hand and days of cover per feed type, a reorder warning, and the
- * selected feed's 14-day ledger. The store keeper receives deliveries and asks the manager to
+ * selected feed's 30-day ledger. The store keeper receives deliveries and asks the manager to
  * reorder; others record purchases; pen attendants only look.
  */
 export default function FeedStock() {
@@ -69,7 +69,7 @@ export default function FeedStock() {
   const feedId = catalog.feedTypes.find((f) => f.name === feed?.name)?.id
   const today = todayISO()
   const rows: LedgerRow[] = feedId
-    ? dailyLedger(history, (d) => d.item === 'feed' && d.feedTypeId === feedId, addDays(today, -13), today).map((r) => ({ ...r, source: feedSource(history, catalog, feedId, r.date) }))
+    ? dailyLedger(history, (d) => d.item === 'feed' && d.feedTypeId === feedId, addDays(today, -29), today).map((r) => ({ ...r, source: feedSource(history, catalog, feedId, r.date) }))
     : []
   const suggestion = reorderSuggestion(history, catalog, types)
   // Only warn once cover drops to the farm's low-stock days (Settings).
@@ -147,7 +147,7 @@ export default function FeedStock() {
         <Card>
           <CardHeader
             title={`${feed.name} ledger`}
-            meta={<span className="type-body-sm text-fg-tertiary">Bags · last 14 days · closing = opening + received − used ± count adjustment</span>}
+            meta={<span className="type-body-sm text-fg-tertiary">Bags · last 30 days · closing = opening + received − used ± count adjustment</span>}
             action={{ label: 'Export', onClick: exportLedger }}
           />
           <Table columns={columns} rows={rows} rowKey={(r) => r.date} />
