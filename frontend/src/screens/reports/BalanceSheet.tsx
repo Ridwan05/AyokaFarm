@@ -7,6 +7,7 @@ import { Card } from '../../components/ui/Card'
 import { DateInput, Field } from '../../components/ui/Form'
 import { InfoTip } from '../../components/ui/InfoTip'
 import { Presence } from '../../components/ui/Overlay'
+import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { balanceSheet, openingDate, unreconciledInfo, useFinance, type BalanceSheet as Sheet, type Line } from '../../data/finance'
 import { farmSettings } from '../../data/farmSettings'
 import { addDays, dayMonth, todayISO } from '../../data/metrics'
@@ -20,7 +21,7 @@ import { accessOf } from '../../lib/access'
 import { downloadCsv } from '../../lib/export'
 import { ReportHeader } from './ReportHeader'
 
-/** Current lines with last month's figure beside each, plus lines that only existed last month (shown at nil now). */
+/** Current lines with the comparison date's figure beside each, plus lines that only existed then (shown at nil now). */
 const lines = (now: Line[], before: Sheet | null, pick: (b: Sheet) => Line[]): StatementRow[] => {
   const prev = before ? new Map(pick(before).map((l) => [l.key, l.amount])) : null
   const rows: StatementRow[] = now.map((line) => ({ type: 'line', line, prev: prev ? (prev.get(line.key) ?? 0) : null }))
@@ -59,9 +60,12 @@ function rowsFor(s: Sheet, p: Sheet | null): StatementRow[] {
   ]
 }
 
+/** What the second column compares with. */
+const COMPARE = ['Month end', 'Year end', 'Pick a date'] as const
+
 /**
  * Balance sheet as at a chosen date (from go-live to today), compared with the end of the month before,
- * with a check that assets equal liabilities plus equity.
+ * the end of last year or a date the owner picks, with a check that assets equal liabilities plus equity.
  */
 export default function BalanceSheet() {
   const { history, catalog } = useTrade()
@@ -72,11 +76,19 @@ export default function BalanceSheet() {
   const G = openingDate(history)
   const [asAt, setAsAt] = useState(today)
   const [open, setOpen] = useState<Line | null>(null)
+  const [compare, setCompare] = useState<(typeof COMPARE)[number]>('Month end')
+  const [picked, setPicked] = useState<string | null>(null)
 
   // No future dates, and nothing before go-live (opening balances start there).
   const date = asAt && asAt <= today ? (asAt < G ? G : asAt) : today
-  // Compare with the end of the month before.
-  const prevDate = addDays(`${date.slice(0, 8)}01`, -1)
+  const monthEnd = addDays(`${date.slice(0, 8)}01`, -1)
+  // The end of the month before, 31 Dec of last year, or the picked date (never after "As at").
+  const prevDate =
+    compare === 'Year end' ? `${Number(date.slice(0, 4)) - 1}-12-31` : compare === 'Pick a date' && picked ? (picked > date ? date : picked) : monthEnd
+  const chooseCompare = (c: (typeof COMPARE)[number]) => {
+    if (c === 'Pick a date' && !picked) setPicked(monthEnd < G ? G : monthEnd)
+    setCompare(c)
+  }
   // Payroll figures only for roles that can see payroll; otherwise the sheet leaves them out and says so.
   const payrollData = accessOf(user, 'payroll') !== 'none' && payroll.loaded && !payroll.error ? payroll.data : null
   const ready = finance.loaded && (payroll.loaded || payroll.error !== null)
@@ -116,6 +128,25 @@ export default function BalanceSheet() {
         <Field label="As at" className="w-full max-w-[220px]">
           {(id) => <DateInput id={id} size="md" value={asAt} min={G} max={today} onChange={(e) => setAsAt(e.target.value)} />}
         </Field>
+        <div className="flex flex-col gap-1.5">
+          <span className="type-label-md text-fg-primary" aria-hidden>Compare with</span>
+          <SegmentedControl label="Compare with" options={COMPARE} value={compare} onChange={chooseCompare} />
+        </div>
+        {compare === 'Pick a date' && picked && (
+          <Field label="Compare with date" className="w-full max-w-[220px]">
+            {(id) => (
+              <DateInput
+                id={id}
+                size="md"
+                value={picked}
+                min={G}
+                max={date}
+                // A cleared or out-of-range date keeps the last good one.
+                onChange={(e) => e.target.value && e.target.value >= G && e.target.value <= date && setPicked(e.target.value)}
+              />
+            )}
+          </Field>
+        )}
         <span className="pb-2.5 type-body-sm text-fg-tertiary">
           {p ? `Compared with ${prevLabel}` : 'No comparison before go-live'} · opening balances at {dayMonth(G)} {G.slice(0, 4)}
         </span>
