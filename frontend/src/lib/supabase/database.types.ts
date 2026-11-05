@@ -2593,6 +2593,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      link_staff_employee: {
+        Args: { employee: number; profile: string }
+        Returns: undefined
+      }
       pay_payroll_lines: {
         Args: {
           line_ids: number[]

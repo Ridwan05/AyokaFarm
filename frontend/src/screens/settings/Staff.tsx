@@ -3,7 +3,7 @@
 import { Plus, ShieldCheck } from 'lucide-react'
 import { useEffect, useState, type FormEvent } from 'react'
 import { toast as sonner } from 'sonner'
-import { addStaff, changeStaffRole, resetStaffPassword, setStaffActive } from '../../app/(app)/settings/staff/actions'
+import { addStaff, changeStaffRole, renameStaff, resetStaffPassword, setStaffActive } from '../../app/(app)/settings/staff/actions'
 import { Badge } from '../../components/ui/Badge'
 import { Button } from '../../components/ui/Button'
 import { Card, CardHeader } from '../../components/ui/Card'
@@ -38,6 +38,7 @@ export default function Staff() {
   const [assigning, setAssigning] = useState<StaffMember | null>(null)
   const [resetting, setResetting] = useState<StaffMember | null>(null)
   const [changingRole, setChangingRole] = useState<StaffMember | null>(null)
+  const [renaming, setRenaming] = useState<StaffMember | null>(null)
   // A second tap while saving would deactivate or reactivate twice.
   const [saving, setSaving] = useState(false)
   // `staff` is loaded from Supabase and refreshed after every change.
@@ -105,6 +106,8 @@ export default function Staff() {
           rowActions={(p) => (
             <RowMenu
               items={[
+                // The employee record follows a new name, and the other way round.
+                ...(isOwner ? [{ label: 'Edit name…', onSelect: () => setRenaming(p) }] : []),
                 ...(p.role === 'pen-attendant'
                   ? [{ label: 'Assign pens…', disabled: !p.active, onSelect: () => setAssigning(p) }]
                   : p.role === 'pen-attendant-all'
@@ -134,16 +137,26 @@ export default function Staff() {
       <Presence>{assigning && <AssignPensModal person={assigning} onClose={() => setAssigning(null)} />}</Presence>
       <Presence>{resetting && <ResetPasswordModal person={resetting} onClose={() => setResetting(null)} />}</Presence>
       <Presence>{changingRole && <ChangeRoleModal person={changingRole} onClose={() => setChangingRole(null)} />}</Presence>
+      <Presence>{renaming && <RenameModal person={renaming} onClose={() => setRenaming(null)} />}</Presence>
     </>
   )
 }
 
-/** Add a staff member with a phone-number login, a first password, a role and (for attendants) pens. */
+/** Someone on the payroll who could get a login. */
+type Unlinked = { id: number; full_name: string; phone: string | null }
+
+/**
+ * Add a staff member with a phone-number login, a first password, a role and (for attendants) pens.
+ * Someone already on the payroll can be picked, so their employee record gets the login instead of a new one.
+ */
 function AddStaffModal({ onClose }: { onClose: () => void }) {
   const toast = useToast()
   const { reload } = useTrade()
+  const [employees, setEmployees] = useState<Unlinked[]>([])
+  const [employeeId, setEmployeeId] = useState('')
   const [name, setName] = useState('')
   const [phone, setPhone] = useState('')
+  const employee = employees.find((e) => String(e.id) === employeeId)
   const [role, setRole] = useState<StaffMember['role']>('pen-attendant')
   const [password, setPassword] = useState('')
   const [pens, setPens] = useState<Set<number>>(new Set())
@@ -157,13 +170,38 @@ function AddStaffModal({ onClose }: { onClose: () => void }) {
     password: password.length >= 8 ? undefined : 'At least 8 characters',
   }
 
+  // Working employees without a login yet.
+  useEffect(() => {
+    let live = true
+    void createClient()
+      .from('employees')
+      .select('id, full_name, phone')
+      .is('profile_id', null)
+      .eq('is_active', true)
+      .is('left_on', null)
+      .order('full_name')
+      .then(({ data }) => {
+        if (live) setEmployees(data ?? [])
+      })
+    return () => {
+      live = false
+    }
+  }, [])
+
+  const pickEmployee = (id: string) => {
+    setEmployeeId(id)
+    const picked = employees.find((e) => String(e.id) === id)
+    setName(picked?.full_name ?? '')
+    if (picked?.phone) setPhone(picked.phone)
+  }
+
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     if (busy) return
     setSubmitted(true)
     if (errors.name || errors.phone || errors.password) return
     setBusy(true)
-    const result = await addStaff({ name, phone, role: roleToDb(role), password, whatsapp, pens: [...pens] }).finally(() => setBusy(false))
+    const result = await addStaff({ name, phone, role: roleToDb(role), password, whatsapp, pens: [...pens], employeeId: employee?.id }).finally(() => setBusy(false))
     if (!result.ok) return void sonner.error(result.error)
     await reload()
     toast(`${name.trim()} can now sign in with their phone number`)
@@ -188,8 +226,20 @@ function AddStaffModal({ onClose }: { onClose: () => void }) {
       }
     >
       <form id="add-staff" onSubmit={submit} className="flex flex-col gap-5">
-        <Field label="Full name" error={submitted ? errors.name : undefined}>
-          {(id) => <TextInput id={id} value={name} onChange={(e) => setName(e.target.value)} />}
+        {employees.length > 0 && (
+          <Field label="Already on the payroll?" hint="Pick them so their employee record gets this login, instead of a second record">
+            {(id) => (
+              <SelectInput
+                id={id}
+                value={employeeId}
+                onChange={(e) => pickEmployee(e.target.value)}
+                options={[{ value: '', label: 'No — new person' }, ...employees.map((e) => ({ value: String(e.id), label: e.full_name }))]}
+              />
+            )}
+          </Field>
+        )}
+        <Field label="Full name" hint={employee ? 'From their employee record — you can rename them later in Staff or Employees' : undefined} error={submitted ? errors.name : undefined}>
+          {(id) => <TextInput id={id} value={name} readOnly={!!employee} onChange={(e) => setName(e.target.value)} />}
         </Field>
         <Field label="Phone" hint="This is their sign-in name" error={submitted ? errors.phone : undefined}>
           {(id) => <TextInput id={id} type="tel" placeholder="0803 123 4567" value={phone} onChange={(e) => setPhone(e.target.value)} />}
@@ -399,6 +449,50 @@ function ChangeRoleModal({ person, onClose }: { person: StaffMember; onClose: ()
               options={roles ? roles.map((r) => ({ value: r.id, label: r.name })) : [{ value: role, label: 'Loading roles…' }]}
             />
           )}
+        </Field>
+      </form>
+    </Modal>
+  )
+}
+
+/** Rename a staff member; their employee record takes the new name too. */
+function RenameModal({ person, onClose }: { person: StaffMember; onClose: () => void }) {
+  const toast = useToast()
+  const { reload } = useTrade()
+  const [name, setName] = useState(person.name)
+  // A second tap while saving would rename twice.
+  const [busy, setBusy] = useState(false)
+  const submit = async (e: FormEvent) => {
+    e.preventDefault()
+    if (busy) return
+    if (!name.trim()) return void sonner.error('Enter their name')
+    setBusy(true)
+    const result = await renameStaff(person.id, name).finally(() => setBusy(false))
+    if (!result.ok) return void sonner.error(result.error)
+    await reload()
+    toast(`${person.name} is now ${name.trim()}`)
+    onClose()
+  }
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Edit name · ${person.name}`}
+      subtitle="Their employee record takes the new name too"
+      footer={
+        <>
+          <Button size="lg" className="flex-1" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button size="lg" variant="primary" className="flex-1" type="submit" form="rename-staff" disabled={busy}>
+            {busy ? 'Saving…' : 'Save name'}
+          </Button>
+        </>
+      }
+    >
+      <form id="rename-staff" onSubmit={submit}>
+        <Field label="Full name">
+          {(id) => <TextInput id={id} value={name} onChange={(e) => setName(e.target.value)} />}
         </Field>
       </form>
     </Modal>

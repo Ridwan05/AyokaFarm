@@ -32,8 +32,9 @@ const fail = (error: string): Result => ({ ok: false, error })
 /**
  * Owner only: create a login for a new staff member, set their role and phone, and, for a pen
  * attendant, the pens they work on. They sign in with their phone and this first password.
+ * With `employeeId`, the login is attached to that existing employee instead of a new one.
  */
-export async function addStaff(input: { name: string; phone: string; role: string; password: string; whatsapp: boolean; pens: number[] }): Promise<Result> {
+export async function addStaff(input: { name: string; phone: string; role: string; password: string; whatsapp: boolean; pens: number[]; employeeId?: number }): Promise<Result> {
   if ((await callerRole()) !== 'owner') return fail('Only an owner can add staff.')
   const name = input.name.trim()
   const phone = normalisePhone(input.phone)
@@ -62,7 +63,24 @@ export async function addStaff(input: { name: string; phone: string; role: strin
     const { error: pensError } = await db.from('staff_pens').insert(input.pens.map((pen_id) => ({ profile_id: id, pen_id })))
     if (pensError) return fail(pensError.message)
   }
+  if (input.employeeId) {
+    const { error: linkError } = await db.rpc('link_staff_employee', { profile: id, employee: input.employeeId })
+    if (linkError) return fail(`The login was created but couldn’t be linked to ${name}: ${linkError.message}. Link it in Employees.`)
+  }
   return { ok: true }
+}
+
+/** Owner only: rename a staff member. Their employee record follows (a database trigger copies it). */
+export async function renameStaff(profileId: string, fullName: string): Promise<Result> {
+  if ((await callerRole()) !== 'owner') return fail('Only an owner can rename staff.')
+  const name = fullName.trim()
+  if (!name) return fail('Enter their name.')
+  const db = await createClient()
+  const { error } = await db.from('profiles').update({ full_name: name }).eq('id', profileId)
+  if (error) return fail(error.message)
+  // The sign-up name in the login itself, so nothing still holds the old one.
+  const { error: authError } = await createSecretClient().auth.admin.updateUserById(profileId, { user_metadata: { full_name: name } })
+  return authError ? fail(authError.message) : { ok: true }
 }
 
 /**
