@@ -1,6 +1,7 @@
 import type { CSSProperties, ReactNode } from 'react'
 import { cn } from '../../lib/cn'
 import { Avatar } from './Avatar'
+import { PAGE_SIZE, Pager, usePage } from './Pager'
 
 /** One table column: its header and how to draw each row's cell. */
 export type Column<Row> = {
@@ -23,10 +24,14 @@ type TableProps<Row> = {
   rowClassName?: (row: Row) => string | undefined
   /** Width of the actions column. */
   actionsWidth?: number
+  /** Rows per page; Infinity shows them all. */
+  pageSize?: number
 }
 
-/** On narrow screens, columns without a width get at least this much before the table scrolls sideways. */
+/** Columns without a width get at least this much; below that the table scrolls sideways instead of squeezing them. */
 const FLEX_COLUMN_MIN = 200
+/** The same floor on wider screens, where there's more room to share. */
+const FLEX_COLUMN_MIN_LG = 140
 
 // On narrow screens the table scrolls inside its card and the first column stays put,
 // so each row keeps its name in view.
@@ -34,67 +39,76 @@ const stickyFirst = 'max-lg:sticky max-lg:left-0 max-lg:z-[1] max-lg:bg-surface'
 
 /**
  * Data table for lists like sales or pens. Rows can open a detail on click and carry a "…" menu.
- * On narrow screens it scrolls sideways with the first column pinned.
+ * Shows 20 rows a page. When the columns don't fit it scrolls sideways (first column pinned on narrow
+ * screens), and text too long for its cell ends in "…".
  */
-export function Table<Row>({ columns, rows, rowKey, onRowClick, rowActions, rowClassName, actionsWidth = 64 }: TableProps<Row>) {
-  const minWidth = columns.reduce((n, c) => n + (c.width ?? FLEX_COLUMN_MIN), rowActions ? actionsWidth : 0)
+export function Table<Row>({ columns, rows, rowKey, onRowClick, rowActions, rowClassName, actionsWidth = 64, pageSize = PAGE_SIZE }: TableProps<Row>) {
+  const paged = usePage(rows, pageSize)
+  const minWidth = (flex: number) => columns.reduce((n, c) => n + (c.width ?? flex), rowActions ? actionsWidth : 0)
   return (
-    // `relative` keeps absolutely positioned bits (the sr-only "Actions" label) inside the scroller.
-    <div className="relative overflow-x-auto overscroll-x-contain">
-      <table className="w-full table-fixed border-collapse max-lg:min-w-(--table-min)" style={{ '--table-min': `${minWidth}px` } as CSSProperties}>
-        <colgroup>
-          {columns.map((c) => (
-            <col key={c.key} style={c.width ? { width: c.width } : undefined} />
-          ))}
-          {rowActions && <col style={{ width: actionsWidth }} />}
-        </colgroup>
-        <thead>
-          <tr>
-            {columns.map((c, i) => (
-              <th
-                key={c.key}
-                scope="col"
-                className={cn(
-                  'h-10 border-b border-line px-4 type-overline whitespace-nowrap text-fg-tertiary',
-                  c.align === 'right' ? 'text-right' : 'text-left',
-                  i === 0 && stickyFirst,
-                )}
-              >
-                {c.header}
-              </th>
+    <>
+      {/* `relative` keeps absolutely positioned bits (the sr-only "Actions" label) inside the scroller. */}
+      <div className="relative overflow-x-auto overscroll-x-contain">
+        <table
+          className="w-full table-fixed border-collapse max-lg:min-w-(--table-min) lg:min-w-(--table-min-lg)"
+          style={{ '--table-min': `${minWidth(FLEX_COLUMN_MIN)}px`, '--table-min-lg': `${minWidth(FLEX_COLUMN_MIN_LG)}px` } as CSSProperties}
+        >
+          <colgroup>
+            {columns.map((c) => (
+              <col key={c.key} style={c.width ? { width: c.width } : undefined} />
             ))}
-            {rowActions && (
-              <th className="border-b border-line">
-                <span className="sr-only">Actions</span>
-              </th>
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr
-              key={rowKey(row)}
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
-              className={cn(onRowClick && 'cursor-pointer hover:bg-canvas', rowClassName?.(row))}
-            >
+            {rowActions && <col style={{ width: actionsWidth }} />}
+          </colgroup>
+          <thead>
+            <tr>
               {columns.map((c, i) => (
-                <td
+                <th
                   key={c.key}
+                  scope="col"
+                  title={c.header}
                   className={cn(
-                    'h-14 border-b border-line-subtle px-4',
-                    c.align === 'right' && 'text-right',
+                    'h-10 truncate border-b border-line px-4 type-overline text-fg-tertiary',
+                    c.align === 'right' ? 'text-right' : 'text-left',
                     i === 0 && stickyFirst,
                   )}
                 >
-                  {c.render(row)}
-                </td>
+                  {c.header}
+                </th>
               ))}
-              {rowActions && <td className="h-14 border-b border-line-subtle px-3 text-right">{rowActions(row)}</td>}
+              {rowActions && (
+                <th className="border-b border-line">
+                  <span className="sr-only">Actions</span>
+                </th>
+              )}
             </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+          </thead>
+          <tbody>
+            {paged.pageRows.map((row) => (
+              <tr
+                key={rowKey(row)}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+                className={cn(onRowClick && 'cursor-pointer hover:bg-canvas', rowClassName?.(row))}
+              >
+                {columns.map((c, i) => (
+                  <td
+                    key={c.key}
+                    className={cn(
+                      'h-14 overflow-hidden border-b border-line-subtle px-4',
+                      c.align === 'right' && 'text-right',
+                      i === 0 && stickyFirst,
+                    )}
+                  >
+                    {c.render(row)}
+                  </td>
+                ))}
+                {rowActions && <td className="h-14 border-b border-line-subtle px-3 text-right">{rowActions(row)}</td>}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <Pager {...paged} />
+    </>
   )
 }
 
@@ -109,7 +123,7 @@ export function PrimaryCell({
   subtitle?: ReactNode
 }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex min-w-0 items-center gap-2">
       <Avatar initials={initials} />
       <div className="flex min-w-0 flex-col">
         <span className="truncate type-label-md text-fg-primary">{title}</span>
@@ -118,6 +132,9 @@ export function PrimaryCell({
     </div>
   )
 }
+
+/** The cell's text for a hover title, so a value cut short with "…" can still be read in full. */
+const fullText = (children: ReactNode) => (typeof children === 'string' || typeof children === 'number' ? String(children) : undefined)
 
 const numberTones = {
   default: 'text-fg-primary',
@@ -136,7 +153,11 @@ export function NumberCell({
   children: ReactNode
   tone?: keyof typeof numberTones
 }) {
-  return <span className={cn('type-numeric-md whitespace-nowrap', numberTones[tone])}>{children}</span>
+  return (
+    <span className={cn('block truncate type-numeric-md', numberTones[tone])} title={fullText(children)}>
+      {children}
+    </span>
+  )
 }
 
 /** Plain text cell, e.g. age or "Recorded by". */
@@ -156,5 +177,9 @@ export function TextCell({
     danger: 'text-fg-danger',
     info: 'text-fg-info',
   }[tone]
-  return <span className={cn(mono ? 'type-mono-sm' : 'type-body-md', 'whitespace-nowrap', color)}>{children}</span>
+  return (
+    <span className={cn(mono ? 'type-mono-sm' : 'type-body-md', 'block truncate', color)} title={fullText(children)}>
+      {children}
+    </span>
+  )
 }

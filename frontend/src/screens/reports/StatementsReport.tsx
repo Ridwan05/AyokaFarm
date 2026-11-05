@@ -18,6 +18,7 @@ import { formatNumber } from '../../lib/format'
 import { ReportHeader } from './ReportHeader'
 import { Presence } from '../../components/ui/Overlay'
 import { InfoTip } from '../../components/ui/InfoTip'
+import { Pager, usePage } from '../../components/ui/Pager'
 import { explain } from '../../data/explain'
 
 const dm = dmOf
@@ -57,6 +58,7 @@ export default function StatementsReport() {
   const from = period('last-month').from
   const today = todayISO()
   const lines = forPeriod(isCustomer ? trade.customerStatement(party.id) : trade.supplierStatement(party.id), from)
+  const paged = usePage(lines)
   const contact = roleWithName(trade.catalog, 'sales_accounts', 'Accounts')
   // Customers who owe and agreed to WhatsApp reminders.
   const dueCount = trade.customers.filter((c) => c.whatsapp && trade.customerBalance(c.id) > 0).length
@@ -164,7 +166,7 @@ export default function StatementsReport() {
                     </tr>
                   </thead>
                   <tbody>
-                    {lines.map((l) => (
+                    {paged.pageRows.map((l) => (
                       <tr key={`${l.date}-${l.ref ?? l.entry}`} className="border-b border-line-subtle align-top">
                         <td className="py-2.5 text-fg-secondary">{dm(l.date)}</td>
                         <td className="py-2.5 pr-2 text-fg-primary">{l.entry.replace(/^(Sale|Purchase) · /, '')}</td>
@@ -177,6 +179,7 @@ export default function StatementsReport() {
                   </tbody>
                 </table>
               </div>
+              <Pager {...paged} />
               <div className="flex items-center">
                 <span className="flex-1 type-label-md text-fg-primary">
                   {isCustomer ? `Balance ${party.name} owes ${farmSettings.farmName}` : `Balance ${farmSettings.farmName} owes ${party.name}`}
