@@ -16,11 +16,20 @@ export type Order = {
   perUnit: number
   stockUnit: string
   ordered: string
+  /** ISO date the order was placed, for date filters. */
+  orderedOn: string
   orderedBy: string
 }
 
 /** A received order: when, by whom, and how much was sent back. */
-export type Delivery = Omit<Order, 'orderedBy'> & { received: string; by: string; sentBack: number; note: string }
+export type Delivery = Omit<Order, 'orderedBy'> & {
+  received: string
+  /** ISO date it arrived, for date filters. */
+  receivedOn: string
+  by: string
+  sentBack: number
+  note: string
+}
 
 /** A change to stock made in this session (delivery received or count adjustment). */
 export type StockMove = {

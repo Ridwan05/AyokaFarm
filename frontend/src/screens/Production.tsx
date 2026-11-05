@@ -1,6 +1,6 @@
 'use client'
 
-import { CalendarDays, Download, PenLine, Warehouse } from 'lucide-react'
+import { Download, PenLine, Warehouse } from 'lucide-react'
 import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -9,6 +9,7 @@ import { Alert } from '../components/ui/Alert'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card, CardHeader } from '../components/ui/Card'
+import { DateInput } from '../components/ui/Form'
 import { InfoTip } from '../components/ui/InfoTip'
 import { KpiCard } from '../components/ui/KpiCard'
 import { SegmentedControl } from '../components/ui/SegmentedControl'
@@ -51,6 +52,7 @@ import { formatCrates, formatDayMon, formatNumber, formatShortDate, formatSigned
 
 const PERIODS = ['Day', 'Week', 'Month'] as const
 type Period = (typeof PERIODS)[number]
+/** Pen groups; single pens (by id) follow them in the Pens dropdown. */
 const PEN_FILTERS = ['All pens', 'Layers', 'Broilers'] as const
 
 /** One pen over the chosen day, week or month. */
@@ -163,19 +165,23 @@ export default function Production() {
   const attendant = isAttendant(user.role)
   const mine = (id: number) => canSeePen(user, id)
 
-  // Days that have entries, newest first, always starting with today.
-  const days = [...new Set([today, ...history.daily.filter((d) => mine(d.penId)).map((d) => d.date)])].sort().reverse().slice(0, 90)
+  // Days that have entries, oldest first: the date picker runs from the first one to today.
+  const days = [...new Set(history.daily.filter((d) => mine(d.penId)).map((d) => d.date))].sort()
+  const firstDay = days[0] ?? today
   const [period, setPeriod] = useState<Period>('Day')
   // Open on the latest earlier day with entries: today is usually still being recorded.
-  const [day, setDay] = useState(days[1] ?? today)
-  const [pens, setPens] = useState<(typeof PEN_FILTERS)[number]>('All pens')
+  const [day, setDay] = useState(days.filter((d) => d < today).at(-1) ?? today)
+  // A pen group, or one pen's id.
+  const [pens, setPens] = useState<string>('All pens')
+  const penFilters = [...PEN_FILTERS, ...catalog.pens.filter((p) => mine(p.id)).map((p) => String(p.id))]
   const [showMissing, setShowMissing] = useState(true)
 
   const range = rangeFor(period, day)
   const span = daysFrom(range.from, range.to) + 1
   // The same number of days just before, for the KPI comparisons.
   const prev: Range = { from: addDays(range.from, -span), to: addDays(range.from, -1), label: 'previous' }
-  const penOk = (id: number) => mine(id) && (pens === 'All pens' || penKindIn(catalog, history, id, range) === pens)
+  const penOk = (id: number) =>
+    mine(id) && (pens === 'All pens' || (pens === 'Layers' || pens === 'Broilers' ? penKindIn(catalog, history, id, range) === pens : String(id) === pens))
   const rows = penRows(trade, range, penOk)
   const periodRows = rowsIn(history.daily, range, penOk)
   const prevRows = rowsIn(history.daily, prev, penOk)
@@ -223,15 +229,25 @@ export default function Production() {
 
       <div className="flex flex-wrap items-center gap-3">
         <SegmentedControl label="Period" options={PERIODS} value={period} onChange={setPeriod} />
-        <Select
-          label="Date"
-          leadingIcon={CalendarDays}
-          options={days}
+        <DateInput
+          aria-label="Date"
+          size="md"
+          className="w-[180px]"
+          min={firstDay}
+          max={today}
           value={day}
-          onChange={setDay}
-          format={(d) => `${formatShortDate(parseISODate(d))} ${d.slice(0, 4)}`}
+          // A cleared or out-of-range date keeps the last good day.
+          onChange={(e) => e.target.value && e.target.value >= firstDay && e.target.value <= today && setDay(e.target.value)}
         />
-        <Select label="Pens" leadingIcon={Warehouse} width={180} options={PEN_FILTERS} value={pens} onChange={setPens} />
+        <Select
+          label="Pens"
+          leadingIcon={Warehouse}
+          width={180}
+          options={penFilters}
+          value={pens}
+          onChange={setPens}
+          format={(v) => ((PEN_FILTERS as readonly string[]).includes(v) ? v : penName(catalog, Number(v)))}
+        />
         <span className="flex-1" />
         <p className="type-body-sm whitespace-nowrap text-fg-tertiary">
           {period === 'Day' ? `${recorded} of ${rows.length} pens recorded` : `${periodRows.length} entries · ${span} days`}

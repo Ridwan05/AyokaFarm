@@ -1,16 +1,18 @@
 'use client'
 
-import { Plus } from 'lucide-react'
+import { CalendarDays, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { PageHeader } from '../components/layout/PageHeader'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { Card, CardHeader } from '../components/ui/Card'
 import { KpiCard, type Kpi } from '../components/ui/KpiCard'
+import { Select } from '../components/ui/Select'
 import { NumberCell, PrimaryCell, Table, TextCell, type Column } from '../components/ui/Table'
 import { Tabs } from '../components/ui/Tabs'
 import type { Delivery, Order } from '../data/deliveries'
 import { explainMoney } from '../data/explainMoney'
+import { inPeriod, PERIODS_OR_ALL, rangeOrAll, type PeriodOrAll } from '../data/periods'
 import { useTrade } from '../data/tradeContext'
 import { ReceiveDeliveryDrawer } from '../features/stock/ReceiveDeliveryDrawer'
 import { inRange, kpi, num, roleWithName } from '../data/metrics'
@@ -28,9 +30,11 @@ export default function Deliveries() {
   const { orders, deliveries, suppliers, history, catalog } = useTrade()
   const [tab, setTab] = useState<(typeof TABS)[number]>('All')
   const [receiving, setReceiving] = useState(false)
+  const [period, setPeriod] = useState<PeriodOrAll>('This month')
+  const range = rangeOrAll(period)
   const match = (k: string) => tab === 'All' || k === tab.toLowerCase()
-  // Orders still due come first so the store keeper sees what to expect.
-  const rows: Row[] = [...orders.map((o) => ({ ...o, pending: true as const })), ...deliveries].filter((r) => match(r.kind))
+  // Orders still due come first so the store keeper sees what to expect; they show whatever the period.
+  const rows: Row[] = [...orders.map((o) => ({ ...o, pending: true as const })), ...deliveries.filter((d) => inPeriod(d.receivedOn, range))].filter((r) => match(r.kind))
   // Received stock purchases (feed and medication) with the day they arrived.
   const received = history.purchases.filter((p) => p.received_on && p.kind !== 'birds')
   const receivedIn = (r: { from: string; to: string }) => received.filter((p) => inRange(p.received_on!, r))
@@ -93,13 +97,19 @@ export default function Deliveries() {
         }
       />
       <Tabs label="Delivery type" tabs={TABS} value={tab} onChange={setTab} />
+      <div className="flex flex-wrap items-center gap-3">
+        <Select label="Period" leadingIcon={CalendarDays} width={170} options={PERIODS_OR_ALL} value={period} onChange={setPeriod} />
+      </div>
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
         {kpis.map((k) => (
           <KpiCard key={k.label} kpi={k} />
         ))}
       </div>
       <Card>
-        <CardHeader title="Recent deliveries" meta={<span className="type-body-sm text-fg-tertiary">Feed and medication · birds go straight to the pens</span>} />
+        <CardHeader
+          title={`Deliveries · ${period.toLowerCase()}`}
+          meta={<span className="type-body-sm text-fg-tertiary">Feed and medication · birds go straight to the pens · orders still due always show</span>}
+        />
         <Table columns={columns} rows={rows} rowKey={(r) => r.ref} rowClassName={(r) => (r.pending ? 'bg-accent-subtle' : undefined)} />
       </Card>
       <Presence>{receiving && <ReceiveDeliveryDrawer onClose={() => setReceiving(false)} />}</Presence>

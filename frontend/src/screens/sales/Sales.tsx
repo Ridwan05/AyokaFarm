@@ -141,7 +141,7 @@ export default function Sales() {
       <Card>
         <CardHeader
           title={f.period}
-          meta={<span className="type-body-sm text-fg-tertiary">{spanLabel(f.range)}</span>}
+          meta={<span className="type-body-sm text-fg-tertiary">{f.range ? spanLabel(f.range) : 'Since go-live'}</span>}
           action={{ label: 'All sales', to: '/sales/all' }}
         />
         <SalesTable

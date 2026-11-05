@@ -1,14 +1,16 @@
 'use client'
 
-import { Download, Plus } from 'lucide-react'
+import { CalendarDays, Download, Plus } from 'lucide-react'
 import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { Button } from '../../components/ui/Button'
 import { Card, CardHeader } from '../../components/ui/Card'
 import { KpiCard } from '../../components/ui/KpiCard'
+import { Select } from '../../components/ui/Select'
 import { LinkTabs } from '../../components/ui/Tabs'
 import { purchaseKpis } from '../../data/moneyKpis'
+import { inPeriod, PERIODS_OR_ALL, rangeOrAll, type PeriodOrAll } from '../../data/periods'
 import type { PurchaseKind } from '../../data/purchases'
 import { useTrade } from '../../data/tradeContext'
 import { PurchaseOverlays, type PurchaseOverlay } from '../../features/purchases/PurchaseOverlays'
@@ -47,8 +49,11 @@ export default function Purchases() {
   // Whoever can buy for the whole farm decides reorder requests (the database checks the same).
   const buyer = accessOf(user, 'purchases', 'add') === 'all'
 
-  // One type shows all its purchases; the overview shows only the latest few. Purchases are newest first.
-  const rows = kind ? purchases.filter((p) => p.kind === kind) : purchases.slice(0, RECENT)
+  const [period, setPeriod] = useState<PeriodOrAll>('All time')
+  const range = rangeOrAll(period)
+  const dated = purchases.filter((p) => inPeriod(p.date, range))
+  // One type shows all its purchases; the overview over All time shows only the latest few. Purchases are newest first.
+  const rows = kind ? dated.filter((p) => p.kind === kind) : range ? dated : dated.slice(0, RECENT)
   const oldest = rows[rows.length - 1]
 
   return (
@@ -59,11 +64,11 @@ export default function Purchases() {
         description="Feed, birds and medication bought. Saving a purchase updates stock and the supplier’s balance, so nothing is typed twice."
         actions={
           <>
-            {/* On the overview, Export gives every purchase, not just the recent ones shown. */}
+            {/* On the overview, Export gives every purchase in the period, not just the recent ones shown. */}
             <Button
               leadingIcon={Download}
               onClick={() =>
-                downloadCsv('purchases', PURCHASE_CSV_HEADER, purchaseCsvRows(kind ? rows : purchases, (id) => trade.suppliers.find((s) => s.id === id)?.name ?? '', trade.purchasePaid))
+                downloadCsv('purchases', PURCHASE_CSV_HEADER, purchaseCsvRows(kind ? rows : dated, (id) => trade.suppliers.find((s) => s.id === id)?.name ?? '', trade.purchasePaid))
               }
             >
               Export
@@ -75,6 +80,9 @@ export default function Purchases() {
         }
       />
       <LinkTabs label="Purchase type" tabs={purchaseTabs('/purchases')} />
+      <div className="flex flex-wrap items-center gap-3">
+        <Select label="Period" leadingIcon={CalendarDays} width={170} options={PERIODS_OR_ALL} value={period} onChange={setPeriod} />
+      </div>
 
       <div className="grid grid-cols-2 gap-3 lg:flex lg:gap-4">
         {purchaseKpis(trade, kind).map((kpi) => (
@@ -87,7 +95,7 @@ export default function Purchases() {
 
       <Card>
         <CardHeader
-          title={kind ? `${kind === 'Birds' ? 'Bird' : kind} purchases` : 'Recent purchases'}
+          title={`${kind ? `${kind === 'Birds' ? 'Bird' : kind} purchases` : range ? 'Purchases' : 'Recent purchases'}${range ? ` · ${period.toLowerCase()}` : ''}`}
           meta={<span className="type-body-sm text-fg-tertiary">Newest first{kind && oldest ? ` · since ${formatDayMon(oldest.date)}` : ''}</span>}
           action={{ label: 'All purchases', to: '/purchases/all' }}
         />

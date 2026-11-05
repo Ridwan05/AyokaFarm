@@ -7,6 +7,7 @@ import { Button } from '../../components/ui/Button'
 import { Card, CardHeader } from '../../components/ui/Card'
 import { amountOf } from '../../data/sales'
 import { useTrade } from '../../data/tradeContext'
+import { PERIODS_OR_ALL } from '../../data/periods'
 import { SALES_CSV_HEADER, saleCsvRows, useSalesFilter } from '../../features/sales/filters'
 import { spanLabel } from '../../data/moneyKpis'
 import { downloadCsv } from '../../lib/export'
@@ -21,7 +22,7 @@ const PAGE = 50
 /** Every sale in the chosen period (this month to start), 50 to a page, with the same filters and actions as Sales. */
 export default function AllSales() {
   const { sales, customers } = useTrade()
-  const f = useSalesFilter(sales, customers, 'This month')
+  const f = useSalesFilter(sales, customers, 'This month', PERIODS_OR_ALL)
   const [overlay, setOverlay] = useState<SaleOverlay>(null)
   const total = f.visible.reduce((n, s) => n + amountOf(s), 0)
   // 50 a page keeps long periods quick to scroll and render.
@@ -54,7 +55,7 @@ export default function AllSales() {
 
       <Card>
         <CardHeader
-          title={`${f.period} · ${spanLabel(f.range)}`}
+          title={f.range ? `${f.period} · ${spanLabel(f.range)}` : f.period}
           meta={
             <span className="flex items-center gap-1.5 type-body-sm text-fg-tertiary">
               {f.visible.length} sales · ₦{(total / 1e6).toFixed(2)}M

@@ -602,19 +602,20 @@ export async function loadRemote(db: DB): Promise<Remote> {
     perUnit: Number(p.stock_units_per_unit),
     stockUnit: stockUnit(p),
     ordered: dm(p.purchased_on),
+    orderedOn: p.purchased_on,
     orderedBy: first(profileName.get(p.recorded_by)),
   })
   const stockPurchases = purchaseRows.filter((p) => p.kind !== 'birds')
   const orders = stockPurchases.filter((p) => p.status === 'ordered').map(orderOf)
-  // The latest 20 deliveries are enough for the Store Keeper's list.
+  // Every delivery: the Deliveries screen filters them by date.
   const deliveries = stockPurchases
     .filter((p) => p.status === 'received')
-    .slice(0, 20)
     .map<Delivery>((p) => {
       const { orderedBy: _ignored, ...o } = orderOf(p)
       return {
         ...o,
         qty: Number(p.received_quantity ?? p.quantity),
+        receivedOn: p.received_on!,
         received: `${dm(p.received_on!)}${p.updated_at ? ` ${hm(p.updated_at)}` : ''}`,
         by: first(profileName.get(p.received_by ?? p.recorded_by)),
         sentBack: Number(p.returned_quantity),

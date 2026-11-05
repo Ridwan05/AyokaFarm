@@ -14,7 +14,8 @@ import { KeyValueRow } from '../components/ui/KeyValueRow'
 import { Select } from '../components/ui/Select'
 import { NumberCell, Table, TextCell, type Column } from '../components/ui/Table'
 import type { Expense } from '../data/expenses'
-import { addDays, period as periodRange, previous, weekdayDayMonth, type PeriodKey, type Range } from '../data/metrics'
+import { addDays, previous, weekdayDayMonth, type Range } from '../data/metrics'
+import { PERIODS, rangeOf, type Period } from '../data/periods'
 import { expenseTotal, expensesIn, pctChange, spanLabel } from '../data/moneyKpis'
 import { useTrade } from '../data/tradeContext'
 import { AddExpenseModal } from '../features/expenses/AddExpenseModal'
@@ -26,12 +27,6 @@ import { downloadCsv } from '../lib/export'
 import { formatNaira, formatNumber } from '../lib/format'
 import { Presence } from '../components/ui/Overlay'
 
-const PERIODS = ['Today', 'This week', 'Last week', 'This month', 'Last month', 'This year'] as const
-type Period = (typeof PERIODS)[number]
-const PERIOD_KEY: Record<Period, PeriodKey> = { Today: 'today', 'This week': 'week', 'Last week': 'last-week', 'This month': 'month', 'Last month': 'last-month', 'This year': 'ytd' }
-
-/** The dates a period filter covers. */
-const rangeOf = (p: Period): Range => periodRange(PERIOD_KEY[p])
 /** The period compared against: the day before, the same weekdays a week earlier, or the same days a month (or year) earlier. */
 function compareWith(p: Period, r: Range): Range {
   if (p === 'This week') return { from: addDays(r.from, -7), to: addDays(r.to, -7), label: 'last week' }
