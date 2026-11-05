@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { Alert } from '../../components/ui/Alert'
 import { Card } from '../../components/ui/Card'
+import { DateInput } from '../../components/ui/Form'
 import { Presence } from '../../components/ui/Overlay'
 import { SegmentedControl } from '../../components/ui/SegmentedControl'
 import { incomeStatement, openingDate, useFinance, type IncomeStatement as Statement, type Line } from '../../data/finance'
@@ -17,8 +18,8 @@ import { downloadCsv } from '../../lib/export'
 import { farmSettings } from '../../data/farmSettings'
 import { ReportHeader } from './ReportHeader'
 
-const PERIODS = ['This month', 'Last month', 'Quarter', 'Year to date'] as const
-const PERIOD_KEY: Record<(typeof PERIODS)[number], PeriodKey> = { 'This month': 'month', 'Last month': 'last-month', Quarter: 'quarter', 'Year to date': 'ytd' }
+const PERIODS = ['This month', 'Last month', 'Quarter', 'Year to date', 'Custom'] as const
+const PERIOD_KEY: Record<Exclude<(typeof PERIODS)[number], 'Custom'>, PeriodKey> = { 'This month': 'month', 'Last month': 'last-month', Quarter: 'quarter', 'Year to date': 'ytd' }
 
 /** Current lines plus any that only appear in the comparison period (shown at nil now). */
 function withPrev(now: Line[], before: Line[]): StatementRow[] {
@@ -56,9 +57,21 @@ export default function IncomeStatement() {
   const payroll = usePayroll()
   const [periodName, setPeriodName] = useState<(typeof PERIODS)[number]>('This month')
   const [open, setOpen] = useState<Line | null>(null)
+  // The owner's own From–To dates when Custom is picked.
+  const [custom, setCustom] = useState<{ from: string; to: string } | null>(null)
 
   const today = todayISO()
-  const range = period(PERIOD_KEY[periodName], today)
+  // Go-live: the day the opening balances were entered.
+  const G = openingDate(history)
+  const range =
+    periodName === 'Custom' && custom
+      ? { ...custom, label: `${dayMonth(custom.from)} ${custom.from.slice(0, 4)} – ${dayMonth(custom.to)} ${custom.to.slice(0, 4)}` }
+      : period(periodName === 'Custom' ? 'month' : PERIOD_KEY[periodName], today)
+  // Custom starts from the range on screen, so the dates move from something familiar.
+  const choosePeriod = (name: (typeof PERIODS)[number]) => {
+    if (name === 'Custom' && !custom) setCustom({ from: range.from < G ? G : range.from, to: range.to })
+    setPeriodName(name)
+  }
   const prevRange = previous(range)
   // Payroll figures only for roles that can see all of payroll (otherwise RLS returns just their own).
   const payrollData = accessOf(user, 'payroll') !== 'none' && payroll.loaded && !payroll.error ? payroll.data : null
@@ -68,8 +81,6 @@ export default function IncomeStatement() {
   const s = ready ? incomeStatement(inputs, range) : null
   const p = ready ? incomeStatement(inputs, prevRange) : null
   const rows = s && p ? rowsFor(s, p) : []
-  // Go-live: the day the opening balances were entered.
-  const G = openingDate(history)
   const prevLabel = `${dayMonth(prevRange.from)} – ${dayMonth(prevRange.to)}`
 
   const exportCsv = () =>
@@ -93,7 +104,31 @@ export default function IncomeStatement() {
         onExport={ready && !finance.error ? exportCsv : undefined}
       />
       <div className="flex flex-wrap items-center gap-3 print:hidden">
-        <SegmentedControl label="Period" options={PERIODS} value={periodName} onChange={setPeriodName} />
+        <SegmentedControl label="Period" options={PERIODS} value={periodName} onChange={choosePeriod} />
+        {periodName === 'Custom' && custom && (
+          <>
+            {/* A cleared or out-of-range date keeps the last good one. */}
+            <DateInput
+              aria-label="From"
+              size="md"
+              className="w-[180px]"
+              min={G}
+              max={custom.to}
+              value={custom.from}
+              onChange={(e) => e.target.value && e.target.value >= G && e.target.value <= custom.to && setCustom({ ...custom, from: e.target.value })}
+            />
+            <span className="type-body-sm text-fg-tertiary">to</span>
+            <DateInput
+              aria-label="To"
+              size="md"
+              className="w-[180px]"
+              min={custom.from}
+              max={today}
+              value={custom.to}
+              onChange={(e) => e.target.value && e.target.value >= custom.from && e.target.value <= today && setCustom({ ...custom, to: e.target.value })}
+            />
+          </>
+        )}
         <span className="type-body-sm text-fg-tertiary">
           {dayMonth(s?.range.from ?? range.from)} – {dayMonth(range.to)} · compared with {prevLabel}
         </span>
