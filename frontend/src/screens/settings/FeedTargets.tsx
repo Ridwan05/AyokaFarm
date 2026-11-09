@@ -88,7 +88,7 @@ export default function FeedTargets() {
     for (const t of THRESHOLDS) {
       const v = values[t.key].trim()
       if ('time' in t) {
-        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) return toast.error(`${t.label}: use a time like 18:00`)
+        if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(v)) return toast.error(`${t.label}: use a time like 23:59`)
         patch.missing_entry_cutoff = v
       } else {
         const n = Number(v)
@@ -294,7 +294,7 @@ function thresholdValues(s: Tables<'farm_settings'> | null): Record<ThresholdKey
     feed_variance_pct: String(Number(s?.feed_variance_pct ?? 10)),
     low_stock_days: String(s?.low_stock_days ?? 5),
     expiry_warning_days: String(s?.expiry_warning_days ?? 30),
-    missing_entry_cutoff: (s?.missing_entry_cutoff ?? '18:00').slice(0, 5),
+    missing_entry_cutoff: (s?.missing_entry_cutoff ?? '23:59').slice(0, 5),
     overdue_debt_days: String(s?.overdue_debt_days ?? 60),
     eggs_per_crate: String(s?.eggs_per_crate ?? 30),
   }

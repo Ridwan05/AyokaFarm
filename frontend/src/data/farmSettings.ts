@@ -24,7 +24,7 @@ export const farmSettings = {
   /** Medication batches expiring within this many days are flagged. */
   expiryWarningDays: 30,
   /** Daily entries are due by this time (HH:MM). */
-  missingEntryCutoff: '18:00',
+  missingEntryCutoff: '23:59',
   /** Customer debts older than this many days are overdue. */
   overdueDebtDays: 60,
   eggsPerCrate: 30,
