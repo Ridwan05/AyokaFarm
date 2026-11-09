@@ -181,7 +181,8 @@ function Overview({ penId }: { penId: number }) {
   const values = asPct ? m.birds.map((v, i) => (m.opening[i] ? +((v / m.opening[i]) * 100).toFixed(2) : 0)) : m.birds
   const threshold = asPct ? farmSettings.mortalityAlertPct : m.thresholdBirds
   const yTicks = niceTicks(0, Math.max(threshold, ...values) || 1, 3).filter((t) => t >= 0)
-  const entries = penEntries(history, catalog, penId, rows.slice(-7).reverse())
+  // The last 30 days, as on the Production tab.
+  const entries = penEntries(history, catalog, penId, rows.filter((d) => d.date >= addDays(todayISO(), -29)).reverse())
   const last = m.birds.at(-1) ?? 0
 
   return (
@@ -311,11 +312,11 @@ function Overview({ penId }: { penId: number }) {
       <Presence>{overlay === 'add-birds' && <AddBirdsDrawer flock={flock} onClose={() => setOverlay(null)} />}</Presence>
 
       <Card>
-        <CardHeader title="Daily entries" meta={<span className="type-body-sm text-fg-tertiary">Last 7 entries</span>} />
+        <CardHeader title="Daily entries" meta={<span className="type-body-sm text-fg-tertiary">Last 30 days</span>} />
         {entries.length ? (
           <Table columns={entryColumns(m.thresholdBirds, m.typicalMax)} rows={entries} rowKey={(e) => e.iso} rowActions={(e) => <EntryActions row={rows.find((d) => d.date === e.iso)} />} />
         ) : (
-          <p className="px-5 pb-6 type-body-md text-fg-tertiary">No entries recorded for this flock yet.</p>
+          <p className="px-5 pb-6 type-body-md text-fg-tertiary">{rows.length ? 'No entries in the last 30 days.' : 'No entries recorded for this flock yet.'}</p>
         )}
       </Card>
     </>
