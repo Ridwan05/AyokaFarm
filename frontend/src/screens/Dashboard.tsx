@@ -34,6 +34,9 @@ import {
   mortalityPct,
   nairaKpi,
   nairaShort,
+  num,
+  penEggsSold,
+  penMoney,
   niceTicks,
   period,
   relativeDay,
@@ -85,6 +88,8 @@ export default function Dashboard() {
   const today = todayISO()
   const rows = pensToday.filter((p) => penOk(p.id))
   const recorded = rows.filter((p) => p.died !== null).length
+  const [day, setDay] = useState<DayLabel>('Today')
+  const dayRows = pensOn(trade, rows, day === 'Today' ? today : addDays(today, -1), day === 'Today')
   const alerts = useMemo(() => deriveAlerts(trade, today), [trade, today]).filter((a) => a.pen === undefined || penOk(a.pen))
   const todays = rowsOn(history.daily, today, penOk)
   // Time of the latest entry saved today.
@@ -93,12 +98,24 @@ export default function Dashboard() {
   const [hello] = useState(() => greeting(new Date()))
   const firstName = currentUser.name.split(' ')[0]
 
-  /** Downloads the "Pens today" table as shown, as CSV. */
+  /** Downloads the "Pens today / yesterday" table as shown, as CSV. */
   function exportPens() {
     downloadCsv(
-      'pens-today',
-      ['Pen', 'Flock', 'Birds', 'Died today', 'Feed vs expected %', 'Laying rate %', 'Entry'],
-      rows.map((p) => [p.name, p.flock, p.birds, p.died, p.feedVsExpected?.toFixed(1), p.layingRate?.toFixed(1), p.entry.label]),
+      day === 'Today' ? 'pens-today' : 'pens-yesterday',
+      ['Pen', 'Flock', 'Birds', 'Died', 'Feed used (bags)', 'Eggs collected (crates)', 'Laying rate %', 'Eggs sold (crates)', 'Revenue (₦)', 'Expenses (₦)', 'Entry'],
+      dayRows.map((p) => [
+        p.name,
+        p.flock,
+        p.birds,
+        p.died,
+        p.feedBags,
+        p.eggs === null ? null : (p.eggs / farmSettings.eggsPerCrate).toFixed(1),
+        p.layingRate?.toFixed(1),
+        p.eggsSold.toFixed(1),
+        Math.round(p.revenue),
+        Math.round(p.expenses),
+        p.entry.label,
+      ]),
     )
   }
 
@@ -137,6 +154,8 @@ export default function Dashboard() {
         ))}
       </div>
 
+      <PensToday rows={dayRows} day={day} onDay={setDay} />
+
       <div className="flex flex-col gap-4 lg:flex-row">
         <NeedsAttention alerts={alerts.slice(0, 5).map(alertRow)} total={alerts.length} />
         <FeedStock />
@@ -146,8 +165,6 @@ export default function Dashboard() {
         <FeedChart trade={trade} penOk={penOk} scope={pen !== ALL_PENS ? penLabel(pen) : birds === 'Layers & broilers' ? 'All pens' : `${birds} pens`} />
         <Receivables trade={trade} />
       </div>
-
-      <PensToday rows={rows} recorded={recorded} />
     </>
   )
 }
@@ -460,46 +477,94 @@ function Receivables({ trade }: { trade: Trade }) {
 
 const dash = <NumberCell tone="muted">—</NumberCell>
 
-/** Columns of the "Pens today" table. */
-const penColumns: Column<PenToday>[] = [
+/** The days the pens table can show. */
+const DAYS = ['Today', 'Yesterday'] as const
+type DayLabel = (typeof DAYS)[number]
+
+/** One pen's row in the "Pens today / yesterday" table. */
+type PenDay = PenToday & { feedBags: number | null; eggs: number | null; eggsSold: number; revenue: number; expenses: number }
+
+/**
+ * Each pen's figures for one day: its entry, eggs sold and revenue (split by pen, or shared by eggs
+ * collected) and the expenses tagged to it. Today keeps the live bird count and "Due by" status.
+ */
+function pensOn(trade: Trade, base: PenToday[], day: string, isToday: boolean): PenDay[] {
+  const { history, catalog } = trade
+  const r = { from: day, to: day }
+  const money = new Map(penMoney(history, catalog, r).map((m) => [m.penId, m]))
+  const sold = penEggsSold(history, catalog, r)
+  return base.map((p): PenDay => {
+    const e = history.daily.find((d) => d.penId === p.id && d.date === day)
+    const flock = history.flocks.find((f) => f.pen_id === p.id && f.status === 'active')
+    return {
+      ...p,
+      birds: isToday ? p.birds : (e?.closing ?? (flock ? flockBirdsOn(history, flock, day) : 0)),
+      died: e ? e.mortality : null,
+      feedVsExpected: e?.variancePct ?? null,
+      layingRate: e?.layingRate ?? null,
+      entry: isToday ? p.entry : e ? { tone: 'success', label: `Recorded ${timeOf(e.createdAt)}` } : { tone: 'warning', label: 'Not recorded' },
+      feedBags: e ? e.feedBags : null,
+      eggs: e?.eggs ?? null,
+      eggsSold: sold.get(p.id) ?? 0,
+      revenue: money.get(p.id)?.revenue ?? 0,
+      expenses: money.get(p.id)?.direct ?? 0,
+    }
+  })
+}
+
+/** "2.5" or "3": one decimal only when there is a fraction. */
+const qty = (n: number) => num(n, n % 1 ? 1 : 0)
+/** Eggs as crates, e.g. "41.3". */
+const crates = (eggs: number) => qty(Math.round((eggs / farmSettings.eggsPerCrate) * 10) / 10)
+
+/** Columns of the "Pens today / yesterday" table. */
+const penColumns: Column<PenDay>[] = [
   {
     key: 'pen',
     header: 'Pen',
+    width: 200,
     render: (p) => <PrimaryCell initials={p.initials} title={p.name} subtitle={p.flock} />,
   },
-  { key: 'birds', header: 'Birds', align: 'right', width: 110, render: (p) => <NumberCell>{formatNumber(p.birds)}</NumberCell> },
+  { key: 'birds', header: 'Birds', align: 'right', width: 90, render: (p) => <NumberCell>{formatNumber(p.birds)}</NumberCell> },
   {
     key: 'died',
-    header: 'Died today',
+    header: 'Died',
     align: 'right',
-    width: 120,
+    width: 72,
     render: (p) =>
       p.died === null ? dash : (
-        // Mortality today = died ÷ birds at the start of the day (closing birds + died); red over the alert threshold.
+        // Mortality = died ÷ birds at the start of the day (closing birds + died); red over the alert threshold.
         <NumberCell tone={(p.died * 100) / (p.birds + p.died || 1) > farmSettings.mortalityAlertPct ? 'danger' : 'default'}>{p.died}</NumberCell>
       ),
   },
   {
     key: 'feed',
-    header: 'Feed vs expected',
+    header: 'Feed used',
     align: 'right',
-    width: 160,
-    render: (p) =>
-      p.feedVsExpected === null ? dash : (
-        <NumberCell tone={Math.abs(p.feedVsExpected) >= farmSettings.feedVariancePct ? 'warning' : 'default'}>{formatSignedPct(p.feedVsExpected)}</NumberCell>
-      ),
+    width: 110,
+    render: (p) => (p.feedBags === null ? dash : <NumberCell>{`${qty(p.feedBags)} bag${p.feedBags === 1 ? '' : 's'}`}</NumberCell>),
   },
+  { key: 'eggs', header: 'Eggs collected', align: 'right', width: 132, render: (p) => (p.eggs === null ? dash : <NumberCell>{`${crates(p.eggs)} crates`}</NumberCell>) },
   {
     key: 'laying',
     header: 'Laying rate',
     align: 'right',
-    width: 130,
+    width: 108,
     render: (p) => (p.layingRate === null ? dash : <NumberCell>{p.layingRate.toFixed(1)}%</NumberCell>),
   },
   {
+    key: 'sold',
+    header: 'Eggs sold',
+    align: 'right',
+    width: 116,
+    render: (p) => (p.eggsSold ? <NumberCell>{`${qty(Math.round(p.eggsSold * 10) / 10)} crates`}</NumberCell> : dash),
+  },
+  { key: 'revenue', header: 'Revenue', align: 'right', width: 132, render: (p) => (p.revenue ? <NumberCell>{formatNaira(Math.round(p.revenue))}</NumberCell> : dash) },
+  { key: 'expenses', header: 'Expenses', align: 'right', width: 132, render: (p) => (p.expenses ? <NumberCell>{formatNaira(Math.round(p.expenses))}</NumberCell> : dash) },
+  {
     key: 'entry',
     header: 'Entry',
-    width: 190,
+    width: 170,
     render: (p) => (
       <Badge tone={p.entry.tone} dot>
         {p.entry.label}
@@ -508,17 +573,21 @@ const penColumns: Column<PenToday>[] = [
   },
 ]
 
-/** Each pen's entry for today: deaths, feed vs expected, laying rate and entry status. */
-function PensToday({ rows, recorded }: { rows: PenToday[]; recorded: number }) {
+/** Each pen's day, today or yesterday: deaths, feed, eggs, sales, revenue, expenses and entry status. */
+function PensToday({ rows, day, onDay }: { rows: PenDay[]; day: DayLabel; onDay: (d: DayLabel) => void }) {
   const router = useRouter()
+  const recorded = rows.filter((p) => p.died !== null).length
   return (
     <Card>
       <CardHeader
-        title="Pens today"
-        info={`${explain.entriesRecorded()} Feed vs expected and laying come from each pen’s entry.`}
+        title={day === 'Today' ? 'Pens today' : 'Pens yesterday'}
+        info={`${explain.entriesRecorded()} Feed used, eggs collected and laying come from each pen’s entry. Revenue and eggs sold are sales split by pen, or shared by eggs collected when a sale wasn’t split. Expenses are those recorded against the pen.`}
         meta={
-          <span className="type-body-sm text-fg-tertiary">
-            {recorded} of {rows.length} recorded
+          <span className="flex items-center gap-3">
+            <span className="type-body-sm whitespace-nowrap text-fg-tertiary">
+              {recorded} of {rows.length} recorded
+            </span>
+            <SegmentedControl label="Day" options={DAYS} value={day} onChange={onDay} />
           </span>
         }
         action={{ label: 'All pens', to: '/pens' }}

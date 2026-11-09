@@ -392,6 +392,28 @@ export function penMoney(history: History, catalog: Catalog, r: { from: string; 
   return [...out.values()].filter((m) => m.birdDays || m.revenue || m.feed || m.direct || m.birds)
 }
 
+/**
+ * Crates of eggs each pen sold in the period, by the same rule as penMoney's revenue: a sale split by
+ * pen gives each pen its portion; an unsplit sale is shared by eggs collected. Cracked eggs aren't counted.
+ */
+export function penEggsSold(history: History, catalog: Catalog, r: { from: string; to: string }): Map<number, number> {
+  const eggProducts = new Set(catalog.products.filter((p) => p.stock_item === 'eggs').map((p) => p.id))
+  const collected = new Map<number, number>()
+  for (const d of rowsIn(history.daily, r)) collected.set(d.penId, (collected.get(d.penId) ?? 0) + (d.eggs ?? 0))
+  const totalEggs = sum([...collected.values()], (n) => n)
+  const portions = new Map<number, History['saleAllocations']>()
+  for (const a of history.saleAllocations) portions.set(a.sale_id, [...(portions.get(a.sale_id) ?? []), a])
+  const out = new Map<number, number>()
+  const add = (penId: number, crates: number) => out.set(penId, (out.get(penId) ?? 0) + crates)
+  for (const s of history.sales.filter((x) => x.approval === 'approved' && eggProducts.has(x.product_id) && inRange(x.sold_on, r))) {
+    const split = portions.get(s.id)
+    if (split?.length) for (const a of split) add(a.pen_id, Number(a.quantity))
+    // With no eggs collected in the period, unsplit sales go to no pen.
+    else if (totalEggs) for (const [penId, eggs] of collected) if (eggs) add(penId, (Number(s.quantity) * eggs) / totalEggs)
+  }
+  return out
+}
+
 /** Everything a pen cost in the period. */
 export const penCost = (m: PenMoney) => m.feed + m.medication + m.birds + m.overhead + m.direct
 
